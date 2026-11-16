@@ -43,6 +43,11 @@ const VERSION_FILE: &str = "sheaf-index-version";
 /// note folder is indexed in seconds even with this budget.
 const WRITER_MEMORY_BYTES: usize = 15_000_000;
 
+/// Blocks of stored notes each segment keeps in memory. The store is not compressed
+/// and is mapped from disk, so a cache buys little; tantivy's default of 100 blocks
+/// would hold more than a megabyte per segment for as long as the index is open.
+const STORE_CACHE_BLOCKS: usize = 4;
+
 const ID: &str = "id";
 const PATH: &str = "path";
 const CREATED: &str = "created";
@@ -140,6 +145,12 @@ impl From<TantivyError> for Error {
 }
 
 /// An index of notes, on disk or in memory.
+///
+/// An index on disk is mapped into memory, and the pages that searches touch count
+/// towards the resident size of the process for as long as the index and its readers
+/// live: some 30 MB for 10,000 notes after a variety of searches. A service that has
+/// to be small while idle drops them and opens the index again, which is cheap, when
+/// the next request arrives.
 pub struct SearchIndex {
     index: Index,
     reader: Reader,
@@ -210,6 +221,7 @@ impl SearchIndex {
             inner: index
                 .reader_builder()
                 .reload_policy(reload_policy)
+                .doc_store_cache_num_blocks(STORE_CACHE_BLOCKS)
                 .try_into()?,
             fields: Arc::new(schema().1),
         };
