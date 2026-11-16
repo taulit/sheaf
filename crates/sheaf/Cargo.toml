@@ -1,0 +1,26 @@
+[package]
+name = "sheaf"
+description = "Notes for GNOME: fast native notes app with plain Markdown files, and its command line"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+sheaf-core.workspace = true
+clap.workspace = true
+clap_complete.workspace = true
+log.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+zbus.workspace = true
+
+[dev-dependencies]
+assert_cmd.workspace = true
+insta.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true
