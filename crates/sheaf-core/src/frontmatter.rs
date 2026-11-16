@@ -170,10 +170,21 @@ pub fn quoted(value: &str) -> String {
             .iter()
             .any(|word| value.eq_ignore_ascii_case(word));
     if plain {
-        value.to_owned()
-    } else {
-        format!("\"{}\"", value.replace('\\', "\\\\").replace('"', "\\\""))
+        return value.to_owned();
     }
+    let mut quoted = String::with_capacity(value.len() + 2);
+    quoted.push('"');
+    for c in value.chars() {
+        match c {
+            '\\' | '"' => quoted.extend(['\\', c]),
+            '\n' => quoted.push_str("\\n"),
+            '\r' => quoted.push_str("\\r"),
+            '\t' => quoted.push_str("\\t"),
+            c => quoted.push(c),
+        }
+    }
+    quoted.push('"');
+    quoted
 }
 
 /// The line ending of the first line: `"\r\n"` or `"\n"`.
@@ -274,7 +285,12 @@ fn scalar(raw: &str) -> String {
         while let Some(c) = chars.next() {
             match c {
                 '"' => break,
-                '\\' => value.extend(chars.next()),
+                '\\' => value.extend(chars.next().map(|escaped| match escaped {
+                    'n' => '\n',
+                    'r' => '\r',
+                    't' => '\t',
+                    other => other,
+                })),
                 _ => value.push(c),
             }
         }
@@ -541,9 +557,16 @@ mod tests {
 
     #[test]
     fn set_value_is_read_back() {
-        let folder = "Q4: \"Plan\" #1";
-        let text = set("Body\n", "from", &quoted(folder));
-        assert_eq!(split(&text).frontmatter().from.as_deref(), Some(folder));
+        for folder in [
+            "Q4: \"Plan\" #1",
+            "back\\slash",
+            "line\nbreak\tand tab",
+            " padded ",
+        ] {
+            let text = set("Body\n", "from", &quoted(folder));
+            assert_eq!(text.lines().count(), 4, "{text:?}");
+            assert_eq!(split(&text).frontmatter().from.as_deref(), Some(folder));
+        }
         assert_eq!(quoted("Arbeit/Projekt A"), "Arbeit/Projekt A");
         assert_eq!(quoted(""), "\"\"");
         assert_eq!(quoted("true"), "\"true\"");
