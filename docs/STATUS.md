@@ -24,3 +24,7 @@ None yet.
 ## Open
 
 - `flatpak-builder` and `git-cliff` are not installed on the build machine; needed in S4.
+- Not yet verified, see `docs/verified.md` "Plan changes" 10: Flathub acceptance of
+  `--filesystem=xdg-documents` (S4), passing an activation token to a window opened later
+  by the running GPUI app (S2), reading the Settings portal inside the sandbox (S4).
+- `rust-version` goes from 1.91 to 1.92 when `krilla` is added for PDF export (S3).
