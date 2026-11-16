@@ -17,6 +17,18 @@ pub const ACTION_OPEN_NOTE: &str = "open-note";
 pub const ACTION_SEARCH: &str = "search";
 pub const ACTION_QUICK_NOTE: &str = "quick-note";
 
+/// The `parameter` argument of `ActivateAction` for an action taking `params`.
+///
+/// The Desktop Entry specification allows no or one item there, so several strings
+/// travel as one array of strings (`as`).
+pub fn action_parameter(params: &[&str]) -> Vec<Variant<'static>> {
+    if params.is_empty() {
+        return Vec::new();
+    }
+    let strings: Vec<String> = params.iter().map(|param| (*param).to_owned()).collect();
+    vec![Variant::from(strings)]
+}
+
 /// Prefix of the D-Bus error names; the suffix is `sheaf_core::Error::code` in
 /// CamelCase, e.g. `io.github.taulit.Sheaf1.Error.NotFound`.
 pub const ERROR_PREFIX: &str = "io.github.taulit.Sheaf1.Error";

@@ -13,14 +13,14 @@ use futures_core::Stream;
 use sheaf_core::Change;
 use sheaf_searchd::api::{
     ACTION_OPEN_NOTE, ACTION_QUICK_NOTE, ACTION_SEARCH, APP_NAME, ApplicationProxy, ERROR_PREFIX,
-    NoteRow, SERVICE_NAME, SERVICE_PATH,
+    NoteRow, SERVICE_NAME, SERVICE_PATH, action_parameter,
 };
 use zbus::fdo::{DBusProxy, RequestNameFlags};
 use zbus::message::{Header, Message};
 use zbus::names::{BusName, ErrorName};
 use zbus::object_server::SignalEmitter;
 use zbus::proxy::CacheProperties;
-use zbus::{Connection, DBusError, OwnedVariant, Str, Variant};
+use zbus::{Connection, DBusError, OwnedVariant, Str};
 use zruntime::lock::Mutex;
 use zruntime::signal::{Signal, Signals};
 use zruntime::{Event, SharedRuntime, mpmc, unblock};
@@ -133,8 +133,7 @@ async fn activate_action(conn: &Connection, action: &str, params: &[&str]) -> Re
         .build()
         .await
         .map_err(|err| Failure::app_unavailable(&err))?;
-    let params: Vec<Variant<'_>> = params.iter().map(|param| Variant::from(*param)).collect();
-    app.activate_action(action, &params, HashMap::new())
+    app.activate_action(action, &action_parameter(params), HashMap::new())
         .await
         .map_err(|err| Failure::app_unavailable(&err))
 }

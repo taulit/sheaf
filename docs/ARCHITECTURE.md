@@ -53,8 +53,10 @@ write returns. See `NoteId` in `crates/sheaf-core/src/model.rs`.
 
 ## Index: one writer, many readers
 
-- `sheaf-searchd` owns the tantivy `IndexWriter`. It watches the notes folder, re-indexes
-  changed files and commits within 300 ms. On start it reconciles the index with the
+- `sheaf-searchd` is the only writer. It watches the notes folder, re-indexes changed
+  files and commits within 300 ms. Each write runs in a short-lived child process
+  (`sheaf-searchd --index`): tantivy's writer leaves about 7 MB behind in the process
+  that created it, which would break the 15 MB idle budget of the service. On start it reconciles the index with the
   folder (path + mtime + size), so changes made while it was not running are picked up.
 - The app opens the same index read-only and reloads on commit. The gallery is drawn
   from stored index fields, not from the files.
@@ -79,14 +81,17 @@ through D-Bus activation if it is not running. Actions:
 
 | Action | Parameters | Effect |
 |---|---|---|
-| `open-note` | `(s id, s query)` | Open the note; jump to the first match of `query` if not empty |
-| `search` | `(s query)` | Show the gallery with this search |
+| `open-note` | `as`: id, query | Open the note; jump to the first match of `query` if not empty |
+| `search` | `as`: query | Show the gallery with this search |
 | `quick-note` | none | Open the Quick Note window |
 
 `io.github.taulit.Sheaf1` has the methods of the plan (`Search`, `Recent`, `Create`,
 `Append`, `Open`, `QuickNote`, signal `Changed`) plus `Sync`, `Reindex` and the property
 `NotesDir`. `Create` with an empty folder writes to the Quick Notes folder, `/` means
 the notes folder itself. Errors are named `io.github.taulit.Sheaf1.Error.<Code>`.
+
+The Desktop Entry specification allows `ActivateAction` no or one parameter item, so
+the strings of an action travel as one array of strings (`api::action_parameter`).
 
 A second `sheaf` launch without a subcommand calls `Activate` on the running instance
 and exits.

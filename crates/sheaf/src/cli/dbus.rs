@@ -4,7 +4,9 @@
 use std::path::Path;
 use std::time::Duration;
 
-use sheaf_searchd::api::{ACTION_OPEN_NOTE, ACTION_QUICK_NOTE, ApplicationProxy, Sheaf1Proxy};
+use sheaf_searchd::api::{
+    ACTION_OPEN_NOTE, ACTION_QUICK_NOTE, ApplicationProxy, Sheaf1Proxy, action_parameter,
+};
 use zbus::connection::Builder;
 use zbus::proxy::CacheProperties;
 use zbus::{Connection, Variant};
@@ -63,7 +65,7 @@ pub fn reindex_service(notes_dir: &Path) -> bool {
 }
 
 pub fn open_note(id: &str) -> Result {
-    activate(ACTION_OPEN_NOTE, &[Variant::new(id), Variant::new("")])
+    activate(ACTION_OPEN_NOTE, &action_parameter(&[id, ""]))
 }
 
 pub fn quick_note() -> Result {

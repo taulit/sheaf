@@ -267,9 +267,10 @@ impl FakeApp {
         parameter: Vec<OwnedVariant>,
         _platform_data: HashMap<String, OwnedVariant>,
     ) {
+        assert!(parameter.len() <= 1, "the specification allows one item");
         let params = parameter
             .into_iter()
-            .map(|param| String::try_from(param).unwrap_or_else(|_| "<not a string>".to_owned()))
+            .flat_map(|param| <Vec<String>>::try_from(param).expect("an array of strings"))
             .collect();
         self.0.0.lock().unwrap().push((action_name, params));
     }
