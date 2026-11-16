@@ -5,8 +5,8 @@ Other sessions read only this file. Updated at the end of every phase.
 | Phase | State | Branch / PR |
 |---|---|---|
 | S0 Setup | in review | `phase/s0-setup`, [#1](https://github.com/taulit/sheaf/pull/1) |
-| S1 Core, searchd, CLI | gate green, in review | `phase/s1-core` |
-| S2 App | not started | |
+| S1 Core, searchd, CLI | gate green, in review | `phase/s1-core`, [#2](https://github.com/taulit/sheaf/pull/2) |
+| S2 App | in progress | `phase/s2-app` |
 | S3 Features | not started | |
 | S4 Release | not started | |
 
@@ -28,8 +28,8 @@ None yet.
 
 | What | State on 2026-11-16 | Effect |
 |---|---|---|
-| `taulit/gpui-markdown-editor` tag `v0.0.1-api` or newer | repository does not exist yet | S2 editor view waits; S1 does not need it |
-| `taulit/visor` tag `api-v1` | repository does not exist yet | "Visor: Notes" (plan 03 §10) is open; built in S3 if the tag exists then, else in session 4 |
+| `taulit/gpui-markdown-editor` tag `v0.0.1-api` or newer | `v0.0.1-api` exists (checked 2026-11-16, 22:25): API complete, plain-text editing behind it | S2 builds against it; gpui-pre =0.3.12, gpui-component =0.10.0, MSRV 1.95 |
+| `taulit/visor` tag `api-v1` | no tag yet (checked 2026-11-16, 22:25) | "Visor: Notes" (plan 03 §10) is open; built in S3 if the tag exists then, else in session 4 |
 
 ## Open
 
