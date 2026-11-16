@@ -4,7 +4,7 @@ Other sessions read only this file. Updated at the end of every phase.
 
 | Phase | State | Branch / PR |
 |---|---|---|
-| S0 Setup | in review | `phase/s0-setup` |
+| S0 Setup | in review | `phase/s0-setup`, [#1](https://github.com/taulit/sheaf/pull/1) |
 | S1 Core, searchd, CLI | in progress | `phase/s1-core` |
 | S2 App | not started | |
 | S3 Features | not started | |
