@@ -13,6 +13,8 @@ sheaf-core.workspace = true
 jiff.workspace = true
 log.workspace = true
 zbus.workspace = true
+zruntime = { workspace = true, features = ["helper", "lock", "mpmc", "signal", "unblock"] }
+futures-core.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
