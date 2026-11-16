@@ -1495,10 +1495,12 @@ dependencies = [
  "clap",
  "clap_complete",
  "insta",
+ "jiff",
  "log",
  "serde",
  "serde_json",
  "sheaf-core",
+ "sheaf-searchd",
  "tempfile",
  "zbus",
 ]
@@ -1528,6 +1530,7 @@ dependencies = [
 name = "sheaf-searchd"
 version = "0.1.0"
 dependencies = [
+ "jiff",
  "log",
  "sheaf-core",
  "tempfile",

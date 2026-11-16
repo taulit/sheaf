@@ -10,10 +10,12 @@ publish.workspace = true
 
 [dependencies]
 sheaf-core.workspace = true
+sheaf-searchd.workspace = true
 clap.workspace = true
 clap_complete.workspace = true
 log.workspace = true
 serde.workspace = true
+jiff.workspace = true
 serde_json.workspace = true
 zbus.workspace = true
 

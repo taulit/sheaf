@@ -58,10 +58,13 @@ write returns. See `NoteId` in `crates/sheaf-core/src/model.rs`.
   folder (path + mtime + size), so changes made while it was not running are picked up.
 - The app opens the same index read-only and reloads on commit. The gallery is drawn
   from stored index fields, not from the files.
-- The CLI reads and writes note files through `sheaf-core` directly. For `search` it
-  asks `sheaf-searchd` over D-Bus. If there is no session bus or the service cannot be
-  started, it builds a temporary in-memory index of the folder instead: slower, but
-  always correct, and what the snapshot tests use.
+- The CLI reads and writes note files through `sheaf-core` directly. To search and
+  list it asks `sheaf-searchd` to `Sync()` and then reads the on-disk index, like the
+  app. If there is no session bus, the service cannot be started, or it serves another
+  notes folder, the CLI builds a temporary in-memory index of the folder instead:
+  slower, but always correct, and what the snapshot tests use.
+- The names, object paths and typed client proxies of both D-Bus interfaces are in
+  `crates/sheaf-searchd/src/api.rs`, the only place that spells them out.
 
 ## D-Bus
 
@@ -79,6 +82,11 @@ through D-Bus activation if it is not running. Actions:
 | `open-note` | `(s id, s query)` | Open the note; jump to the first match of `query` if not empty |
 | `search` | `(s query)` | Show the gallery with this search |
 | `quick-note` | none | Open the Quick Note window |
+
+`io.github.taulit.Sheaf1` has the methods of the plan (`Search`, `Recent`, `Create`,
+`Append`, `Open`, `QuickNote`, signal `Changed`) plus `Sync`, `Reindex` and the property
+`NotesDir`. `Create` with an empty folder writes to the Quick Notes folder, `/` means
+the notes folder itself. Errors are named `io.github.taulit.Sheaf1.Error.<Code>`.
 
 A second `sheaf` launch without a subcommand calls `Activate` on the running instance
 and exits.

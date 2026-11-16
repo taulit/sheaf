@@ -10,6 +10,7 @@ publish.workspace = true
 
 [dependencies]
 sheaf-core.workspace = true
+jiff.workspace = true
 log.workspace = true
 zbus.workspace = true
 
