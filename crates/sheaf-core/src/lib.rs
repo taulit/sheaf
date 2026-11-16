@@ -14,6 +14,10 @@ pub mod frontmatter;
 pub mod i18n;
 pub mod model;
 pub mod scan;
+pub mod store;
+pub mod trash;
 
 pub use error::{Error, Result};
 pub use model::{NoteDoc, NoteId, NoteMeta, NoteRef};
+pub use store::{CreateOptions, Entry, Fingerprint, Note, NoteStore, TaskRef, WriteOptions};
+pub use trash::{TRASH_MAX_AGE, TrashedNote};
