@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Notes folder",
+  "description": "Output of `path`.",
+  "type": "object",
+  "required": [
+    "schema",
+    "path"
+  ],
+  "properties": {
+    "schema": {
+      "const": 1,
+      "description": "Version of the document format."
+    },
+    "path": {
+      "type": "string",
+      "description": "Absolute path of the notes folder."
+    }
+  }
+}

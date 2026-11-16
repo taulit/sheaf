@@ -1,0 +1,23 @@
+---
+source: crates/sheaf/tests/cli.rs
+expression: "sandbox.document(&ambiguous.stderr, \"error\")"
+---
+{
+  "error": {
+    "candidates": [
+      {
+        "folder": "",
+        "id": "[id1]",
+        "title": "Ideen für den Garten"
+      },
+      {
+        "folder": "",
+        "id": "[id2]",
+        "title": "Ideen für die Reise"
+      }
+    ],
+    "code": "ambiguous",
+    "message": "ambiguous reference: Ideen"
+  },
+  "schema": 1
+}

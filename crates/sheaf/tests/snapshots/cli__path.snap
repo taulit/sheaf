@@ -1,0 +1,8 @@
+---
+source: crates/sheaf/tests/cli.rs
+expression: "sandbox.json(&[\"path\"], \"path\")"
+---
+{
+  "path": "[notes]",
+  "schema": 1
+}

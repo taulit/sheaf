@@ -1,0 +1,9 @@
+---
+source: crates/sheaf/tests/cli.rs
+expression: "sandbox.text(&[\"tasks\", \"--open\"])"
+---
+Project plan  ([id1])
+  [ ] 2  Book the venue
+Einkauf  ([id2])
+  [ ] 1  Milch
+  [ ] 3  Eier

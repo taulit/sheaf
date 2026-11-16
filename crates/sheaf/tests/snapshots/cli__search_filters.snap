@@ -1,0 +1,55 @@
+---
+source: crates/sheaf/tests/cli.rs
+expression: "sandbox.json(&[\"search\", \"#projekt\", \"folder:Arbeit\"], \"search\")"
+---
+{
+  "hits": [
+    {
+      "conflict": false,
+      "created": "[time]",
+      "folder": "Arbeit/Planung",
+      "has_attachment": false,
+      "has_image": false,
+      "has_table": false,
+      "id": "[id1]",
+      "modified": "[time]",
+      "path": "[notes]/Arbeit/Planung/Project plan.md",
+      "pinned": false,
+      "score": "[score]",
+      "snippet": "Kickoff next week. #projekt Write the brief Book the venue",
+      "snippet_highlights": [],
+      "tags": [
+        "projekt"
+      ],
+      "tasks_open": 1,
+      "tasks_total": 2,
+      "title": "Project plan",
+      "title_highlights": []
+    },
+    {
+      "conflict": false,
+      "created": "[time]",
+      "folder": "Arbeit",
+      "has_attachment": false,
+      "has_image": false,
+      "has_table": true,
+      "id": "[id2]",
+      "modified": "[time]",
+      "path": "[notes]/Arbeit/Besprechung Ausschreibung.md",
+      "pinned": false,
+      "score": "[score]",
+      "snippet": "Die Ausschreibung für das Projekt Frühling wurde besprochen. #projekt Phase Frist Angebot 30. November",
+      "snippet_highlights": [],
+      "tags": [
+        "projekt"
+      ],
+      "tasks_open": 0,
+      "tasks_total": 0,
+      "title": "Besprechung Ausschreibung",
+      "title_highlights": []
+    }
+  ],
+  "query": "#projekt folder:Arbeit",
+  "schema": 1,
+  "total": 2
+}

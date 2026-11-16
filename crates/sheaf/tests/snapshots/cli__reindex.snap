@@ -1,0 +1,8 @@
+---
+source: crates/sheaf/tests/cli.rs
+expression: "sandbox.document(&run.stdout, \"done\")"
+---
+{
+  "ok": true,
+  "schema": 1
+}

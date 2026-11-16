@@ -1,0 +1,11 @@
+---
+source: crates/sheaf/tests/cli.rs
+expression: "sandbox.document(&usage.stderr, \"error\")"
+---
+{
+  "error": {
+    "code": "usage",
+    "message": "invalid value 'many' for '--limit <N>': invalid digit found in string"
+  },
+  "schema": 1
+}
