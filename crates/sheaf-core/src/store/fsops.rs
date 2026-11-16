@@ -115,11 +115,19 @@ fn parent(path: &Path) -> &Path {
 
 /// The file name (without extension) for a note with this title.
 pub(crate) fn file_stem_for(title: &str) -> String {
-    let stem = clean_name(title, |c| match c {
-        '/' | '\\' => '-',
-        c if c.is_control() => ' ',
+    // Syncthing and Nextcloud carry notes to Android and Windows, whose file systems
+    // reject these characters and names ending in a dot.
+    let portable: String = title
+        .chars()
+        .filter(|c| !matches!(c, '?' | '*' | '"' | '<' | '>' | '|'))
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .collect();
+    let portable = portable.split_whitespace().collect::<Vec<_>>().join(" ");
+    let stem = clean_name(&portable, |c| match c {
+        '/' | '\\' | ':' => '-',
         c => c,
     });
+    let stem = stem.trim_end_matches(['.', ' ']).to_owned();
     if stem.is_empty() {
         tr("Untitled")
     } else {
@@ -180,11 +188,10 @@ mod tests {
             ("tab\there\u{7}", "tab here"),
             (".hidden", "_hidden"),
             ("  .padded and hidden", "_padded and hidden"),
-            ("...", "_.."),
-            (
-                "Fragen? Antworten: \"ja\" <1> *",
-                "Fragen? Antworten: \"ja\" <1> *",
-            ),
+            ("...", "_"),
+            ("Fragen? Antworten: \"ja\" <1> *", "Fragen Antworten- ja 1"),
+            ("Ende mit Punkt.", "Ende mit Punkt"),
+            ("zu   viele\tLeerzeichen", "zu viele Leerzeichen"),
             ("", "Untitled"),
             ("   ", "Untitled"),
         ];

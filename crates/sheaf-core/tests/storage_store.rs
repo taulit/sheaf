@@ -99,7 +99,7 @@ fn file_names_follow_titles() {
         ("Einkauf\nanderer Text", "Einkauf 2.md"),
         ("# Einkauf", "Einkauf 3.md"),
         ("Soll/Haben\\Rest", "Soll-Haben-Rest.md"),
-        ("Fragen: wer? *was*", "Fragen: wer? was.md"),
+        ("Fragen: wer? *was*", "Fragen- wer was.md"),
         (".versteckt", "_versteckt.md"),
         ("", "Untitled.md"),
         ("\n\n", "Untitled 2.md"),

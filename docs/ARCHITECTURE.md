@@ -20,9 +20,11 @@ file records the decisions that span more than one crate. The plan it implements
   never treated as notes or folders.
 - **Title** is the first non-empty line of the text, without heading markers. Sheaf does
   not add a `# ` to what the user typed.
-- **File name** follows the title: `/`, `\`, control characters and a leading `.` are
-  replaced, the name is trimmed to 120 bytes at a character boundary, an empty title
-  becomes the localised "Untitled". On a collision ` 2`, ` 3`, … is appended.
+- **File name** follows the title and stays valid on Android and Windows, where sync
+  tools carry the notes: `/`, `\` and `:` become `-`, `? * " < > |` are dropped, a leading
+  `.` is replaced, a trailing `.` removed, the name is trimmed to 120 bytes at a character
+  boundary, an empty title becomes the localised "Untitled". On a collision ` 2`, ` 3`, …
+  is appended.
 - **Frontmatter** is written only when there is something to store. Sheaf edits single
   keys in place and leaves every other byte of the file alone, so a file Sheaf did not
   change is byte-identical after a read/write cycle.
