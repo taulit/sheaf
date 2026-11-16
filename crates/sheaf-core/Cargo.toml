@@ -33,3 +33,12 @@ tempfile.workspace = true
 
 [lints]
 workspace = true
+
+[[bench]]
+name = "search"
+harness = false
+required-features = ["testgen"]
+
+[[example]]
+name = "search_budget"
+required-features = ["testgen"]
