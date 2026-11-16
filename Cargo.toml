@@ -30,6 +30,8 @@ toml = "1"
 ulid = "3"
 unicode-normalization = "0.1"
 zbus = "6.3"
+zruntime = { version = "0.2.3", default-features = false }
+futures-core = { version = "0.3", default-features = false }
 
 assert_cmd = "2.2"
 criterion = "0.8"
