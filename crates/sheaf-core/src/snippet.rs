@@ -18,9 +18,14 @@ pub const SNIPPET_CHARS: usize = 160;
 /// beginning of the note.
 const SCAN_LIMIT_BYTES: usize = 128 * 1024;
 
-/// How much more a window is worth for the first match of a query term than for a
-/// repeated one: a window with every term once beats one with a single term many times.
-const DISTINCT_TERM_WEIGHT: usize = 8;
+/// A note is looked at in pieces of about this size, and the search for a snippet
+/// stops at the first piece that has all of the query in one window. Most snippets
+/// therefore cost one piece, however long the note is.
+const CHUNK_BYTES: usize = 4096;
+
+/// Consecutive pieces overlap by this much, so that a window that straddles the end
+/// of one piece is found whole in the next.
+const CHUNK_OVERLAP_BYTES: usize = 512;
 
 /// An excerpt of a note's text.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
@@ -45,26 +50,67 @@ pub fn body_without_title(body: &str) -> &str {
 
 /// The beginning of a note's text as plain text: what a card shows under the title.
 pub fn preview(body: &str, max_chars: usize) -> String {
-    head(&plain_body(body), max_chars)
+    beginning(body_without_title(body), max_chars)
 }
 
-/// The snippet of a search hit.
-pub(crate) fn build(body: &str, matcher: &Matcher) -> Snippet {
-    let plain = plain_body(body);
-    let marks = matcher.marks(&plain);
-    if marks.is_empty() {
-        Snippet {
-            text: head(&plain, SNIPPET_CHARS),
-            highlights: Vec::new(),
+/// The first `max_chars` characters of `markdown` as plain text.
+fn beginning(markdown: &str, max_chars: usize) -> String {
+    // Markup can be much longer than what it shows, so read on until there is enough.
+    let mut end = 0;
+    loop {
+        end = chunk_end(markdown, (end * 2).max(CHUNK_BYTES).max(max_chars * 2));
+        let plain = plain_text(&markdown[..end]);
+        if end == markdown.len() || plain.chars().nth(max_chars).is_some() {
+            return head(&plain, max_chars);
         }
-    } else {
-        window(&plain, &marks)
     }
 }
 
-fn plain_body(body: &str) -> String {
+/// The snippet of a search hit: the first place in the text where as much of the
+/// query as possible occurs together, or the beginning of the text if none of it does.
+pub(crate) fn build(body: &str, matcher: &Matcher) -> Snippet {
     let rest = body_without_title(body);
-    plain_text(&rest[..rest.floor_char_boundary(SCAN_LIMIT_BYTES)])
+    let rest = &rest[..rest.floor_char_boundary(SCAN_LIMIT_BYTES)];
+    let mut best: Option<(u32, Snippet)> = None;
+    let mut start = 0;
+    while start < rest.len() && !matcher.is_empty() {
+        let next = chunk_end(rest, start + CHUNK_BYTES);
+        let end = chunk_end(rest, next + CHUNK_OVERLAP_BYTES);
+        let plain = plain_text(&rest[start..end]);
+        let marks = matcher.marks(&plain);
+        if !marks.is_empty() {
+            let (terms, snippet) = window(&plain, &marks, start > 0, end < rest.len());
+            if best.as_ref().is_none_or(|(most, _)| terms > *most) {
+                best = Some((terms, snippet));
+            }
+            if terms as usize >= matcher.num_terms() {
+                break;
+            }
+        }
+        start = next;
+    }
+    best.map_or_else(
+        || Snippet {
+            text: beginning(rest, SNIPPET_CHARS),
+            highlights: Vec::new(),
+        },
+        |(_, snippet)| snippet,
+    )
+}
+
+/// The end of a piece of `text` that should be about `at` bytes long: the next line
+/// start, or failing that the next blank, so that neither words nor (usually) Markdown
+/// constructs are cut in two.
+fn chunk_end(text: &str, at: usize) -> usize {
+    if at >= text.len() {
+        return text.len();
+    }
+    let at = text.ceil_char_boundary(at);
+    let nearby = &text[at..text.floor_char_boundary(at + CHUNK_OVERLAP_BYTES)];
+    let boundary = nearby
+        .find('\n')
+        .or_else(|| nearby.find(char::is_whitespace));
+    boundary.map_or(at, |offset| at + offset + 1)
 }
 
 /// The first `max_chars` characters of `text`, cut at a word boundary.
@@ -81,9 +127,10 @@ fn head(text: &str, max_chars: usize) -> String {
     format!("{}…", kept.trim_end())
 }
 
-/// Cuts the [`SNIPPET_CHARS`] of `text` that hold the most matches. `marks` must be
-/// in text order and not empty.
-fn window(text: &str, marks: &[Mark]) -> Snippet {
+/// Cuts the first [`SNIPPET_CHARS`] of `text` that hold the most different query
+/// terms, and tells how many that are. `marks` must be in text order and not empty.
+/// `more_before` and `more_after` say whether the note goes on beyond `text`.
+fn window(text: &str, marks: &[Mark], more_before: bool, more_after: bool) -> (u32, Snippet) {
     let mut counted = (0, 0);
     let mut char_offset = |byte: usize| {
         counted = (byte, counted.1 + text[counted.0..byte].chars().count());
@@ -98,24 +145,17 @@ fn window(text: &str, marks: &[Mark]) -> Snippet {
     let mut best = (0, 0, 0);
     for first in 0..marks.len() {
         let mut seen = 0u64;
-        let mut score = 0;
         for last in first..marks.len() {
             if spans[last].1 - spans[first].0 > SNIPPET_CHARS {
                 break;
             }
-            let term = 1 << marks[last].term.min(63);
-            score += if seen & term == 0 {
-                DISTINCT_TERM_WEIGHT
-            } else {
-                1
-            };
-            seen |= term;
-            if score > best.0 {
-                best = (score, first, last);
+            seen |= 1 << marks[last].term.min(63);
+            if seen.count_ones() > best.0 {
+                best = (seen.count_ones(), first, last);
             }
         }
     }
-    let (_, first, last) = best;
+    let (terms, first, last) = best;
 
     // Centre the matches, then give context the note does not have after them to the
     // text before them.
@@ -143,8 +183,8 @@ fn window(text: &str, marks: &[Mark]) -> Snippet {
     }
     let kept = text[from..to].trim_end();
 
-    let lead = if from > 0 { "…" } else { "" };
-    let trail = if from + kept.len() < text.len() {
+    let lead = if from > 0 || more_before { "…" } else { "" };
+    let trail = if from + kept.len() < text.len() || more_after {
         "…"
     } else {
         ""
@@ -154,10 +194,11 @@ fn window(text: &str, marks: &[Mark]) -> Snippet {
         .filter(|mark| mark.range.start >= from && mark.range.end <= from + kept.len())
         .map(|mark| mark.range.start - from + lead.len()..mark.range.end - from + lead.len())
         .collect();
-    Snippet {
+    let snippet = Snippet {
         text: format!("{lead}{kept}{trail}"),
         highlights,
-    }
+    };
+    (terms, snippet)
 }
 
 /// Markdown reduced to the text a reader sees, on a single line: no heading, list,
@@ -226,7 +267,17 @@ fn strip_block_markers(line: &str) -> Option<(&str, bool)> {
 /// Appends `text` without inline Markdown markers.
 fn strip_inline(text: &str, table: bool, out: &mut String) {
     let mut index = 0;
-    while let Some(c) = text[index..].chars().next() {
+    loop {
+        // Most of a text is neither markup nor blank, and is copied as it is.
+        let plain = text.as_bytes()[index..]
+            .iter()
+            .position(|byte| byte.is_ascii_whitespace() || br"\![<`*~=_|".contains(byte))
+            .unwrap_or(text.len() - index);
+        out.push_str(&text[index..index + plain]);
+        index += plain;
+        let Some(c) = text[index..].chars().next() else {
+            break;
+        };
         let rest = &text[index..];
         let after = &rest[c.len_utf8()..];
         // A marker between two blanks is no marker: `2 * 3`, `a == b`.
@@ -461,6 +512,86 @@ mod tests {
         let inner = snippet.text.trim_matches('…');
         assert!(inner.chars().count() <= SNIPPET_CHARS);
         assert!(inner.chars().count() > SNIPPET_CHARS - 8);
+    }
+
+    fn marked(snippet: &Snippet) -> Vec<&str> {
+        snippet
+            .highlights
+            .iter()
+            .map(|range| &snippet.text[range.clone()])
+            .collect()
+    }
+
+    #[test]
+    fn a_match_deep_in_a_long_note_is_found() {
+        let line = "Lorem ipsum dolor sit amet. ".repeat(40);
+        let body = format!(
+            "Titel\n\n{}Hier steht die Nadel im Heu.\n{line}\n",
+            format!("{line}\n").repeat(20)
+        );
+        assert!(body.len() > 5 * CHUNK_BYTES);
+        let snippet = build(&body, &Matcher::new(&parse("nadel")));
+        assert_eq!(marked(&snippet), ["Nadel"]);
+        assert!(
+            snippet
+                .text
+                .contains("amet. Hier steht die Nadel im Heu. Lorem")
+        );
+        assert!(snippet.text.starts_with('…') && snippet.text.ends_with('…'));
+        assert!(snippet.text.chars().count() <= SNIPPET_CHARS + 2);
+    }
+
+    #[test]
+    fn the_whole_query_further_down_beats_a_part_of_it_at_the_top() {
+        let line = "wort ".repeat(200);
+        let body = format!(
+            "Titel\n\nalpha am Anfang\n{}alpha und beta zusammen\n{line}\n",
+            format!("{line}\n").repeat(12)
+        );
+        let snippet = build(&body, &Matcher::new(&parse("alpha beta")));
+        assert_eq!(marked(&snippet), ["alpha", "beta"]);
+
+        // Without such a place the first match is shown.
+        let snippet = build(&body, &Matcher::new(&parse("alpha gamma")));
+        assert_eq!(marked(&snippet), ["alpha"]);
+        assert!(snippet.text.starts_with("alpha am Anfang wort"));
+    }
+
+    #[test]
+    fn matches_on_both_sides_of_a_piece_boundary_are_found_together() {
+        let line = format!("{}\n", "wort ".repeat(200));
+        let before = format!("{}{}alpha\n", line.repeat(4), "wort ".repeat(20));
+        assert!((CHUNK_BYTES..CHUNK_BYTES + CHUNK_OVERLAP_BYTES).contains(&before.len()));
+        assert_eq!(chunk_end(&before, CHUNK_BYTES), before.len());
+        let body = format!("Titel\n\n{before}beta {line}{line}");
+        let snippet = build(&body, &Matcher::new(&parse("alpha beta")));
+        assert_eq!(marked(&snippet), ["alpha", "beta"]);
+    }
+
+    #[test]
+    fn pieces_end_at_line_starts_or_blanks() {
+        let lines = "abc def\n".repeat(1000);
+        assert_eq!(chunk_end(&lines, 0), 8);
+        assert_eq!(chunk_end(&lines, 8), 16);
+        assert_eq!(chunk_end(&lines, 9), 16);
+        assert_eq!(chunk_end(&lines, lines.len()), lines.len());
+        assert_eq!(chunk_end(&lines, lines.len() + 100), lines.len());
+        let one_line = "äöü ".repeat(1000);
+        assert_eq!(chunk_end(&one_line, 1), 7);
+        let one_word = "ä".repeat(1000);
+        assert_eq!(chunk_end(&one_word, 1), 2);
+        assert_eq!(chunk_end("", 0), 0);
+    }
+
+    #[test]
+    fn a_long_preview_reads_as_much_as_it_needs() {
+        let body = format!(
+            "Titel\n\n{}",
+            "[wort](https://example.org/a/very/long/address) ".repeat(2000)
+        );
+        let preview = preview(&body, 3000);
+        assert_eq!(preview.chars().count(), 3000);
+        assert!(preview.starts_with("wort wort wort") && preview.ends_with("wort…"));
     }
 
     #[test]

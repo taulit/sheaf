@@ -478,3 +478,12 @@ fn backlinks_find_notes_linking_to_a_title() {
     assert_eq!(backlinks("Einkaufe"), [""; 0]);
     assert_eq!(backlinks("Ausschreibung"), [""; 0]);
 }
+
+#[test]
+fn handles_can_be_shared_between_threads() {
+    fn assert_send_sync<T: Send + Sync>() {}
+    assert_send_sync::<SearchIndex>();
+    assert_send_sync::<sheaf_core::Reader>();
+    fn assert_send<T: Send>() {}
+    assert_send::<sheaf_core::Writer>();
+}

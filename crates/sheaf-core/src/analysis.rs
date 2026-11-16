@@ -118,24 +118,43 @@ fn push_base(c: char, out: &mut String) {
     }
 }
 
-fn is_word_char(c: char) -> bool {
-    if c.is_ascii() {
-        c.is_ascii_alphanumeric()
-    } else {
-        // Combining marks belong to the letter before them (decomposed umlauts).
-        c.is_alphanumeric() || is_combining_mark(c)
+/// Whether the character at byte `at` is part of a word, and its length in bytes.
+fn word_char(text: &str, at: usize) -> (bool, usize) {
+    let byte = text.as_bytes()[at];
+    if byte.is_ascii() {
+        return (byte.is_ascii_alphanumeric(), 1);
     }
+    text[at..].chars().next().map_or((false, 1), |c| {
+        // Combining marks belong to the letter before them (decomposed umlauts).
+        (c.is_alphanumeric() || is_combining_mark(c), c.len_utf8())
+    })
 }
 
 /// Byte ranges of the words in `text`, in order.
 pub fn word_ranges(text: &str) -> impl Iterator<Item = Range<usize>> + '_ {
-    let mut chars = text.char_indices();
+    let mut position = 0;
     std::iter::from_fn(move || {
         loop {
-            let (start, _) = chars.find(|(_, c)| is_word_char(*c))?;
-            let end = chars
-                .find(|(_, c)| !is_word_char(*c))
-                .map_or(text.len(), |(index, _)| index);
+            let mut start = position;
+            let mut end = loop {
+                if start == text.len() {
+                    position = start;
+                    return None;
+                }
+                let (in_word, len) = word_char(text, start);
+                if in_word {
+                    break start + len;
+                }
+                start += len;
+            };
+            while end < text.len() {
+                let (in_word, len) = word_char(text, end);
+                if !in_word {
+                    break;
+                }
+                end += len;
+            }
+            position = end;
             if end - start <= MAX_WORD_BYTES {
                 return Some(start..end);
             }
@@ -149,6 +168,18 @@ pub fn words(text: &str) -> impl Iterator<Item = Word> + '_ {
         folded: fold(&text[range.clone()]),
         range,
     })
+}
+
+/// Calls `visit` with the byte range, the primary form and the German form, if it has
+/// one, of every word of `text`. Unlike [`words`] it allocates nothing per word.
+pub fn for_each_word(text: &str, mut visit: impl FnMut(Range<usize>, &str, Option<&str>)) {
+    let mut primary = String::new();
+    let mut german = String::new();
+    for range in word_ranges(text) {
+        primary.clear();
+        let differs = fold_into(&text[range.clone()], &mut primary, &mut german);
+        visit(range, &primary, differs.then_some(german.as_str()));
+    }
 }
 
 /// The folded words of `text` joined by single spaces: a form of a title that ignores

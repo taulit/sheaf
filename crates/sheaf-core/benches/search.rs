@@ -1,4 +1,5 @@
-//! Benchmarks of the index build and of search on 10,000 generated notes.
+//! Benchmarks of the index build and of search on 10,000 generated notes. A search
+//! measurement runs every query of its class once, so divide by their number.
 //!
 //! ```text
 //! cargo bench -p sheaf-core --features testgen

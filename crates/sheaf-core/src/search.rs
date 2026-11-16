@@ -229,14 +229,13 @@ impl WordTerm {
         }
     }
 
-    fn matches(&self, word: &Folded) -> bool {
+    /// Whether a word of a note, given in one of its folded forms, matches.
+    fn matches(&self, word: &str) -> bool {
+        let distance = usize::from(self.distance);
         self.forms.iter().any(|form| {
-            word.forms().any(|word| {
-                word == form
-                    || (self.prefix && word.starts_with(form.as_str()))
-                    || (self.distance > 0
-                        && within_distance(word, form, usize::from(self.distance)))
-            })
+            word == form
+                || (self.prefix && word.starts_with(form.as_str()))
+                || (distance > 0 && within_distance(word, form, distance))
         })
     }
 }
@@ -298,41 +297,62 @@ impl Matcher {
         self.words.is_empty() && self.phrases.is_empty()
     }
 
+    /// The number of words and phrases, which is the most different terms a text can
+    /// have [`marks`](Matcher::marks) for.
+    pub(crate) fn num_terms(&self) -> usize {
+        self.words.len() + self.phrases.len()
+    }
+
     /// The words of `text` the query matches, in text order.
     pub(crate) fn marks(&self, text: &str) -> Vec<Mark> {
-        let words: Vec<analysis::Word> = analysis::words(text).collect();
-        let mut terms: Vec<Option<usize>> = words
-            .iter()
-            .map(|word| {
-                self.words
-                    .iter()
-                    .position(|term| term.matches(&word.folded))
-            })
-            .collect();
+        let mut marks = Vec::new();
+        // With phrases every word is kept until the phrases are found, with one bit
+        // per word of a phrase that it equals.
+        let mut candidates: Vec<(Range<usize>, Option<usize>, u64)> = Vec::new();
+        let phrase_words = || self.phrases.iter().flatten().take(u64::BITS as usize);
+        analysis::for_each_word(text, |range, primary, german| {
+            let forms = [Some(primary), german];
+            let matches = |word: &WordTerm| forms.iter().flatten().any(|form| word.matches(form));
+            let term = self.words.iter().position(matches);
+            if self.phrases.is_empty() {
+                marks.extend(term.map(|term| Mark { range, term }));
+                return;
+            }
+            let equal = |wanted: &Folded| {
+                wanted
+                    .forms()
+                    .any(|wanted| forms.iter().flatten().any(|form| *form == wanted))
+            };
+            let equals = phrase_words()
+                .enumerate()
+                .filter(|(_, wanted)| equal(wanted))
+                .fold(0, |bits, (index, _)| bits | 1 << index);
+            candidates.push((range, term, equals));
+        });
+
+        let mut first_bit = 0;
         for (index, phrase) in self.phrases.iter().enumerate() {
-            for start in 0..(words.len() + 1).saturating_sub(phrase.len()) {
-                let occurs = phrase.iter().zip(&words[start..]).all(|(wanted, word)| {
-                    wanted
-                        .forms()
-                        .any(|form| word.folded.forms().any(|w| w == form))
-                });
+            let bits = first_bit..(first_bit + phrase.len()).min(u64::BITS as usize);
+            first_bit = bits.end;
+            for start in 0..(candidates.len() + 1).saturating_sub(bits.len().max(1)) {
+                let occurs = !bits.is_empty()
+                    && bits
+                        .clone()
+                        .zip(&candidates[start..])
+                        .all(|(bit, (_, _, equals))| equals & (1 << bit) != 0);
                 if occurs {
-                    for term in &mut terms[start..start + phrase.len()] {
+                    for (_, term, _) in &mut candidates[start..start + bits.len()] {
                         term.get_or_insert(self.words.len() + index);
                     }
                 }
             }
         }
-        words
-            .into_iter()
-            .zip(terms)
-            .filter_map(|(word, term)| {
-                Some(Mark {
-                    range: word.range,
-                    term: term?,
-                })
-            })
-            .collect()
+        marks.extend(
+            candidates
+                .into_iter()
+                .filter_map(|(range, term, _)| Some(Mark { range, term: term? })),
+        );
+        marks
     }
 
     /// The byte ranges of `text` the query matches.
@@ -348,13 +368,27 @@ impl Matcher {
 /// substitutions and swaps of neighbours, which is what the index's typo tolerance
 /// accepts.
 fn within_distance(a: &str, b: &str, max: usize) -> bool {
+    if a.len().abs_diff(b.len()) > max * 4 {
+        return false;
+    }
     if a.is_ascii() && b.is_ascii() {
-        edits_within(a.as_bytes(), b.as_bytes(), max)
+        // An edit adds at most one kind of letter and removes at most one, so words
+        // whose letters differ more than that are told apart without comparing them
+        // position by position. This rejects nearly every word of a text.
+        let (letters_a, letters_b) = (letters(a), letters(b));
+        (letters_a & !letters_b).count_ones() as usize <= max
+            && (letters_b & !letters_a).count_ones() as usize <= max
+            && edits_within(a.as_bytes(), b.as_bytes(), max)
     } else {
         let a: Vec<char> = a.chars().collect();
         let b: Vec<char> = b.chars().collect();
         edits_within(&a, &b, max)
     }
+}
+
+/// The set of bytes that occur in `word`, in 32 buckets.
+fn letters(word: &str) -> u32 {
+    word.bytes().fold(0, |set, byte| set | 1 << (byte % 32))
 }
 
 fn edits_within<T: PartialEq>(a: &[T], b: &[T], max: usize) -> bool {

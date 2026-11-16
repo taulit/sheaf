@@ -2,9 +2,10 @@
 //!
 //! The notes are made up, but shaped like a real folder: German and English mixed,
 //! most notes a few paragraphs long and a few very long, with headings, checklists,
-//! tables, images, attachments, tags, wiki links and nested folders. Word frequencies
-//! are skewed and compounds, names and numbers give the vocabulary a long tail, since
-//! the size of the vocabulary is what prefix and typo search cost.
+//! tables, images, attachments, tags, wiki links and nested folders. Every note is
+//! about a handful of things, word frequencies are skewed, and compounds, names and
+//! numbers give the vocabulary a long tail: the number of notes a word occurs in and
+//! the size of the vocabulary are what search costs.
 //!
 //! The same seed always gives the same notes, on every platform.
 
@@ -39,6 +40,7 @@ pub fn notes(count: usize) -> Vec<NoteDoc> {
 pub fn notes_with_seed(count: usize, seed: u64) -> Vec<NoteDoc> {
     let mut generator = Generator {
         rng: Rng(seed),
+        topic: Vec::new(),
         paths: HashSet::new(),
         titles: Vec::new(),
     };
@@ -388,6 +390,8 @@ impl Words {
 
 struct Generator {
     rng: Rng,
+    /// What the current note is about: the nouns most of its nouns are taken from.
+    topic: Vec<(bool, &'static str)>,
     paths: HashSet<String>,
     /// Titles of the notes so far, the targets of wiki links.
     titles: Vec<String>,
@@ -410,6 +414,13 @@ struct Draft {
 impl Generator {
     fn note(&mut self) -> NoteDoc {
         let german = self.rng.chance(65);
+        self.topic.clear();
+        for _ in 0..self.rng.between(6, 14) {
+            // Mostly in the note's language, but people mix.
+            let german = if self.rng.chance(15) { !german } else { german };
+            let noun = self.rng.pick(&Self::language(german).nouns);
+            self.topic.push((german, noun));
+        }
         let mut draft = Draft::default();
         let mut title = self.title(german);
         let folder = self.rng.pick_skewed(FOLDERS);
@@ -564,6 +575,10 @@ impl Generator {
     }
 
     fn noun(&mut self, german: bool) -> &'static str {
+        if self.rng.chance(70) {
+            let (_, noun) = self.topic[self.rng.below(self.topic.len())];
+            return noun;
+        }
         let nouns = &Self::language(german).nouns;
         let index = (self.rng.unit().powi(2) * nouns.len() as f64) as usize;
         nouns[index.min(nouns.len() - 1)]
