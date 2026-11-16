@@ -1,0 +1,6 @@
+/target
+*.mo
+/po/*.po~
+/build-aux/flatpak/.flatpak-builder
+/build-aux/flatpak/build
+.DS_Store
