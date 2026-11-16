@@ -1,0 +1,11 @@
+---
+source: crates/sheaf/tests/cli.rs
+expression: "sandbox.document(&run.stderr, \"error\")"
+---
+{
+  "error": {
+    "code": "usage",
+    "message": "the app is not part of this build; run `sheaf help` for the commands"
+  },
+  "schema": 1
+}

@@ -1,0 +1,44 @@
+---
+source: crates/sheaf/tests/cli.rs
+expression: "sandbox.json(&[\"tasks\"], \"tasks\")"
+---
+{
+  "schema": 1,
+  "tasks": [
+    {
+      "checked": true,
+      "note_id": "[id1]",
+      "note_title": "Project plan",
+      "number": 1,
+      "text": "Write the brief"
+    },
+    {
+      "checked": false,
+      "note_id": "[id1]",
+      "note_title": "Project plan",
+      "number": 2,
+      "text": "Book the venue"
+    },
+    {
+      "checked": false,
+      "note_id": "[id2]",
+      "note_title": "Einkauf",
+      "number": 1,
+      "text": "Milch"
+    },
+    {
+      "checked": true,
+      "note_id": "[id2]",
+      "note_title": "Einkauf",
+      "number": 2,
+      "text": "Brot"
+    },
+    {
+      "checked": false,
+      "note_id": "[id2]",
+      "note_title": "Einkauf",
+      "number": 3,
+      "text": "Eier"
+    }
+  ]
+}

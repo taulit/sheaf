@@ -1,0 +1,11 @@
+---
+source: crates/sheaf/tests/cli.rs
+expression: md
+---
+# Besprechung Ausschreibung
+
+Die Ausschreibung für das Projekt Frühling wurde besprochen. #projekt
+
+| Phase | Frist |
+|---|---|
+| Angebot | 30. November |

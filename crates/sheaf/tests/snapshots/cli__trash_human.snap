@@ -1,0 +1,5 @@
+---
+source: crates/sheaf/tests/cli.rs
+expression: "sandbox.text(&[\"trash\"])"
+---
+[id1]                       Project plan  Arbeit/Planung  [time]
