@@ -9,14 +9,18 @@
 //! - search (`analysis`, `query`, `index`, `snippet`): indexes [`model::NoteDoc`]s and
 //!   answers queries.
 
+pub mod config;
 pub mod error;
 pub mod frontmatter;
 pub mod i18n;
 pub mod model;
+pub mod paths;
 pub mod scan;
 pub mod store;
+pub mod templates;
 pub mod trash;
 
+pub use config::{AppConfig, FolderConfig};
 pub use error::{Error, Result};
 pub use model::{NoteDoc, NoteId, NoteMeta, NoteRef};
 pub use store::{CreateOptions, Entry, Fingerprint, Note, NoteStore, TaskRef, WriteOptions};
