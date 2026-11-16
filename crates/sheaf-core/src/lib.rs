@@ -16,6 +16,8 @@ pub mod model;
 pub mod query;
 pub mod search;
 pub mod snippet;
+#[cfg(feature = "testgen")]
+pub mod testgen;
 
 pub use error::{Error, Result};
 pub use index::{Reader, SearchIndex, Sort, Writer};
