@@ -240,12 +240,15 @@ pub trait SearchProvider2 {
     fn launch_search(&self, terms: &[&str], timestamp: u32) -> zbus::Result<()>;
 }
 
-/// The actions the fake app was asked for, with their string parameters.
+/// An action the fake app was asked for, with its string parameters.
+pub type Call = (String, Vec<String>);
+
+/// The actions the fake app was asked for.
 #[derive(Clone, Debug, Default)]
-pub struct Calls(Arc<Mutex<Vec<(String, Vec<String>)>>>);
+pub struct Calls(Arc<Mutex<Vec<Call>>>);
 
 impl Calls {
-    pub fn take(&self) -> Vec<(String, Vec<String>)> {
+    pub fn take(&self) -> Vec<Call> {
         std::mem::take(&mut *self.0.lock().unwrap())
     }
 }

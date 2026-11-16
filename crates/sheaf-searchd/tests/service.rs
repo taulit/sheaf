@@ -1,5 +1,7 @@
 //! `sheaf-searchd` end to end: the real binary on a private bus.
 
+#![allow(clippy::unwrap_used)]
+
 mod harness;
 
 use std::fs;
@@ -79,7 +81,7 @@ fn created_and_appended_notes_are_searchable_at_once() {
 
         let quick = notes.create("Quick\n\nmango", "").await.unwrap();
         let signal = next(&mut changed, TIMEOUT).await.expect("Changed");
-        assert_eq!(signal.args().unwrap().ids, [quick.clone()]);
+        assert_eq!(signal.args().unwrap().ids, std::slice::from_ref(&quick));
         let root = notes.create("Root\n\npapaya", "/").await.unwrap();
         let nested = notes.create("Nested\n\nguava", "Work/Ideas").await.unwrap();
 
@@ -172,7 +174,7 @@ fn search_provider_returns_ids_and_metas() {
             .get_subsearch_result_set(&[&lemon, &lime], &["lemon", "tart"])
             .await
             .unwrap();
-        assert_eq!(narrowed, [lemon.clone()]);
+        assert_eq!(narrowed, std::slice::from_ref(&lemon));
 
         let metas = provider
             .get_result_metas(&[&lemon, &lime, &blank, "01ARZ3NDEKTSV4RRFFQ69G5FAV", "junk"])
