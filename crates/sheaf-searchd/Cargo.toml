@@ -17,6 +17,7 @@ zruntime = { workspace = true, features = ["helper", "lock", "mpmc", "signal", "
 futures-core.workspace = true
 
 [dev-dependencies]
+sheaf-core = { workspace = true, features = ["testgen"] }
 tempfile.workspace = true
 
 [lints]

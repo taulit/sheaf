@@ -1,8 +1,9 @@
 //! The notes folder and its index, kept in step. Everything here blocks; the D-Bus side
-//! runs it on a worker thread, one call at a time.
+//! runs it on a worker thread, one call at a time. Writes to the index go through the
+//! [`indexer`](crate::indexer) child process.
 
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use jiff::{Timestamp, ZonedDateTime};
 use sheaf_core::i18n::tr;
@@ -10,9 +11,11 @@ use sheaf_core::query::parse;
 use sheaf_core::snippet::{SNIPPET_CHARS, preview};
 use sheaf_core::{
     Change, CreateOptions, Error, FolderConfig, NoteId, NoteStore, Reader, Result, SearchIndex,
-    TRASH_MAX_AGE, Writer,
+    TRASH_MAX_AGE,
 };
 use sheaf_searchd::api::NoteRow;
+
+use crate::indexer::{self, Op};
 
 const DEFAULT_LIMIT: usize = 20;
 const MAX_LIMIT: usize = 200;
@@ -30,7 +33,7 @@ pub struct ResultMeta {
 #[derive(Debug)]
 pub struct Library {
     store: NoteStore,
-    index: SearchIndex,
+    index_dir: PathBuf,
     reader: Reader,
     /// The snippet of the most recent search that returned a note, by id.
     snippets: HashMap<String, String>,
@@ -38,11 +41,12 @@ pub struct Library {
 
 impl Library {
     pub fn open(notes_dir: &Path, index_dir: &Path) -> Result<Self> {
+        // Creates or repairs the index; this process only reads it afterwards.
         let index = SearchIndex::open_or_create(index_dir)?;
         Ok(Library {
             store: NoteStore::new(notes_dir),
+            index_dir: index_dir.to_owned(),
             reader: index.reader(),
-            index,
             snippets: HashMap::new(),
         })
     }
@@ -87,16 +91,13 @@ impl Library {
             indexed.len()
         );
         let mut ids = Vec::new();
-        self.write(|writer| {
-            for (path, (id, _)) in indexed {
-                writer.remove_path(&path);
-                ids.push(id.to_string());
-            }
-            for path in &stale {
-                ids.extend(self.index_path(writer, path)?);
-            }
-            Ok(())
-        })?;
+        let mut ops = Vec::with_capacity(indexed.len() + stale.len());
+        for (path, (id, _)) in indexed {
+            ops.push(Op::Remove(path));
+            ids.push(id.to_string());
+        }
+        ops.extend(stale.into_iter().map(Op::Upsert));
+        ids.extend(self.write(&ops)?);
         Ok(dedup(ids))
     }
 
@@ -109,21 +110,20 @@ impl Library {
             return Ok(Vec::new());
         }
         let mut ids = Vec::new();
-        self.write(|writer| {
-            for change in &changes {
-                match change {
-                    Change::Upsert(path) => ids.extend(self.index_path(writer, path)?),
-                    Change::Remove(path) => {
-                        if let Some(meta) = self.reader.get_by_path(path)? {
-                            ids.push(meta.id.to_string());
-                        }
-                        writer.remove_path(path);
+        let mut ops = Vec::with_capacity(changes.len());
+        for change in changes {
+            match change {
+                Change::Upsert(path) => ops.push(Op::Upsert(path)),
+                Change::Remove(path) => {
+                    if let Some(meta) = self.reader.get_by_path(&path)? {
+                        ids.push(meta.id.to_string());
                     }
-                    Change::Rescan => {}
+                    ops.push(Op::Remove(path));
                 }
+                Change::Rescan => {}
             }
-            Ok(())
-        })?;
+        }
+        ids.extend(self.write(&ops)?);
         Ok(dedup(ids))
     }
 
@@ -132,13 +132,11 @@ impl Library {
         self.store.refresh();
         self.snippets.clear();
         let entries = self.store.walk()?;
-        self.write(|writer| {
-            writer.clear()?;
-            for entry in &entries {
-                self.index_path(writer, &entry.rel_path)?;
-            }
-            Ok(())
-        })
+        let ops: Vec<Op> = std::iter::once(Op::Clear)
+            .chain(entries.into_iter().map(|entry| Op::Upsert(entry.rel_path)))
+            .collect();
+        self.write(&ops)?;
+        Ok(())
     }
 
     pub fn search(&mut self, query: &str, limit: u32) -> Result<Vec<NoteRow>> {
@@ -217,7 +215,7 @@ impl Library {
             ..CreateOptions::default()
         };
         let meta = self.store.create(text, &options)?;
-        self.write(|writer| writer.upsert(&self.store.load_doc(&meta.rel_path)?))?;
+        self.write(&[Op::Upsert(meta.rel_path)])?;
         Ok(meta.id.to_string())
     }
 
@@ -226,33 +224,19 @@ impl Library {
     pub fn append(&mut self, id: &str, text: &str) -> Result<Vec<String>> {
         let note_id: NoteId = id.parse().map_err(|_| Error::NotFound(id.to_owned()))?;
         let meta = self.store.append(&note_id, text)?;
-        self.write(|writer| writer.upsert(&self.store.load_doc(&meta.rel_path)?))?;
+        self.write(&[Op::Upsert(meta.rel_path)])?;
         Ok(dedup(vec![note_id.to_string(), meta.id.to_string()]))
     }
 
-    /// Indexes the note at `path`, or drops it from the index if it cannot be read.
-    /// Returns its id if it was indexed.
-    fn index_path(&self, writer: &mut Writer, path: &str) -> Result<Option<String>> {
-        match self.store.load_doc(path) {
-            Ok(doc) => {
-                writer.upsert(&doc)?;
-                Ok(Some(doc.meta.id.to_string()))
-            }
-            Err(err) => {
-                log::warn!("not indexing {path}: {err}");
-                writer.remove_path(path);
-                Ok(None)
-            }
+    /// Applies `ops` and shows their result to the following reads. Returns the ids of
+    /// the notes that were indexed.
+    fn write(&self, ops: &[Op]) -> Result<Vec<String>> {
+        if ops.is_empty() {
+            return Ok(Vec::new());
         }
-    }
-
-    /// Runs `f` with a fresh writer and commits. The writer is released afterwards, so
-    /// that an idle service holds neither the lock nor the writer's memory.
-    fn write<T>(&self, f: impl FnOnce(&mut Writer) -> Result<T>) -> Result<T> {
-        let mut writer = self.index.writer()?;
-        let value = f(&mut writer)?;
-        writer.finish()?;
-        Ok(value)
+        let ids = indexer::apply(self.store.root(), &self.index_dir, ops)?;
+        self.reader.reload()?;
+        Ok(ids)
     }
 }
 
