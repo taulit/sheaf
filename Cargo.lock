@@ -1496,12 +1496,13 @@ dependencies = [
  "clap_complete",
  "insta",
  "jiff",
- "log",
+ "regex",
  "serde",
  "serde_json",
  "sheaf-core",
  "sheaf-searchd",
  "tempfile",
+ "thiserror",
  "zbus",
 ]
 
