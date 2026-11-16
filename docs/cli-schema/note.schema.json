@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Note result",
+  "description": "Output of `new`, `append`, `prepend`, `edit`, `check`, `uncheck`, `mv`, `rm`, `restore`, `pin`, `unpin` and `open`: the note after the change (for `rm` the note in the trash).",
+  "type": "object",
+  "required": [
+    "schema",
+    "note"
+  ],
+  "properties": {
+    "schema": {
+      "const": 1,
+      "description": "Version of the document format."
+    },
+    "note": {
+      "$ref": "#/$defs/note"
+    }
+  },
+  "$defs": {
+    "note": {
+      "type": "object",
+      "description": "A note. The same object in every document.",
+      "required": [
+        "id",
+        "title",
+        "folder",
+        "path",
+        "created",
+        "modified",
+        "pinned",
+        "tags",
+        "tasks_open",
+        "tasks_total",
+        "has_image",
+        "has_table",
+        "has_attachment",
+        "conflict"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "26 characters: a ULID, or `p` plus 25 lower-case characters for a note Sheaf has not written yet. Stable across renames and moves."
+        },
+        "title": {
+          "type": "string",
+          "description": "First line of the note without heading markers; empty for an empty note."
+        },
+        "folder": {
+          "type": "string",
+          "description": "Folder relative to the notes folder, `/`-separated; empty for the notes folder itself."
+        },
+        "path": {
+          "type": "string",
+          "description": "Absolute path of the note file. Read it, but change notes only through the CLI."
+        },
+        "created": {
+          "type": "string",
+          "format": "date-time",
+          "description": "RFC 3339, UTC."
+        },
+        "modified": {
+          "type": "string",
+          "format": "date-time",
+          "description": "RFC 3339, UTC."
+        },
+        "pinned": {
+          "type": "boolean"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Without `#`."
+        },
+        "tasks_open": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "tasks_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "has_image": {
+          "type": "boolean"
+        },
+        "has_table": {
+          "type": "boolean"
+        },
+        "has_attachment": {
+          "type": "boolean"
+        },
+        "conflict": {
+          "type": "boolean",
+          "description": "The file is a sync conflict copy."
+        }
+      }
+    }
+  }
+}

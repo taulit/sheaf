@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Search results",
+  "description": "Output of `search`. Best match first.",
+  "type": "object",
+  "required": [
+    "schema",
+    "query",
+    "total",
+    "hits"
+  ],
+  "properties": {
+    "schema": {
+      "const": 1,
+      "description": "Version of the document format."
+    },
+    "query": {
+      "type": "string",
+      "description": "The query as sent."
+    },
+    "total": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Notes that matched, before `--limit`."
+    },
+    "hits": {
+      "type": "array",
+      "items": {
+        "allOf": [
+          {
+            "$ref": "note.schema.json#/$defs/note"
+          },
+          {
+            "type": "object",
+            "required": [
+              "score",
+              "snippet",
+              "snippet_highlights",
+              "title_highlights"
+            ],
+            "properties": {
+              "score": {
+                "type": "number",
+                "description": "Higher is better; 0 for queries without words."
+              },
+              "snippet": {
+                "type": "string",
+                "description": "Plain text excerpt, one line."
+              },
+              "snippet_highlights": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "minItems": 2,
+                  "maxItems": 2
+                },
+                "description": "Byte ranges of `snippet` that match."
+              },
+              "title_highlights": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "minItems": 2,
+                  "maxItems": 2
+                },
+                "description": "Byte ranges of `title` that match."
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

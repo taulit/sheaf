@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Folders",
+  "description": "Output of `folders`. Empty folders are listed with 0 notes; the notes folder itself (path empty) only if it holds notes.",
+  "type": "object",
+  "required": [
+    "schema",
+    "folders"
+  ],
+  "properties": {
+    "schema": {
+      "const": 1,
+      "description": "Version of the document format."
+    },
+    "folders": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "path",
+          "notes"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Relative to the notes folder, `/`-separated."
+          },
+          "notes": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Notes directly in this folder."
+          }
+        }
+      }
+    }
+  }
+}

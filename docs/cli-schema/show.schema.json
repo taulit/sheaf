@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Note with text",
+  "description": "Output of `show --json` and `show --format json`.",
+  "type": "object",
+  "required": [
+    "schema",
+    "note",
+    "body"
+  ],
+  "properties": {
+    "schema": {
+      "const": 1,
+      "description": "Version of the document format."
+    },
+    "note": {
+      "$ref": "note.schema.json#/$defs/note"
+    },
+    "body": {
+      "type": "string",
+      "description": "The note text without frontmatter."
+    }
+  }
+}

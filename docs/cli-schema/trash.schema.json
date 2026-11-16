@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Trash",
+  "description": "Output of `trash`. Most recently deleted first.",
+  "type": "object",
+  "required": [
+    "schema",
+    "notes"
+  ],
+  "properties": {
+    "schema": {
+      "const": 1,
+      "description": "Version of the document format."
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "allOf": [
+          {
+            "$ref": "note.schema.json#/$defs/note"
+          },
+          {
+            "type": "object",
+            "required": [
+              "deleted",
+              "from"
+            ],
+            "properties": {
+              "deleted": {
+                "type": "string",
+                "format": "date-time",
+                "description": "RFC 3339, UTC."
+              },
+              "from": {
+                "type": "string",
+                "description": "The folder the note was in; empty for the notes folder."
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

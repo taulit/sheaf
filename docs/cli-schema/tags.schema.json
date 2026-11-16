@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Tags",
+  "description": "Output of `tags`.",
+  "type": "object",
+  "required": [
+    "schema",
+    "tags"
+  ],
+  "properties": {
+    "schema": {
+      "const": 1,
+      "description": "Version of the document format."
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "count"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Without `#`."
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    }
+  }
+}

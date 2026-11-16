@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Checklist items",
+  "description": "Output of `tasks`.",
+  "type": "object",
+  "required": [
+    "schema",
+    "tasks"
+  ],
+  "properties": {
+    "schema": {
+      "const": 1,
+      "description": "Version of the document format."
+    },
+    "tasks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "note_id",
+          "note_title",
+          "number",
+          "checked",
+          "text"
+        ],
+        "properties": {
+          "note_id": {
+            "type": "string"
+          },
+          "note_title": {
+            "type": "string"
+          },
+          "number": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Position among the items of the note; what `check` takes."
+          },
+          "checked": {
+            "type": "boolean"
+          },
+          "text": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
