@@ -5,10 +5,20 @@ Other sessions read only this file. Updated at the end of every phase.
 | Phase | State | Branch / PR |
 |---|---|---|
 | S0 Setup | in review | `phase/s0-setup`, [#1](https://github.com/taulit/sheaf/pull/1) |
-| S1 Core, searchd, CLI | in progress | `phase/s1-core` |
+| S1 Core, searchd, CLI | gate green, in review | `phase/s1-core` |
 | S2 App | not started | |
 | S3 Features | not started | |
 | S4 Release | not started | |
+
+## What works (S1)
+
+- `sheaf-core`: notes folder (lossless frontmatter, atomic writes, trash, watcher), index
+  and search language. Search p95 5.7 ms for 10,000 notes (budget 30 ms).
+- `sheaf-searchd`: GNOME Shell search provider and `io.github.taulit.Sheaf1` on D-Bus,
+  about 11 MB idle (budget 15 MB). The D-Bus contract is `crates/sheaf-searchd/src/api.rs`.
+- `sheaf` CLI with JSON output, schemas in `docs/cli-schema/`, agent guide `docs/AGENTS.md`.
+- `scripts/shell-search-check.sh` proves the GNOME overview finds notes, in a sandboxed
+  headless shell (`docs/testing.md`).
 
 ## Tags
 
