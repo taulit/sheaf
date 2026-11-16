@@ -1,0 +1,67 @@
+# German translations for sheaf package
+# German translation for sheaf.
+# Copyright (C) 2026 The Sheaf contributors
+# This file is distributed under the same license as the sheaf package.
+# Automatically generated, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: sheaf\n"
+"Report-Msgid-Bugs-To: https://github.com/taulit/sheaf/issues\n"
+"POT-Creation-Date: 2026-11-16 22:17+0100\n"
+"PO-Revision-Date: 2026-11-16 22:17+0100\n"
+"Last-Translator: Automatically generated\n"
+"Language-Team: German\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: crates/sheaf-core/src/config.rs:118
+msgid "Quick Notes"
+msgstr "Schnellnotizen"
+
+#: crates/sheaf-core/src/i18n.rs:51 crates/sheaf-core/src/store/fsops.rs:132
+#: crates/sheaf-searchd/src/library.rs:190 crates/sheaf/src/cli/output.rs:183
+msgid "Untitled"
+msgstr "Ohne Titel"
+
+#: crates/sheaf-core/src/i18n.rs:52 crates/sheaf-core/src/i18n.rs:53
+#, rust-format
+msgid "{} note"
+msgid_plural "{} notes"
+msgstr[0] "{} Notiz"
+msgstr[1] "{} Notizen"
+
+#: crates/sheaf-core/src/paths.rs:75
+msgid "Notes"
+msgstr "Notizen"
+
+#: crates/sheaf-core/src/store/write.rs:216
+msgid "conflict"
+msgstr "Konflikt"
+
+#: crates/sheaf/src/cli/commands/app.rs:28
+msgid "sheaf-searchd cannot be reached or found"
+msgstr "sheaf-searchd ist nicht erreichbar und wurde nicht gefunden"
+
+#: crates/sheaf/src/cli/commands/mod.rs:76
+msgid "no text given: pass TEXT or pipe it on stdin"
+msgstr "Kein Text angegeben: TEXT übergeben oder über stdin einlesen"
+
+#: crates/sheaf/src/cli/commands/read.rs:140
+msgid "not a date, use YYYY-MM-DD or RFC 3339:"
+msgstr "Kein Datum, erwartet wird JJJJ-MM-TT oder RFC 3339:"
+
+#: crates/sheaf/src/cli/commands/write.rs:36
+msgid "the note would be empty"
+msgstr "Die Notiz wäre leer"
+
+#: crates/sheaf/src/cli/commands/write.rs:72
+msgid "neither $VISUAL nor $EDITOR is set"
+msgstr "Weder $VISUAL noch $EDITOR ist gesetzt"
+
+#: crates/sheaf/src/cli/mod.rs:41
+msgid "the app is not part of this build; run `sheaf help` for the commands"
+msgstr "Die App ist in diesem Build nicht enthalten; `sheaf help` zeigt die Befehle"
