@@ -1,0 +1,77 @@
+---
+source: crates/sheaf-core/src/query.rs
+expression: query
+---
+{
+  "items": [
+    {
+      "kind": {
+        "Word": "Milch"
+      },
+      "span": {
+        "start": 2,
+        "end": 7
+      }
+    },
+    {
+      "kind": {
+        "Filter": {
+          "Tag": "einkauf/markt"
+        }
+      },
+      "span": {
+        "start": 8,
+        "end": 22
+      }
+    },
+    {
+      "kind": {
+        "Phrase": "frische Äpfel"
+      },
+      "span": {
+        "start": 23,
+        "end": 39
+      }
+    },
+    {
+      "kind": {
+        "Filter": {
+          "Folder": "Meine Notizen"
+        }
+      },
+      "span": {
+        "start": 40,
+        "end": 62
+      }
+    },
+    {
+      "kind": {
+        "Filter": {
+          "Has": "Image"
+        }
+      },
+      "span": {
+        "start": 63,
+        "end": 71
+      }
+    },
+    {
+      "kind": {
+        "Filter": "Open"
+      },
+      "span": {
+        "start": 72,
+        "end": 78
+      }
+    },
+    {
+      "kind": {
+        "Word": "ha"
+      },
+      "span": {
+        "start": 79,
+        "end": 81
+      }
+    }
+  ]
+}
