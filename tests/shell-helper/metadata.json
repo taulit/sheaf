@@ -1,0 +1,7 @@
+{
+  "uuid": "sheaf-test-helper@taulit.github.io",
+  "name": "Sheaf Test Helper",
+  "description": "Test-only helper for the sandboxed headless shell used by scripts/shell-sandbox.sh. Never installed for users.",
+  "shell-version": ["50", "51"],
+  "url": "https://github.com/taulit/sheaf"
+}
