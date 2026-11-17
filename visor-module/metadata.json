@@ -1,0 +1,10 @@
+{
+  "uuid": "sheaf-visor@taulit.github.io",
+  "name": "Visor: Notes",
+  "description": "Requires Visor. Shows the most recent notes of Sheaf in the dock, searches them and saves quick notes with the command \"note\".",
+  "shell-version": ["50", "51"],
+  "url": "https://github.com/taulit/sheaf",
+  "gettext-domain": "sheaf-visor",
+  "version-name": "0.1.0",
+  "visor": { "api": 1, "slot": "dock" }
+}
