@@ -269,7 +269,7 @@ async fn a_quick_note_window_without_a_note_still_closes(cx: &mut TestAppContext
     let read_only = std::fs::Permissions::from_mode(0o555);
     std::fs::set_permissions(&notes.dir, read_only).unwrap();
 
-    let mut window = quick.open(cx);
+    let window = quick.open(cx);
     let created = window
         .view
         .read_with(window.cx, |view, _| view.note().is_some());
