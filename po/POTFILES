@@ -31,7 +31,13 @@ crates/sheaf-searchd/src/service.rs
 crates/sheaf/src/app/actions.rs
 crates/sheaf/src/app/assets.rs
 crates/sheaf/src/app/chrome.rs
+crates/sheaf/src/app/gallery/cards.rs
+crates/sheaf/src/app/gallery/chips.rs
+crates/sheaf/src/app/gallery/dates.rs
+crates/sheaf/src/app/gallery/layout.rs
 crates/sheaf/src/app/gallery/mod.rs
+crates/sheaf/src/app/gallery/preview.rs
+crates/sheaf/src/app/gallery/render.rs
 crates/sheaf/src/app/instance.rs
 crates/sheaf/src/app/library.rs
 crates/sheaf/src/app/library/service.rs
