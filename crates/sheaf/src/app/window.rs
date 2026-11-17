@@ -71,6 +71,9 @@ pub struct MainWindow {
     restore_focus: Option<FocusHandle>,
     _sliding: Task<()>,
     _opening: Task<()>,
+    /// The note New Note is creating, until it is open; a second New Note meanwhile
+    /// does nothing.
+    creating: Option<Task<()>>,
     _note_events: Option<Subscription>,
     _overlay_events: Option<Subscription>,
     _subscriptions: [Subscription; 1],
@@ -115,6 +118,7 @@ impl MainWindow {
             restore_focus: None,
             _sliding: Task::ready(()),
             _opening: Task::ready(()),
+            creating: None,
             _note_events: None,
             _overlay_events: None,
             _subscriptions: [gallery_event],
@@ -264,6 +268,9 @@ impl MainWindow {
     /// open note is left.
     pub fn new_note(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.leave_note(window, cx, |this, _, window, cx| {
+            if this.creating.is_some() {
+                return;
+            }
             let options = CreateOptions {
                 folder: this.gallery.read(cx).current_folder(),
                 ..CreateOptions::default()
@@ -271,14 +278,21 @@ impl MainWindow {
             let created = this
                 .library
                 .update(cx, |library, cx| library.create("", options, cx));
-            this._opening = cx.spawn_in(window, async move |this, cx| match created.await {
-                Ok(meta) => {
-                    let _ = this.update_in(cx, |this, window, cx| {
-                        this.open(meta.id, String::new(), true, window, cx);
-                    });
-                }
-                Err(err) => log::error!("cannot create a note: {err}"),
-            });
+            this.creating = Some(cx.spawn_in(window, async move |this, cx| {
+                let created = created.await;
+                let _ = this.update_in(cx, |this, window, cx| {
+                    this.creating = None;
+                    match created {
+                        Ok(meta) => this.open(meta.id, String::new(), true, window, cx),
+                        Err(err) => {
+                            log::error!("cannot create a note: {err}");
+                            let message =
+                                tr("Could not create a note: {}").replace("{}", &err.to_string());
+                            this.toast(Toast::new(message), cx);
+                        }
+                    }
+                });
+            }));
         });
     }
 

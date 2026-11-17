@@ -947,3 +947,23 @@ async fn keys_typed_before_the_note_is_loaded_never_appear_and_are_never_lost(
     app.cx.simulate_input("Neu ");
     assert!(app.editor_text().starts_with("Neu Notch-Ideen"));
 }
+
+#[gpui::test]
+async fn a_second_new_note_while_the_first_is_created_leaves_nothing_behind(
+    cx: &mut TestAppContext,
+) {
+    let notes = Notes::empty();
+    let mut app = open_app(&notes, cx);
+    let main = app.main.clone();
+    app.cx.update(|window, cx| {
+        main.update(cx, |main, cx| {
+            main.handle(Request::NewNote, window, cx);
+            main.handle(Request::NewNote, window, cx);
+        });
+    });
+    app.cx.run_until_parked();
+    assert_eq!(notes.files(), ["Untitled.md"]);
+    app.cx.simulate_keystrokes("escape");
+    assert!(notes.files().is_empty(), "{:?}", notes.files());
+    assert_eq!(app.route(), Route::Gallery);
+}
