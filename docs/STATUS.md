@@ -43,7 +43,7 @@ None yet.
 | What | State on 2026-11-16 | Effect |
 |---|---|---|
 | `taulit/gpui-markdown-editor` tag `v0.0.3` | used since 2026-11-17 (newest tag then): WYSIWYG editing, `highlight`, `scroll_to`, `set_style`; not yet format bar, slash menu, completions, images, `MetaChanged` | gpui-pre =0.3.12, gpui-component =0.10.0, MSRV 1.95 |
-| `taulit/visor` tag `api-v1` | no tag yet (checked 2026-11-16, 22:25) | "Visor: Notes" (plan 03 §10) is open; built in S3 if the tag exists then, else in session 4 |
+| `taulit/visor` tag `api-v1` | exists (checked 2026-11-17) | "Visor: Notes" is built in `visor-module/` against it (S3) |
 
 ## Open
 
