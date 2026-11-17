@@ -490,6 +490,26 @@ async fn ctrl_n_creates_and_opens_a_note_and_escape_saves_it(cx: &mut TestAppCon
 }
 
 #[gpui::test]
+async fn header_titles_sit_in_the_middle_of_the_window(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let mut app = open_app(&notes, None, cx);
+    let off_centre = |app: &mut TestApp| {
+        let middle = |bounds: gpui::Bounds<gpui::Pixels>| bounds.origin.x + bounds.size.width / 2.;
+        let bar = app.cx.debug_bounds("header-bar").expect("a header bar");
+        let title = app.cx.debug_bounds("header-title").expect("a title");
+        (middle(title) - middle(bar)).abs()
+    };
+    // One button on the left, several on the right.
+    assert!(off_centre(&mut app) < px(1.), "{:?}", off_centre(&mut app));
+    let id = app.id_of("Notch-Ideen");
+    app.request(Request::OpenNote {
+        id: id.to_string(),
+        query: String::new(),
+    });
+    assert!(off_centre(&mut app) < px(1.), "{:?}", off_centre(&mut app));
+}
+
+#[gpui::test]
 async fn keys_of_the_gallery_pin_trash_and_focus_the_search(cx: &mut TestAppContext) {
     let notes = Notes::seeded();
     let mut app = open_app(&notes, None, cx);

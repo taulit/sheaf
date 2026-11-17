@@ -56,8 +56,8 @@ pub fn pane(background: Hsla, window: &Window, cx: &App) -> Div {
         .overflow_hidden()
 }
 
-/// The 47 px bar at the top of a pane: `start` items, a centred title, `end` items and
-/// the close button. It has no background of its own. Dragging it moves the window, a
+/// The 47 px bar at the top of a pane: `start` items, a title centred on the bar, `end`
+/// items and the close button. It has no background of its own. Dragging it moves the window, a
 /// double click maximises it, a right click opens the window menu.
 #[derive(IntoElement, Default)]
 pub struct HeaderBar {
@@ -111,6 +111,7 @@ impl RenderOnce for HeaderBar {
 
         div()
             .id("header-bar")
+            .debug_selector(|| "header-bar".into())
             .flex()
             .flex_none()
             .items_center()
@@ -146,19 +147,39 @@ impl RenderOnce for HeaderBar {
                     window.show_window_menu(event.position);
                 })
             })
-            .children(self.start)
+            // Both sides take the same share of the room the title leaves, so the title
+            // sits in the middle of the window, as in GNOME, however many buttons each
+            // side has.
             .child(
                 div()
+                    .flex()
                     .flex_1()
+                    .items_center()
+                    .gap(px(4.))
+                    .children(self.start),
+            )
+            .child(
+                div()
+                    .debug_selector(|| "header-title".into())
+                    .flex_initial()
                     .min_w_0()
+                    .px(px(8.))
                     .text_center()
                     .text_size(title_size)
                     .font_weight(gpui::FontWeight::BOLD)
                     .truncate()
                     .children(self.title),
             )
-            .children(self.end)
-            .when(client_decorated, |bar| bar.child(close_button(cx)))
+            .child(
+                div()
+                    .flex()
+                    .flex_1()
+                    .items_center()
+                    .justify_end()
+                    .gap(px(4.))
+                    .children(self.end)
+                    .when(client_decorated, |side| side.child(close_button(cx))),
+            )
     }
 }
 
