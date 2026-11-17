@@ -88,8 +88,9 @@ None yet.
 - PDF limits: no italic face (slanted Inter), checked items are grey but not struck
   through, `#tags` are not coloured, right-to-left text is set left to right, no
   hyphenation.
-- S2 CI needs the repository secret `EDITOR_DEPLOY_KEY` (read-only deploy key on
-  `taulit/gpui-markdown-editor`); not created yet.
+- CI fetches `taulit/gpui-markdown-editor` over https without credentials, so it is red
+  until that repository is public (decided 2026-11-17; the organisation has deploy keys
+  disabled).
 - In service mode folder and tag counts follow the service's index, not the app's own
   writes (`app/library/overlay.rs`).
 - Wanted from the editor (API, not in `v0.0.3`): read and set the scroll position (a

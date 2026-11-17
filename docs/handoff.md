@@ -63,15 +63,10 @@ Confirmed by the second review, except the cover cache (finding 3 above).
 
 ## Waiting for the user
 
-- **CI cannot fetch the private editor repository.** The user approved a read-only deploy
-  key (2026-11-17), but the organisation `taulit` has deploy keys disabled
-  (`gh api orgs/taulit --jq .deploy_keys_enabled_for_repositories` is `false`), so
-  `gh repo deploy-key add` fails. No key and no secret exist. Ways out, the user decides:
-  enable deploy keys in the organisation settings (then: `ssh-keygen`, `gh repo deploy-key
-  add <pub> --repo taulit/gpui-markdown-editor`, `gh secret set EDITOR_DEPLOY_KEY --repo
-  taulit/sheaf < <key>`, delete the files, `gh run rerun --failed`); or a fine-grained
-  token with read access to that repository as a secret (the workflow then needs an
-  https `insteadOf` rewrite instead of ssh); or making the editor repository public.
+- **CI is red until `taulit/gpui-markdown-editor` is public.** The organisation has
+  deploy keys disabled, so the user chose (2026-11-17) to make the editor repository
+  public. The workflow no longer uses ssh or a secret. Once it is public:
+  `gh run rerun --failed` on the PRs. No key and no secret exist.
 - PR screenshots are embedded
   from the repository instead.
 
