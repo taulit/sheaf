@@ -74,7 +74,7 @@ Geschenkideen Jukek\n\n![Skizze](_attachments/01JD3K8Z6Q4X7V9B2M5N8P0R04/skizze.
         path: "Privat/Rezepte/Shakshuka.md",
         minutes_ago: 4 * DAY + HOUR,
         text: "---\nid: 01JD3K8Z6Q4X7V9B2M5N8P0R05\ncreated: 2026-10-28T18:10:00+01:00\n---\n\
-Shakshuka\n\nFür 2 Personen, 25 Minuten.\n\n- [ ] 2 Paprika, 1 Zwiebel\n- [ ] 1 Dose Tomaten\n\
+Shakshuka\n\n![Shakshuka](_attachments/01JD3K8Z6Q4X7V9B2M5N8P0R05/pfanne.png)\n\nFür 2 Personen, 25 Minuten.\n\n- [ ] 2 Paprika, 1 Zwiebel\n- [ ] 1 Dose Tomaten\n\
 - [ ] 4 Eier, Feta, Kreuzkümmel\n\n#rezepte\n",
     },
     Seed {
@@ -88,7 +88,7 @@ Nächster Termin Do 15:00.\n",
         path: "Privat/Lesestoff.md",
         minutes_ago: 8 * DAY,
         text: "---\nid: 01JD3K8Z6Q4X7V9B2M5N8P0R07\ncreated: 2026-11-01T21:15:00+01:00\n---\n\
-Lesestoff\n\n[GNOME Human Interface Guidelines](https://developer.gnome.org/hig/)\n\n\
+Lesestoff\n\n![](_attachments/01JD3K8Z6Q4X7V9B2M5N8P0R07/cover.png)\n\n[GNOME Human Interface Guidelines](https://developer.gnome.org/hig/)\n\n\
 [libadwaita: Adaptive Layouts](https://gnome.pages.gitlab.gnome.org/libadwaita/doc/main/adaptive-layouts.html)\n\n\
 „The Design of Everyday Things“, Kapitel 3\n",
     },
@@ -139,14 +139,24 @@ Tax return 2025\n\nSubmitted on 2 May. Reference number in the letter from the t
     },
 ];
 
-/// A 1×1 PNG, so that the image link of the fixture points at a real picture.
-const PIXEL_PNG: &[u8] = &[
-    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
-    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53,
-    0xde, 0x00, 0x00, 0x00, 0x0c, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0xf8, 0xcf, 0xc0, 0x00,
-    0x00, 0x03, 0x01, 0x01, 0x00, 0xc9, 0xfe, 0x92, 0xef, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e,
-    0x44, 0xae, 0x42, 0x60, 0x82,
+/// Covers like the prototype's gradients, at the paths the seeded notes link to.
+const COVERS: &[(&str, &[u8])] = &[
+    (
+        "Privat/_attachments/01JD3K8Z6Q4X7V9B2M5N8P0R04/skizze.png",
+        include_bytes!("covers/purple.png"),
+    ),
+    (
+        "Privat/Rezepte/_attachments/01JD3K8Z6Q4X7V9B2M5N8P0R05/pfanne.png",
+        include_bytes!("covers/orange.png"),
+    ),
+    (
+        "Privat/_attachments/01JD3K8Z6Q4X7V9B2M5N8P0R07/cover.png",
+        include_bytes!("covers/green.png"),
+    ),
 ];
+
+/// What the folder remembers: the tags shown as chips, as in the prototype.
+const FOLDER_CONFIG: &str = "pinned_tags = [\"ausschreibung\", \"rezepte\"]\n";
 
 /// A temporary notes folder, removed when dropped.
 pub struct Notes {
@@ -176,9 +186,11 @@ impl Notes {
                 .unwrap();
             file.set_modified(modified).unwrap();
         }
-        let attachment = "Privat/_attachments/01JD3K8Z6Q4X7V9B2M5N8P0R04/skizze.png";
-        fs::create_dir_all(notes.dir.join(attachment).parent().unwrap()).unwrap();
-        fs::write(notes.dir.join(attachment), PIXEL_PNG).unwrap();
+        for (path, bytes) in COVERS {
+            fs::create_dir_all(notes.dir.join(path).parent().unwrap()).unwrap();
+            fs::write(notes.dir.join(path), bytes).unwrap();
+        }
+        notes.write(".sheaf/config.toml", FOLDER_CONFIG);
         notes
     }
 

@@ -29,8 +29,14 @@ actions!(
         Trash,
         /// Open the selected note.
         OpenSelected,
+        /// Move the selection down, or to the next note in a list.
         SelectNext,
         SelectPrevious,
+        /// Move the selection to the card on the left or right.
+        SelectLeft,
+        SelectRight,
+        /// Empty the search field of the gallery.
+        ClearSearch,
         OpenCommandPalette,
         OpenSettings,
         ShowShortcuts,
@@ -60,6 +66,9 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("enter", OpenSelected, Some(GALLERY)),
         KeyBinding::new("down", SelectNext, Some(GALLERY)),
         KeyBinding::new("up", SelectPrevious, Some(GALLERY)),
+        KeyBinding::new("left", SelectLeft, Some(GALLERY)),
+        KeyBinding::new("right", SelectRight, Some(GALLERY)),
+        KeyBinding::new("escape", ClearSearch, Some(GALLERY)),
         KeyBinding::new("ctrl-w", Back, Some(NOTE)),
         KeyBinding::new("escape", Back, Some(NOTE)),
     ]);
