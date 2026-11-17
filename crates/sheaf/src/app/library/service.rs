@@ -5,6 +5,8 @@
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use async_channel::Sender;
@@ -109,9 +111,9 @@ impl ServiceLink {
         None
     }
 
-    /// Hands this link to a [`Syncer`].
-    pub fn into_syncer(self) -> Syncer {
-        Syncer::new(move || self.sync())
+    /// Hands this link to a [`Syncer`] that reports on `confirmed`.
+    pub fn into_syncer(self, confirmed: Sender<u64>) -> Syncer {
+        Syncer::new(move || self.sync(), confirmed)
     }
 
     fn watch(&self, changes: Sender<Vec<String>>) {
@@ -143,34 +145,46 @@ impl ServiceLink {
 }
 
 /// Runs `sync` on a thread of its own whenever the app wrote a note: a write never
-/// waits for the service, and requests made while one waits become one. The service
-/// announces what it indexed with its `Changed` signal.
+/// waits for the service, and requests made while one waits become one. Writes are
+/// numbered; after each sync the service confirmed, the number of the last write it
+/// covers goes to `confirmed`.
 #[derive(Debug)]
 pub(super) struct Syncer {
     requests: Sender<()>,
+    /// The number of the last write a sync was asked for.
+    latest: Arc<AtomicU64>,
 }
 
 impl Syncer {
-    pub fn new(sync: impl Fn() -> bool + Send + 'static) -> Syncer {
+    pub fn new(sync: impl Fn() -> bool + Send + 'static, confirmed: Sender<u64>) -> Syncer {
         // Room for one request: one waiting while a sync runs covers all writes since.
         let (requests, pending) = async_channel::bounded(1);
+        let latest = Arc::new(AtomicU64::new(0));
         let spawned = std::thread::Builder::new()
             .name("sheaf-searchd-sync".to_owned())
-            .spawn(move || {
-                while pending.recv_blocking().is_ok() {
-                    if !sync() {
-                        log::warn!("sheaf-searchd did not confirm the change, lists may lag");
+            .spawn({
+                let latest = latest.clone();
+                move || {
+                    while pending.recv_blocking().is_ok() {
+                        // Every write up to here is on disk before the sync starts.
+                        let upto = latest.load(Ordering::SeqCst);
+                        if sync() {
+                            let _ = confirmed.send_blocking(upto);
+                        } else {
+                            log::warn!("sheaf-searchd did not confirm the change");
+                        }
                     }
                 }
             });
         if let Err(err) = spawned {
             log::warn!("cannot ask sheaf-searchd to follow changes: {err}");
         }
-        Syncer { requests }
+        Syncer { requests, latest }
     }
 
-    /// Asks for a sync, unless one is already waiting.
-    pub fn request(&self) {
+    /// Asks for a sync that covers write number `write`, unless one is waiting.
+    pub fn request(&self, write: u64) {
+        self.latest.fetch_max(write, Ordering::SeqCst);
         let _ = self.requests.try_send(());
     }
 }

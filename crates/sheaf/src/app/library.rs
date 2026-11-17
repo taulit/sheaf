@@ -26,8 +26,8 @@
 //!   [`note_state`](Library::note_state) and [`set_note_state`](Library::set_note_state);
 //!   it lives in the folder's `.sheaf/config.toml`, not in the note.
 //! - **Follow** changes by subscribing to [`LibraryEvent`]. When a change task
-//!   resolves, the lists of the in-memory index already contain it; with
-//!   `sheaf-searchd` they follow, with another event, once the service indexed it.
+//!   resolves, the lists already show it: with `sheaf-searchd`, the app's own writes
+//!   are read from an overlay until the service indexed them (`overlay`).
 //!
 //! Every method but [`run_now`](Library::run_now) returns a [`Task`]: file and index
 //! work runs on the background executor, never on the UI thread. Dropping the task of
@@ -41,6 +41,7 @@
 //! date after its own writes ([`LibraryMode::Local`]); changes made by other programs
 //! are then not seen until the next start.
 
+mod overlay;
 mod service;
 
 use std::fmt;
@@ -57,6 +58,7 @@ use sheaf_core::{
 };
 use zbus::Connection;
 
+use overlay::{Lists, Overlay};
 use service::{ServiceLink, Syncer};
 
 /// Where the index comes from, see the module documentation.
@@ -100,7 +102,9 @@ pub type Clock = Arc<dyn Fn() -> ZonedDateTime + Send + Sync>;
 enum Backend {
     /// Writes go to the files only; the index catches up when it is ready.
     Opening,
-    Service(Arc<Syncer>),
+    /// The service is asked to index each write; until it confirms, the write is in
+    /// the overlay.
+    Service(Arc<Syncer>, Arc<Mutex<Overlay>>),
     /// The lock keeps writers apart: an index takes one at a time.
     Local(Arc<Mutex<SearchIndex>>),
 }
@@ -108,32 +112,47 @@ enum Backend {
 impl Backend {
     /// Brings the index in line after a write: each of `paths` is indexed if it is a
     /// note file now and dropped from the index otherwise. Blocks on the in-memory
-    /// index only: the service is asked without waiting for it.
+    /// indexes only: the service is asked without waiting for it.
     fn reflect(&self, store: &NoteStore, reader: &Reader, paths: &[String]) -> Result<()> {
         if paths.is_empty() {
             return Ok(());
         }
         match self {
             Backend::Opening => Ok(()),
-            Backend::Service(syncer) => {
-                syncer.request();
-                Ok(())
+            Backend::Service(syncer, overlay) => {
+                let mut overlay = overlay.lock().unwrap_or_else(PoisonError::into_inner);
+                let indexed = overlay.reflect(store, paths);
+                syncer.request(overlay.writes());
+                indexed
             }
             Backend::Local(index) => {
                 let index = index.lock().unwrap_or_else(PoisonError::into_inner);
-                let mut writer = index.writer()?;
-                for rel_path in paths {
-                    if store.root().join(rel_path).is_file() {
-                        writer.upsert(&store.load_doc(rel_path)?)?;
-                    } else {
-                        writer.remove_path(rel_path);
-                    }
-                }
-                writer.finish()?;
+                index_paths(&index, store, paths)?;
                 reader.reload()
             }
         }
     }
+
+    fn overlay(&self) -> Option<Arc<Mutex<Overlay>>> {
+        match self {
+            Backend::Service(_, overlay) => Some(overlay.clone()),
+            _ => None,
+        }
+    }
+}
+
+/// Indexes each of `paths` if it is a note file now and drops it from `index`
+/// otherwise.
+fn index_paths(index: &SearchIndex, store: &NoteStore, paths: &[String]) -> Result<()> {
+    let mut writer = index.writer()?;
+    for rel_path in paths {
+        if store.root().join(rel_path).is_file() {
+            writer.upsert(&store.load_doc(rel_path)?)?;
+        } else {
+            writer.remove_path(rel_path);
+        }
+    }
+    writer.finish()
 }
 
 /// What a write does to the note it was given, for the index.
@@ -194,6 +213,7 @@ pub struct Library {
     config: Arc<Mutex<()>>,
     _starting: Task<()>,
     _following: Option<Task<()>>,
+    _confirming: Option<Task<()>>,
 }
 
 impl fmt::Debug for Library {
@@ -239,6 +259,7 @@ impl Library {
             clock: Arc::new(|| Timestamp::now().to_zoned_datetime(TimeZone::system())),
             config: Arc::new(Mutex::new(())),
             _following: None,
+            _confirming: None,
         }))
     }
 
@@ -254,9 +275,10 @@ impl Library {
         cx: &mut Context<Self>,
     ) -> Task<()> {
         let (sender, changes) = async_channel::unbounded();
+        let (confirm, confirmed) = async_channel::unbounded();
         cx.spawn(async move |this, cx| {
             let established = cx
-                .background_spawn(async move { establish(&store, service, sender) })
+                .background_spawn(async move { establish(&store, service, sender, confirm) })
                 .await;
             let _ = this.update(cx, |this, cx| match established {
                 Ok((backend, reader)) => {
@@ -266,6 +288,7 @@ impl Library {
                     this.backend = backend;
                     this.reader = reader;
                     this._following = Some(Self::follow(changes, cx));
+                    this._confirming = Some(Self::confirm(confirmed, cx));
                     cx.emit(LibraryEvent::Changed { ids: Vec::new() });
                 }
                 Err(err) => log::error!("cannot index the notes folder: {err}"),
@@ -295,10 +318,38 @@ impl Library {
         })
     }
 
+    /// Drops the app's writes from the overlay once the service confirms it indexed
+    /// them. The lists stay the same, so nobody is told.
+    fn confirm(confirmed: Receiver<u64>, cx: &mut Context<Self>) -> Task<()> {
+        cx.spawn(async move |this, cx| {
+            while let Ok(upto) = confirmed.recv().await {
+                let Ok((reader, overlay)) =
+                    this.read_with(cx, |this, _| (this.reader.clone(), this.backend.overlay()))
+                else {
+                    break;
+                };
+                let Some(overlay) = overlay else { continue };
+                let confirmed = cx
+                    .background_spawn(async move {
+                        // The service's index first, so that no write shows as missing.
+                        reader.reload()?;
+                        overlay
+                            .lock()
+                            .unwrap_or_else(PoisonError::into_inner)
+                            .confirm(upto)
+                    })
+                    .await;
+                if let Err(err) = confirmed {
+                    log::warn!("cannot take the confirmed writes from the overlay: {err}");
+                }
+            }
+        })
+    }
+
     pub fn mode(&self) -> LibraryMode {
         match self.backend {
             Backend::Opening => LibraryMode::Opening,
-            Backend::Service(_) => LibraryMode::Service,
+            Backend::Service(..) => LibraryMode::Service,
             Backend::Local(_) => LibraryMode::Local,
         }
     }
@@ -319,18 +370,22 @@ impl Library {
 
     /// The notes that pass all `filters`, in the order of `sort`.
     pub fn notes(&self, filters: Vec<Filter>, sort: Sort, cx: &App) -> Task<Result<Vec<NoteMeta>>> {
-        let reader = self.reader.clone();
+        let lists = self.lists();
         let now = self.now();
-        cx.background_spawn(async move { reader.list(&filters, sort, None, &now) })
+        cx.background_spawn(async move { lists.list(&filters, sort, &now) })
+    }
+
+    fn lists(&self) -> Lists {
+        Lists::new(self.reader.clone(), self.backend.overlay())
     }
 
     /// The `limit` best hits for `query`, in the search language of
     /// [`sheaf_core::query`], with snippets and highlights.
     pub fn search(&self, query: &str, limit: usize, cx: &App) -> Task<Result<SearchResults>> {
-        let reader = self.reader.clone();
+        let lists = self.lists();
         let now = self.now();
         let parsed = query::parse(query);
-        cx.background_spawn(async move { reader.search(&parsed, limit, &now) })
+        cx.background_spawn(async move { lists.search(&parsed, limit, &now) })
     }
 
     /// Every folder, empty ones included, sorted by path. The root comes first.
@@ -360,16 +415,16 @@ impl Library {
 
     /// What the index knows about a note; `None` if it has no such note.
     pub fn meta(&self, id: &NoteId, cx: &App) -> Task<Result<Option<NoteMeta>>> {
-        let reader = self.reader.clone();
+        let lists = self.lists();
         let id = id.clone();
-        cx.background_spawn(async move { reader.get(&id) })
+        cx.background_spawn(async move { lists.get(&id) })
     }
 
     /// The Markdown text of a note as indexed, without reading its file. For previews.
     pub fn body(&self, id: &NoteId, cx: &App) -> Task<Result<Option<String>>> {
-        let reader = self.reader.clone();
+        let lists = self.lists();
         let id = id.clone();
-        cx.background_spawn(async move { reader.body(&id) })
+        cx.background_spawn(async move { lists.body(&id) })
     }
 
     /// Reads the note's file. This is what an editor starts from.
@@ -653,6 +708,7 @@ fn establish(
     store: &NoteStore,
     service: Option<(Connection, PathBuf)>,
     changes: async_channel::Sender<Vec<String>>,
+    confirm: async_channel::Sender<u64>,
 ) -> Result<(Backend, Reader)> {
     if let Some((connection, index_dir)) = service
         && let Some(link) = ServiceLink::connect(connection, store.root(), changes)
@@ -660,7 +716,9 @@ fn establish(
     {
         let reader = index.reader();
         reader.reload()?;
-        return Ok((Backend::Service(Arc::new(link.into_syncer())), reader));
+        let syncer = Arc::new(link.into_syncer(confirm));
+        let overlay = Arc::new(Mutex::new(Overlay::new()?));
+        return Ok((Backend::Service(syncer, overlay), reader));
     }
     let index = SearchIndex::in_memory()?;
     let mut writer = index.writer()?;
@@ -722,16 +780,20 @@ mod tests {
         cx.run_until_parked();
         let asked = Arc::new(AtomicUsize::new(0));
         let (release, hang) = std::sync::mpsc::channel::<()>();
-        let syncer = Syncer::new({
-            let asked = asked.clone();
-            move || {
-                asked.fetch_add(1, Ordering::SeqCst);
-                let _ = hang.recv();
-                true
-            }
-        });
+        let syncer = Syncer::new(
+            {
+                let asked = asked.clone();
+                move || {
+                    asked.fetch_add(1, Ordering::SeqCst);
+                    let _ = hang.recv();
+                    true
+                }
+            },
+            async_channel::unbounded().0,
+        );
+        let overlay = Arc::new(Mutex::new(Overlay::new().expect("an overlay")));
         library.update(cx, |library, _| {
-            library.backend = Backend::Service(Arc::new(syncer));
+            library.backend = Backend::Service(Arc::new(syncer), overlay);
         });
 
         let created = library.update(cx, |library, cx| {
@@ -770,6 +832,144 @@ mod tests {
             2,
             "one sync, and one for the writes during it"
         );
+    }
+
+    /// A Library over `dir` whose service never confirms on its own: its index shows
+    /// the folder as it was when the Library opened. A test confirms writes up to a
+    /// number by sending it on the returned channel, as the syncer does.
+    fn with_slow_service(
+        dir: &Path,
+        cx: &mut TestAppContext,
+    ) -> (Entity<Library>, async_channel::Sender<u64>) {
+        let library = cx.update(|cx| Library::local(dir, cx)).expect("a library");
+        cx.run_until_parked();
+        let (confirm, confirmed) = async_channel::unbounded();
+        library.update(cx, |library, cx| {
+            let syncer = Syncer::new(|| false, async_channel::unbounded().0);
+            let overlay = Arc::new(Mutex::new(Overlay::new().expect("an overlay")));
+            library.backend = Backend::Service(Arc::new(syncer), overlay);
+            library._confirming = Some(Library::confirm(confirmed, cx));
+        });
+        (library, confirm)
+    }
+
+    fn titles(library: &Entity<Library>, cx: &mut TestAppContext) -> Vec<(NoteId, String)> {
+        let listed =
+            library.read_with(cx, |library, cx| library.notes(Vec::new(), Sort::Title, cx));
+        cx.run_until_parked();
+        let listed = cx.foreground_executor().block_test(listed);
+        let listed = listed.expect("listed");
+        listed
+            .into_iter()
+            .map(|note| (note.id, note.title))
+            .collect()
+    }
+
+    fn done<T: 'static>(task: Task<Result<T>>, cx: &mut TestAppContext) -> T {
+        cx.run_until_parked();
+        cx.foreground_executor().block_test(task).expect("done")
+    }
+
+    #[gpui::test]
+    async fn own_writes_show_before_the_service_indexed_them(cx: &mut TestAppContext) {
+        let dir = tempfile::tempdir().expect("a temporary directory");
+        std::fs::write(dir.path().join("Lesen.md"), "Lesen\n\nBücher\n").expect("written");
+        std::fs::write(dir.path().join("Alt.md"), "Alt\n").expect("written");
+        let (library, _) = with_slow_service(dir.path(), cx);
+        let listed = titles(&library, cx);
+        let provisional = listed[1].0.clone();
+        assert!(provisional.is_provisional());
+
+        // The first save gives the note its real id: listed once, under it.
+        let saved = library.update(cx, |library, cx| {
+            library.save_body(&provisional, "Lesen\n\nMehr Bücher\n".into(), None, cx)
+        });
+        let id = done(saved, cx).meta.id;
+        assert!(!id.is_provisional());
+        assert_eq!(titles(&library, cx)[1], (id.clone(), "Lesen".into()));
+        assert_eq!(titles(&library, cx).len(), 2);
+
+        // A new title, and the file following it.
+        let saved = library.update(cx, |library, cx| {
+            library.save_body(&id, "Gelesen\n\nAlles\n".into(), None, cx)
+        });
+        done(saved, cx);
+        let renamed = library.update(cx, |library, cx| library.sync_filename(&id, cx));
+        done(renamed, cx);
+        let listed = titles(&library, cx);
+        assert_eq!(listed[1], (id.clone(), "Gelesen".into()), "{listed:?}");
+        assert_eq!(listed.len(), 2);
+        let body = library.read_with(cx, |library, cx| library.body(&id, cx));
+        assert_eq!(done(body, cx).as_deref(), Some("Gelesen\n\nAlles\n"));
+        let found = library.read_with(cx, |library, cx| library.search("alles", 10, cx));
+        let found = done(found, cx);
+        assert_eq!(found.hits.len(), 1);
+        assert_eq!(found.hits[0].meta.id, id);
+
+        // Trashed: gone at once.
+        let trashed = library.update(cx, |library, cx| library.trash(&id, cx));
+        done(trashed, cx);
+        assert_eq!(titles(&library, cx).len(), 1);
+        let meta = library.read_with(cx, |library, cx| library.meta(&id, cx));
+        assert_eq!(done(meta, cx), None);
+        let found = library.read_with(cx, |library, cx| library.search("lesen", 10, cx));
+        assert!(done(found, cx).hits.is_empty());
+    }
+
+    #[gpui::test]
+    async fn confirmed_writes_leave_the_overlay(cx: &mut TestAppContext) {
+        let dir = tempfile::tempdir().expect("a temporary directory");
+        let (library, confirm) = with_slow_service(dir.path(), cx);
+        let service = SearchIndex::in_memory().expect("an index");
+        library.update(cx, |library, _| library.reader = service.reader());
+        let created = library.update(cx, |library, cx| {
+            library.create("Eins", CreateOptions::default(), cx)
+        });
+        let id = done(created, cx).id;
+        let overlay = library.read_with(cx, |library, _| library.backend.overlay());
+        let overlay = overlay.expect("service mode");
+        let pending = || {
+            !overlay
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .is_empty()
+        };
+        assert!(pending());
+
+        // The service indexes the folder and confirms.
+        let mut writer = service.writer().expect("a writer");
+        for doc in NoteStore::new(dir.path()).all_docs().expect("docs") {
+            writer.upsert(&doc).expect("indexed");
+        }
+        writer.finish().expect("committed");
+        confirm.try_send(1).expect("sent");
+        cx.run_until_parked();
+        assert!(!pending(), "the confirmed write left the overlay");
+        assert_eq!(titles(&library, cx), [(id, "Eins".to_owned())]);
+    }
+
+    #[test]
+    fn a_confirmed_sync_reports_the_last_write_it_covers() {
+        let (confirm, confirmed) = async_channel::unbounded();
+        let (release, hang) = std::sync::mpsc::channel::<()>();
+        let (started, running) = std::sync::mpsc::channel::<()>();
+        let syncer = Syncer::new(
+            move || {
+                let _ = started.send(());
+                let _ = hang.recv();
+                true
+            },
+            confirm,
+        );
+        syncer.request(1);
+        running.recv().expect("the first sync runs");
+        // Asked while the first sync runs: one more sync, for both.
+        syncer.request(2);
+        syncer.request(3);
+        release.send(()).expect("released");
+        release.send(()).expect("released");
+        assert_eq!(confirmed.recv_blocking(), Ok(1));
+        assert_eq!(confirmed.recv_blocking(), Ok(3));
     }
 
     #[test]
