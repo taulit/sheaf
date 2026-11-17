@@ -68,5 +68,5 @@ completions.
 - Sub-agents: Opus for implementation, Sonnet for mechanical work, Fable for reviews and
   gates. Worktree agents should use `CARGO_TARGET_DIR=~/development/sheaf/target`.
 - Phase PRs target `main` directly (a stacked base sent #2 into the wrong branch).
-- The editor is pinned at `v0.0.1-api` (raw Markdown text). Check for a newer tag with
+- The editor is pinned at `v0.0.3` (WYSIWYG). Check for a newer tag with
   `gh api repos/taulit/gpui-markdown-editor/git/refs/tags` and bump it in `Cargo.toml`.
