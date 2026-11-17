@@ -20,6 +20,13 @@ crates/sheaf-core/src/templates.rs
 crates/sheaf-core/src/testgen.rs
 crates/sheaf-core/src/trash.rs
 crates/sheaf-core/src/watch.rs
+crates/sheaf-export/examples/render.rs
+crates/sheaf-export/src/blocks.rs
+crates/sheaf-export/src/fonts.rs
+crates/sheaf-export/src/layout.rs
+crates/sheaf-export/src/lib.rs
+crates/sheaf-export/src/pdf.rs
+crates/sheaf-export/src/text.rs
 crates/sheaf-searchd/examples/generate_notes.rs
 crates/sheaf-searchd/src/api.rs
 crates/sheaf-searchd/src/indexer.rs
@@ -31,6 +38,7 @@ crates/sheaf-searchd/src/service.rs
 crates/sheaf/src/app/actions.rs
 crates/sheaf/src/app/assets.rs
 crates/sheaf/src/app/chrome.rs
+crates/sheaf/src/app/dialogs.rs
 crates/sheaf/src/app/gallery/cards.rs
 crates/sheaf/src/app/gallery/chips.rs
 crates/sheaf/src/app/gallery/covers.rs
@@ -45,7 +53,10 @@ crates/sheaf/src/app/library/overlay.rs
 crates/sheaf/src/app/library/service.rs
 crates/sheaf/src/app/logger.rs
 crates/sheaf/src/app/mod.rs
+crates/sheaf/src/app/note/attach.rs
+crates/sheaf/src/app/note/backlinks.rs
 crates/sheaf/src/app/note/date.rs
+crates/sheaf/src/app/note/export.rs
 crates/sheaf/src/app/note/files.rs
 crates/sheaf/src/app/note/header.rs
 crates/sheaf/src/app/note/jump.rs
@@ -57,6 +68,8 @@ crates/sheaf/src/app/overlays/palette.rs
 crates/sheaf/src/app/overlays/shortcuts.rs
 crates/sheaf/src/app/overlays/toast.rs
 crates/sheaf/src/app/portal.rs
+crates/sheaf/src/app/settings/mod.rs
+crates/sheaf/src/app/settings/view.rs
 crates/sheaf/src/app/state.rs
 crates/sheaf/src/app/theme.rs
 crates/sheaf/src/app/window.rs
