@@ -17,6 +17,7 @@
 //! | `serial` | background jobs in order, for the writes of settings files |
 //! | [`quick`] | the Quick Note window |
 //! | [`shortcut`] | the global Quick Note shortcut through the portal |
+//! | [`trace`] | the startup trace of `SHEAF_STARTUP_TRACE` |
 
 pub mod actions;
 pub mod assets;
@@ -35,6 +36,7 @@ pub mod settings;
 pub mod shortcut;
 pub mod state;
 pub mod theme;
+pub mod trace;
 pub mod window;
 
 use std::path::PathBuf;
@@ -64,6 +66,7 @@ pub struct Launch {
 /// Starts the app, or hands `launch` to the instance that already runs. Returns when
 /// the app quits.
 pub fn run(launch: Launch, dir: Option<PathBuf>) -> ExitCode {
+    trace::mark(trace::Event::Run);
     logger::init();
     let first = Activation::from_launch(launch.request);
     let (connection, requests) = match instance::start(Bus::Session, &first) {
@@ -74,7 +77,8 @@ pub fn run(launch: Launch, dir: Option<PathBuf>) -> ExitCode {
         }) => (connection, requests),
         Err(err) => return fail(&format!("{}: {err}", tr("the running app does not answer"))),
     };
-    if !launch.service && !has_display() {
+    let traced_headless = trace::headless();
+    if !launch.service && !has_display() && !traced_headless {
         return fail(&tr(
             "cannot open a window: neither WAYLAND_DISPLAY nor DISPLAY is set",
         ));
@@ -94,13 +98,16 @@ pub fn run(launch: Launch, dir: Option<PathBuf>) -> ExitCode {
     let for_the_app = viewer_files.clone();
 
     let mut application = gpui_platform::application().with_assets(assets::Assets);
-    if launch.service {
+    if launch.service || traced_headless {
         // No connection to a display until someone asks for a window; the token that
         // comes with the request then lets that window take the focus.
         application = application.with_windowing(WindowingRequest::Headless);
     }
     application.run(move |cx| {
         quit_on_signals(cx);
+        if traced_headless {
+            trace::draw_headless(cx);
+        }
         gpui_component::init(cx);
         theme::init(theme::Overrides::from_process(), cx);
         if let Some(settings) = settings {
@@ -252,7 +259,7 @@ pub(crate) fn use_library(library: Entity<Library>, cx: &mut App) {
 /// Brings the main window to the front, opening it if needed, and passes it `request`.
 async fn show(request: Request, token: Option<String>, cx: &mut AsyncApp) {
     let headless = cx.update(|cx| cx.graphical_environment().is_none());
-    if headless {
+    if headless && !trace::headless() {
         let environment = GraphicalEnvironment {
             activation_token: token,
             ..GraphicalEnvironment::detect()
@@ -295,6 +302,7 @@ fn present(request: Request, cx: &mut App) -> anyhow::Result<()> {
             let session = cx.global::<Session>();
             let (library, state_file) = (session.library.clone(), session.state_file.clone());
             let window = window::open(library, state_file, cx)?;
+            trace::mark(trace::Event::Window);
             cx.global_mut::<Session>().window = Some(window.clone());
             window
         }

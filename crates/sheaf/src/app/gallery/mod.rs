@@ -66,6 +66,7 @@ use super::actions::{
     ClearSearch, OpenSelected, Search, SelectLeft, SelectNext, SelectPrevious, SelectRight, Trash,
 };
 use super::library::{Folder, Library, LibraryEvent};
+use super::trace;
 use covers::{Covers, Wanted};
 use layout::{Layout, Row, Section};
 use preview::Preview;
@@ -161,6 +162,13 @@ struct Listing {
     marks: HashMap<NoteId, Marks>,
 }
 
+/// The cards of the frame being drawn, by path, and how many lack their miniature.
+#[derive(Debug, Default)]
+struct Drawn {
+    notes: Vec<String>,
+    unready: usize,
+}
+
 /// The miniature of a note at one modification time; `None` while it is read.
 struct CachedPreview {
     modified: Timestamp,
@@ -208,6 +216,8 @@ pub struct GalleryView {
     /// Notes picked with Ctrl or Shift; when empty, the selection is the cursor.
     marked: BTreeSet<NoteId>,
     previews: HashMap<NoteId, CachedPreview>,
+    /// What the frame being drawn shows, while the startup trace waits for it.
+    drawn: Drawn,
     covers: Covers,
     hover: Hover,
     popover: Option<Popover>,
@@ -269,6 +279,7 @@ impl GalleryView {
             anchor: None,
             marked: BTreeSet::new(),
             previews: HashMap::new(),
+            drawn: Drawn::default(),
             covers: Covers::default(),
             hover: Hover::default(),
             popover: None,
@@ -787,6 +798,15 @@ impl GalleryView {
             });
         })
         .detach();
+    }
+
+    /// Notes a card of the frame being drawn for the startup trace; `ready` if it shows
+    /// its miniature.
+    fn count_drawn(&mut self, note: &NoteMeta, ready: bool) {
+        if trace::pending(trace::Event::Miniatures) {
+            self.drawn.notes.push(note.rel_path.clone());
+            self.drawn.unready += usize::from(!ready);
+        }
     }
 
     /// The miniature of `note`, or `None` while it is read in the background.

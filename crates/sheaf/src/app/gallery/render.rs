@@ -19,6 +19,7 @@ use crate::app::actions::{
 use crate::app::assets::{IconName, icon};
 use crate::app::chrome::{FlatButton, HeaderBar, pane};
 use crate::app::theme::{ActiveTokens as _, Tokens, size};
+use crate::app::trace::{self, Event};
 
 /// The side padding of the grid (`.gal`).
 pub(super) const GRID_SIDE: f32 = 24.;
@@ -26,6 +27,7 @@ pub(super) const GRID_SIDE: f32 = 24.;
 impl Render for GalleryView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.covers.next_frame();
+        self.drawn = Default::default();
         if let Some(text) = self.pending_text.take() {
             self.search
                 .update(cx, |state, cx| state.set_value(text, window, cx));
@@ -331,7 +333,31 @@ impl GalleryView {
                 .left_0()
                 .size_full(),
             )
+            .when(trace::pending(Event::Miniatures), |body| {
+                body.child(self.trace_frame(cx))
+            })
             .into_any_element()
+    }
+
+    /// Marks the frame in the startup trace once the list above it is painted.
+    fn trace_frame(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let gallery = cx.entity().downgrade();
+        canvas(
+            |_, _, _| {},
+            move |_, _, _, cx| {
+                let Some(gallery) = gallery.upgrade() else {
+                    return;
+                };
+                let drawn = &gallery.read(cx).drawn;
+                if drawn.notes.is_empty() {
+                    return;
+                }
+                trace::mark_with(Event::Cards, &drawn.notes);
+                if drawn.unready == 0 {
+                    trace::mark(Event::Miniatures);
+                }
+            },
+        )
     }
 
     fn render_empty(&self, tokens: &Tokens, cx: &mut Context<Self>) -> impl IntoElement {

@@ -101,6 +101,7 @@ impl GalleryView {
         let selected = self.is_selected(index);
         let marks = self.marks.get(&note.id).cloned();
         let preview = self.preview(&note, cx);
+        self.count_drawn(&note, marks.is_some() || preview.is_some());
         let cover = self.cover_of(&note, preview.as_deref(), cx);
 
         let mut card = div()
@@ -280,6 +281,7 @@ impl GalleryView {
             .is_none_or(|above| matches!(self.layout.rows()[above], Row::Header(_)));
         let marks = self.marks.get(&note.id).cloned();
         let preview = self.preview(&note, cx);
+        self.count_drawn(&note, marks.is_some() || preview.is_some());
         let now = self.library.read(cx).now();
         let date = DateLabel::of(self.date_of(&note), &now).format();
         let summary = match (&marks, &preview) {
