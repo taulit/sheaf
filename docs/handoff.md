@@ -77,10 +77,11 @@ Confirmed by the second review, except the cover cache (finding 3 above).
 
 ## Waiting for the user
 
-- **CI is red until `taulit/gpui-markdown-editor` is public.** The organisation has
-  deploy keys disabled, so the user chose (2026-11-17) to make the editor repository
-  public. The workflow no longer uses ssh or a secret. Once it is public:
-  `gh run rerun --failed` on the PRs. No key and no secret exist.
+- Nothing about CI. The user decided on 2026-11-17: `taulit/gpui-markdown-editor` stays
+  private for now and the red PR checks are ignored (CI cannot fetch the editor). The
+  gate is therefore run locally before every PR: `cargo fmt --check`, clippy with
+  `-D warnings`, `cargo test --workspace --all-features`, `cargo deny check`,
+  `scripts/test-visor-module.sh`, `scripts/screenshot.sh`; state the results in the PR.
 - PR screenshots are embedded
   from the repository instead.
 

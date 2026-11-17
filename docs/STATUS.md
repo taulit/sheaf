@@ -88,9 +88,8 @@ None yet.
 - PDF limits: no italic face (slanted Inter), checked items are grey but not struck
   through, `#tags` are not coloured, right-to-left text is set left to right, no
   hyphenation.
-- CI fetches `taulit/gpui-markdown-editor` over https without credentials, so it is red
-  until that repository is public (decided 2026-11-17; the organisation has deploy keys
-  disabled).
+- CI is red and ignored for now (user's decision, 2026-11-17): it cannot fetch the
+  private `taulit/gpui-markdown-editor`. The gate runs locally before every PR.
 - In service mode folder and tag counts follow the service's index, not the app's own
   writes (`app/library/overlay.rs`).
 - Wanted from the editor (API, not in `v0.0.3`): read and set the scroll position (a
