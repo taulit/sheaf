@@ -213,3 +213,22 @@ fn two_hundred_pages_render_in_reasonable_time() {
     );
     eprintln!("{} pages in {took:?}", pdf.pages);
 }
+
+#[test]
+fn an_image_that_is_a_device_shows_its_placeholder() {
+    let started = Instant::now();
+    let pdf = render(
+        "Null\n\n![Endlos](/dev/zero)\n\n![Auch](../../../../../../dev/zero)\n",
+        &fonts(),
+        &Options {
+            base_dir: Some(fixture_dir()),
+            ..Options::default()
+        },
+    )
+    .expect("rendered");
+    assert!(started.elapsed() < Duration::from_secs(10));
+    let Some(text) = text_of(&pdf.bytes) else {
+        return;
+    };
+    assert!(text.contains("Endlos") && text.contains("Auch"), "{text}");
+}

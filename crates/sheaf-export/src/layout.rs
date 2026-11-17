@@ -1,6 +1,7 @@
 //! Blocks in, pages of positioned items out. The measures follow the editor (plan 04
 //! "Editor"), scaled to print: points instead of pixels, a smaller body size.
 
+use std::io::Read as _;
 use std::path::Path;
 
 use krilla::image::Image;
@@ -666,8 +667,9 @@ impl Flow<'_> {
         });
     }
 
-    /// The image at `src`, relative to the note's folder; `None` for addresses on
-    /// the web and files that cannot be read as PNG, JPEG, GIF or WebP.
+    /// The image at `src`, relative to the note's folder, as the editor finds it;
+    /// `None` for addresses on the web and files that cannot be read as PNG, JPEG,
+    /// GIF or WebP.
     fn load_image(&self, src: &str) -> Option<Image> {
         if src.contains("://") {
             return None;
@@ -677,7 +679,7 @@ impl Flow<'_> {
             Some(dir) if path.is_relative() => dir.join(path),
             _ => path,
         };
-        let data = std::fs::read(path).ok()?;
+        let data = read_image_file(&path)?;
         let kind = data.get(..12)?.to_vec();
         let data: krilla::Data = data.into();
         match kind.as_slice() {
@@ -691,6 +693,28 @@ impl Flow<'_> {
         }
         .filter(|image| image.size().0 > 0 && image.size().1 > 0)
     }
+}
+
+/// The largest image file read; a larger one shows as its placeholder.
+const MAX_IMAGE_BYTES: u64 = 50 * 1024 * 1024;
+
+/// The bytes of the regular file at `path`, if it is one and not larger than
+/// [`MAX_IMAGE_BYTES`]. Devices, pipes and folders are not read, so that a link to
+/// `/dev/zero` or a FIFO cannot hang the export.
+fn read_image_file(path: &Path) -> Option<Vec<u8>> {
+    let regular =
+        |metadata: &std::fs::Metadata| metadata.is_file() && metadata.len() <= MAX_IMAGE_BYTES;
+    // Checked before opening, as opening a FIFO waits for a writer.
+    if !regular(&std::fs::metadata(path).ok()?) {
+        return None;
+    }
+    let file = std::fs::File::open(path).ok()?;
+    if !regular(&file.metadata().ok()?) {
+        return None;
+    }
+    let mut data = Vec::new();
+    file.take(MAX_IMAGE_BYTES + 1).read_to_end(&mut data).ok()?;
+    (data.len() as u64 <= MAX_IMAGE_BYTES).then_some(data)
 }
 
 /// Widths of the columns: as wide as their content if that fits, else shrunk towards
@@ -755,6 +779,34 @@ mod tests {
             (widths.iter().sum::<f32>() - 200.).abs() < 0.01,
             "{widths:?}"
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn only_regular_files_of_a_sane_size_are_read_as_images() {
+        let dir = tempfile::tempdir().unwrap();
+        let small = dir.path().join("bild.png");
+        std::fs::write(&small, b"\x89PNG").unwrap();
+        assert_eq!(read_image_file(&small).as_deref(), Some(&b"\x89PNG"[..]));
+
+        assert_eq!(read_image_file(Path::new("/dev/zero")), None);
+        assert_eq!(read_image_file(dir.path()), None);
+        assert_eq!(read_image_file(&dir.path().join("fehlt.png")), None);
+
+        let big = dir.path().join("gross.png");
+        let file = std::fs::File::create(&big).unwrap();
+        file.set_len(MAX_IMAGE_BYTES + 1).unwrap();
+        assert_eq!(read_image_file(&big), None);
+
+        let link = dir.path().join("null.png");
+        std::os::unix::fs::symlink("/dev/zero", &link).unwrap();
+        assert_eq!(read_image_file(&link), None);
+
+        let fifo = dir.path().join("rohr.png");
+        let made = std::process::Command::new("mkfifo").arg(&fifo).status();
+        if made.is_ok_and(|status| status.success()) {
+            assert_eq!(read_image_file(&fifo), None);
+        }
     }
 
     #[test]
