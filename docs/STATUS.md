@@ -4,9 +4,9 @@ Other sessions read only this file. Updated at the end of every phase.
 
 | Phase | State | Branch / PR |
 |---|---|---|
-| S0 Setup | in review | `phase/s0-setup`, [#1](https://github.com/taulit/sheaf/pull/1) |
-| S1 Core, searchd, CLI | gate green, in review | `phase/s1-core`, [#2](https://github.com/taulit/sheaf/pull/2) |
-| S2 App | in progress | `phase/s2-app` |
+| S0 Setup | merged | [#1](https://github.com/taulit/sheaf/pull/1) |
+| S1 Core, searchd, CLI | merged | [#2](https://github.com/taulit/sheaf/pull/2), [#3](https://github.com/taulit/sheaf/pull/3) |
+| S2 App | gate green, in review | `phase/s2-app` |
 | S3 Features | not started | |
 | S4 Release | not started | |
 
@@ -19,6 +19,19 @@ Other sessions read only this file. Updated at the end of every phase.
 - `sheaf` CLI with JSON output, schemas in `docs/cli-schema/`, agent guide `docs/AGENTS.md`.
 - `scripts/shell-search-check.sh` proves the GNOME overview finds notes, in a sandboxed
   headless shell (`docs/testing.md`).
+
+## What works (S2)
+
+- `sheaf` without a subcommand starts the GPUI app: single instance on
+  `io.github.taulit.Sheaf`, theme from the Settings portal, window size remembered.
+- Gallery: cards with miniatures of the content, date groups, search with filter chips and
+  highlighted hits, folder picker, list view, multi-select, context menu, undo toast.
+- Note view: saves 600 ms after the last change and at once on leave, close, quit and
+  SIGTERM; the file follows the title; changes from other programs reload or ask; a save
+  that fails shows a banner and falls back to `$XDG_STATE_HOME/sheaf/recovered/`.
+- Command palette (Ctrl+K), keyboard shortcuts (Ctrl+?), toasts; German translation.
+- The editor shows Markdown source until `gpui-markdown-editor` renders it (tag
+  `v0.0.1-api`). Screenshots: `docs/screenshots/app-*.png` (`scripts/screenshot.sh`).
 
 ## Tags
 
@@ -38,3 +51,14 @@ None yet.
   `--filesystem=xdg-documents` (S4), passing an activation token to a window opened later
   by the running GPUI app (S2), reading the Settings portal inside the sandbox (S4).
 - `rust-version` goes from 1.91 to 1.92 when `krilla` is added for PDF export (S3).
+- S2 CI needs the repository secret `EDITOR_DEPLOY_KEY` (read-only deploy key on
+  `taulit/gpui-markdown-editor`); not created yet.
+- S2 review leftovers, all minor, to fix at the start of S3: in service mode the gallery
+  shows the old title, or a just-trashed note, until the service's `Changed` signal
+  arrives (`app/library.rs`); a second SIGTERM/SIGINT is ignored while the final save
+  runs, and SIGHUP now quits under `nohup` (`app/mod.rs`); pin, move and duplicate from
+  the gallery drop errors without a toast.
+- Wanted from the editor (API): read and set the scroll position, a getter for the scroll
+  target, a slot above the first block (date line), asynchronous completions.
+- The S2 app was checked through tests and offscreen screenshots only, not by hand in a
+  real desktop session.
