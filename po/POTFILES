@@ -74,6 +74,7 @@ crates/sheaf/src/app/overlays/shortcuts.rs
 crates/sheaf/src/app/overlays/toast.rs
 crates/sheaf/src/app/portal.rs
 crates/sheaf/src/app/quick.rs
+crates/sheaf/src/app/serial.rs
 crates/sheaf/src/app/settings/mod.rs
 crates/sheaf/src/app/settings/view.rs
 crates/sheaf/src/app/shortcut.rs
