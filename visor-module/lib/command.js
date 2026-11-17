@@ -9,6 +9,15 @@ export function noteText(raw) {
 }
 
 /**
+ * The entry after a note could not be created from `failed`: that text in front of
+ * whatever was typed while it was being saved, so that neither is lost.
+ */
+export function afterFailedCreate(failed, typedSince) {
+  const since = typedSince.trim();
+  return since === '' ? failed : `${failed} ${since}`;
+}
+
+/**
  * What Enter would do for the arguments of the command. Visor calls this on
  * every keystroke, so it only builds results; the work is in their activate().
  *

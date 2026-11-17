@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import {commandResults, noteText} from '../lib/command.js';
+import {afterFailedCreate, commandResults, noteText} from '../lib/command.js';
 import {displayTitle, mapRows, noteToResult, oneLine} from '../lib/notes.js';
 import {equal, test} from './harness.js';
 
@@ -65,4 +65,10 @@ test('the command with text saves it, Ctrl+Enter also opens it', () => {
   results[0].activate();
   results[0].alternate();
   equal(calls, [['create', 'Milch kaufen'], ['open', 'Milch kaufen']]);
+});
+
+test('a note that could not be created keeps its text and what was typed since', () => {
+  equal(afterFailedCreate('Milch kaufen', ''), 'Milch kaufen');
+  equal(afterFailedCreate('Milch kaufen', '  '), 'Milch kaufen');
+  equal(afterFailedCreate('Milch kaufen', 'und Brot'), 'Milch kaufen und Brot');
 });

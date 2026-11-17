@@ -5,7 +5,7 @@ import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import St from 'gi://St';
 
-import {KEYWORDS, commandResults, noteText} from './command.js';
+import {KEYWORDS, afterFailedCreate, commandResults, noteText} from './command.js';
 import {displayTitle, noteToResult, oneLine} from './notes.js';
 import {SEARCH_PROVIDER_ID, SheafApp} from './sheaf-app.js';
 import {SheafClient, isCancelled} from './sheaf-client.js';
@@ -209,7 +209,7 @@ class NotesModule {
       console.warn(`Visor: Notes: cannot create the note: ${e.message}`);
       // The view is gone when the module was switched off meanwhile.
       if (this._view !== view) return;
-      if (view.entry.text === '') view.entry.text = text;
+      view.entry.text = afterFailedCreate(text, view.entry.text);
       view.error = kit.empty(t('Could not save the note'));
       view.root.insert_child_at_index(view.error, 1);
     } finally {
