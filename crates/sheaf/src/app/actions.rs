@@ -60,12 +60,18 @@ pub const WINDOW: &str = "Sheaf";
 pub const GALLERY: &str = "Gallery";
 /// Key context of the note view, around the editor.
 pub const NOTE: &str = "Note";
+/// Key context of the editor itself, inside [`NOTE`].
+const EDITOR: &str = "MarkdownEditor";
 
 pub fn bind_keys(cx: &mut App) {
+    // The editor's keys first, so that ours win where both bind the same key.
+    gpui_markdown_editor::init(cx);
     cx.bind_keys([
         KeyBinding::new("ctrl-n", NewNote, Some(WINDOW)),
         KeyBinding::new("ctrl-shift-n", QuickNote, Some(WINDOW)),
         KeyBinding::new("ctrl-k", OpenCommandPalette, Some(WINDOW)),
+        // The editor binds Ctrl+K to links; in Sheaf it is the palette (plan 03 §5).
+        KeyBinding::new("ctrl-k", OpenCommandPalette, Some(EDITOR)),
         KeyBinding::new("ctrl-,", OpenSettings, Some(WINDOW)),
         KeyBinding::new("ctrl-?", ShowShortcuts, Some(WINDOW)),
         KeyBinding::new("ctrl-p", TogglePin, Some(WINDOW)),

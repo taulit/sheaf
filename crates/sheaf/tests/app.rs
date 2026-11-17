@@ -471,7 +471,7 @@ async fn ctrl_n_creates_and_opens_a_note_and_escape_saves_it(cx: &mut TestAppCon
     assert_eq!(notes.files(), ["Untitled.md"]);
 
     app.cx.simulate_input("Hallo Welt");
-    assert_eq!(app.editor_text(), "Hallo Welt");
+    assert_eq!(app.editor_text(), "Hallo Welt\n");
     app.cx.simulate_keystrokes("escape");
     assert_eq!(app.route(), Route::Gallery);
     assert_eq!(
@@ -479,7 +479,7 @@ async fn ctrl_n_creates_and_opens_a_note_and_escape_saves_it(cx: &mut TestAppCon
         ["Hallo Welt.md"],
         "the file follows the title"
     );
-    assert!(notes.read("Hallo Welt.md").ends_with("Hallo Welt"));
+    assert!(notes.read("Hallo Welt.md").ends_with("\nHallo Welt\n"));
     assert_eq!(app.titles(), ["Hallo Welt"]);
 
     // Nothing typed, nothing written.

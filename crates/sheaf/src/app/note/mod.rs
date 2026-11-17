@@ -543,7 +543,7 @@ impl NoteView {
             return;
         }
         self.saved_shown = false;
-        let title = first_line(self.editor.read(cx).document().source()).to_owned();
+        let title = title(self.editor.read(cx));
         if title != self.title {
             self.title = title;
             self.rename_pending = true;
@@ -696,10 +696,9 @@ impl NoteView {
     }
 
     fn show(&mut self, note: &Note, cx: &mut Context<Self>) {
-        let body = note.body();
-        self.title = first_line(body).to_owned();
         self.editor
-            .update(cx, |editor, cx| editor.set_markdown(body, cx));
+            .update(cx, |editor, cx| editor.set_markdown(note.body(), cx));
+        self.title = title(self.editor.read(cx));
         self.took(note.meta.clone());
     }
 
@@ -800,6 +799,14 @@ impl NoteView {
 /// The first line of a text, where the title is.
 fn first_line(text: &str) -> &str {
     text.lines().next().unwrap_or_default()
+}
+
+/// The text of the editor's first block, the title, without Markdown syntax.
+fn title(editor: &MarkdownEditor) -> String {
+    let first = editor.document().blocks().first();
+    first
+        .map(|block| block.text().to_owned())
+        .unwrap_or_default()
 }
 
 /// The editor's view state as it is kept in the folder configuration: TOML, whose

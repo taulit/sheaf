@@ -11,9 +11,9 @@ use std::path::Path;
 use std::time::Duration;
 
 use fixture::{Look, Notes};
-use gpui::{Entity, TestAppContext, VisualTestContext};
+use gpui::{Entity, EntityInputHandler as _, TestAppContext, VisualTestContext, point, px};
 use gpui_component::ActiveTheme as _;
-use gpui_markdown_editor::{DocMeta, EditorEvent};
+use gpui_markdown_editor::{BlockId, DocMeta, EditorEvent, MarkdownEditor, TextPos};
 use sheaf::app::actions;
 use sheaf::app::instance::Request;
 use sheaf::app::library::{Library, LibraryEvent};
@@ -84,6 +84,31 @@ impl TestApp {
     fn editor_text(&mut self) -> String {
         let note = self.note();
         note.read_with(self.cx, |note, cx| note.editor().read(cx).markdown())
+    }
+
+    /// The blocks of which some part is in the window. The editor has no getter for
+    /// its scroll position, and it maps points to text only in the block of the
+    /// caret; so the caret visits every block and the window is probed from top to
+    /// bottom, all in one update: the frame after it scrolls to the caret.
+    fn visible_blocks(&mut self, editor: &Entity<MarkdownEditor>) -> Vec<BlockId> {
+        self.cx.update(|window, cx| {
+            editor.update(cx, |editor, cx| {
+                let ids: Vec<BlockId> = editor.document().blocks().iter().map(|b| b.id()).collect();
+                let size = window.viewport_size();
+                let x = size.width / 2.;
+                let rows = (size.height / px(4.)) as usize;
+                ids.into_iter()
+                    .filter(|&block| {
+                        let pos = TextPos { block, offset: 0 };
+                        editor.__set_selection(pos, pos, cx);
+                        (0..rows).any(|row| {
+                            let at = point(x, px(row as f32 * 4.));
+                            editor.character_index_for_point(at, window, cx).is_some()
+                        })
+                    })
+                    .collect()
+            })
+        })
     }
 
     fn banner(&mut self) -> Option<Banner> {
@@ -758,20 +783,42 @@ async fn opened_from_a_search_the_matches_are_marked(cx: &mut TestAppContext) {
         id: shakshuka.to_string(),
         query: "kreuzkümmel Feta folder:Privat".to_owned(),
     });
-    let note = app.note();
-    let (highlights, debug) = note.read_with(app.cx, |note, cx| {
-        let editor = note.editor().read(cx);
-        (editor.highlights().to_vec(), format!("{editor:?}"))
+    let highlights = app.note().read_with(app.cx, |note, cx| {
+        note.editor().read(cx).highlights().to_vec()
     });
     assert_eq!(highlights.len(), 2, "both words, not the filter");
     assert!(highlights[0].start.offset < highlights[1].start.offset);
-    // The editor has no getter for the scroll target yet; its debug output shows it.
-    assert!(
-        debug.contains(&format!("scroll_target: Some({:?})", highlights[0])),
-        "{debug}"
-    );
 }
 
+#[gpui::test]
+async fn opened_from_a_search_the_first_match_is_scrolled_into_view(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let mut long = String::from("Lange Notiz\n");
+    for n in 1..=150 {
+        let word = match n {
+            70 => " mit Kreuzkümmel",
+            150 => " mit Feta",
+            _ => "",
+        };
+        long.push_str(&format!("\nAbsatz {n}{word}\n"));
+    }
+    notes.write("Lang.md", &long);
+    let mut app = open_app(&notes, cx);
+    let id = app.id_of("Lange Notiz");
+    app.request(Request::OpenNote {
+        id: id.to_string(),
+        query: "feta kreuzkümmel".to_owned(),
+    });
+    let editor = app
+        .note()
+        .read_with(app.cx, |note, _| note.editor().clone());
+    let (title, first) = editor.read_with(app.cx, |editor, _| {
+        (editor.document().blocks()[0].id(), editor.highlights()[0])
+    });
+    let visible = app.visible_blocks(&editor);
+    assert!(!visible.contains(&title), "scrolled away from the top");
+    assert!(visible.contains(&first.start.block), "to the first match");
+}
 #[gpui::test]
 async fn the_editors_view_state_is_kept_per_note(cx: &mut TestAppContext) {
     let notes = Notes::seeded();
