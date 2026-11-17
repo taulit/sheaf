@@ -13,6 +13,7 @@ publish = false
 
 [workspace.dependencies]
 sheaf-core = { path = "crates/sheaf-core" }
+sheaf-searchd = { path = "crates/sheaf-searchd" }
 
 clap = { version = "4.6", features = ["derive", "wrap_help"] }
 clap_complete = "4.6"
@@ -29,11 +30,14 @@ toml = "1"
 ulid = "3"
 unicode-normalization = "0.1"
 zbus = "6.3"
+zruntime = { version = "0.2.3", default-features = false }
+futures-core = { version = "0.3", default-features = false }
 
 assert_cmd = "2.2"
 criterion = "0.8"
 insta = { version = "1.49", features = ["json"] }
 tempfile = "3"
+regex = "1"
 
 [workspace.lints.rust]
 unsafe_code = "deny"

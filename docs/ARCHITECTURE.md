@@ -20,9 +20,11 @@ file records the decisions that span more than one crate. The plan it implements
   never treated as notes or folders.
 - **Title** is the first non-empty line of the text, without heading markers. Sheaf does
   not add a `# ` to what the user typed.
-- **File name** follows the title: `/`, `\`, control characters and a leading `.` are
-  replaced, the name is trimmed to 120 bytes at a character boundary, an empty title
-  becomes the localised "Untitled". On a collision ` 2`, ` 3`, … is appended.
+- **File name** follows the title and stays valid on Android and Windows, where sync
+  tools carry the notes: `/`, `\` and `:` become `-`, `? * " < > |` are dropped, a leading
+  `.` is replaced, a trailing `.` removed, the name is trimmed to 120 bytes at a character
+  boundary, an empty title becomes the localised "Untitled". On a collision ` 2`, ` 3`, …
+  is appended.
 - **Frontmatter** is written only when there is something to store. Sheaf edits single
   keys in place and leaves every other byte of the file alone, so a file Sheaf did not
   change is byte-identical after a read/write cycle.
@@ -51,15 +53,20 @@ write returns. See `NoteId` in `crates/sheaf-core/src/model.rs`.
 
 ## Index: one writer, many readers
 
-- `sheaf-searchd` owns the tantivy `IndexWriter`. It watches the notes folder, re-indexes
-  changed files and commits within 300 ms. On start it reconciles the index with the
+- `sheaf-searchd` is the only writer. It watches the notes folder, re-indexes changed
+  files and commits within 300 ms. Each write runs in a short-lived child process
+  (`sheaf-searchd --index`): tantivy's writer leaves about 7 MB behind in the process
+  that created it, which would break the 15 MB idle budget of the service. On start it reconciles the index with the
   folder (path + mtime + size), so changes made while it was not running are picked up.
 - The app opens the same index read-only and reloads on commit. The gallery is drawn
   from stored index fields, not from the files.
-- The CLI reads and writes note files through `sheaf-core` directly. For `search` it
-  asks `sheaf-searchd` over D-Bus. If there is no session bus or the service cannot be
-  started, it builds a temporary in-memory index of the folder instead: slower, but
-  always correct, and what the snapshot tests use.
+- The CLI reads and writes note files through `sheaf-core` directly. To search and
+  list it asks `sheaf-searchd` to `Sync()` and then reads the on-disk index, like the
+  app. If there is no session bus, the service cannot be started, or it serves another
+  notes folder, the CLI builds a temporary in-memory index of the folder instead:
+  slower, but always correct, and what the snapshot tests use.
+- The names, object paths and typed client proxies of both D-Bus interfaces are in
+  `crates/sheaf-searchd/src/api.rs`, the only place that spells them out.
 
 ## D-Bus
 
@@ -74,9 +81,17 @@ through D-Bus activation if it is not running. Actions:
 
 | Action | Parameters | Effect |
 |---|---|---|
-| `open-note` | `(s id, s query)` | Open the note; jump to the first match of `query` if not empty |
-| `search` | `(s query)` | Show the gallery with this search |
+| `open-note` | `as`: id, query | Open the note; jump to the first match of `query` if not empty |
+| `search` | `as`: query | Show the gallery with this search |
 | `quick-note` | none | Open the Quick Note window |
+
+`io.github.taulit.Sheaf1` has the methods of the plan (`Search`, `Recent`, `Create`,
+`Append`, `Open`, `QuickNote`, signal `Changed`) plus `Sync`, `Reindex` and the property
+`NotesDir`. `Create` with an empty folder writes to the Quick Notes folder, `/` means
+the notes folder itself. Errors are named `io.github.taulit.Sheaf1.Error.<Code>`.
+
+The Desktop Entry specification allows `ActivateAction` no or one parameter item, so
+the strings of an action travel as one array of strings (`api::action_parameter`).
 
 A second `sheaf` launch without a subcommand calls `Activate` on the running instance
 and exits.

@@ -1,0 +1,12 @@
+---
+source: crates/sheaf/tests/cli.rs
+expression: "sandbox.document(&ambiguous.stderr, \"error\")"
+---
+{
+  "error": {
+    "candidates": [],
+    "code": "ambiguous",
+    "message": "ambiguous reference: i"
+  },
+  "schema": 1
+}

@@ -8,6 +8,10 @@ license.workspace = true
 repository.workspace = true
 publish.workspace = true
 
+[lib]
+# The benchmarks are criterion's, in benches/; libtest would reject its arguments.
+bench = false
+
 [features]
 # Generator for synthetic note folders, used by benchmarks and budget checks.
 testgen = []
@@ -33,3 +37,12 @@ tempfile.workspace = true
 
 [lints]
 workspace = true
+
+[[bench]]
+name = "search"
+harness = false
+required-features = ["testgen"]
+
+[[example]]
+name = "search_budget"
+required-features = ["testgen"]

@@ -1,0 +1,25 @@
+---
+source: crates/sheaf/tests/cli.rs
+expression: "sandbox.json(&[\"tags\"], \"tags\")"
+---
+{
+  "schema": 1,
+  "tags": [
+    {
+      "count": 1,
+      "name": "books"
+    },
+    {
+      "count": 1,
+      "name": "haushalt"
+    },
+    {
+      "count": 2,
+      "name": "projekt"
+    },
+    {
+      "count": 1,
+      "name": "urlaub"
+    }
+  ]
+}

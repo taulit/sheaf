@@ -1,0 +1,11 @@
+---
+source: crates/sheaf/tests/cli.rs
+expression: "sandbox.document(&invalid.stderr, \"error\")"
+---
+{
+  "error": {
+    "code": "invalid",
+    "message": "invalid input: not a folder inside the notes folder: ../outside"
+  },
+  "schema": 1
+}

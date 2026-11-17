@@ -1,0 +1,8 @@
+---
+source: crates/sheaf/tests/cli.rs
+expression: "sandbox.text(&[\"tags\"])"
+---
+1  #books
+1  #haushalt
+2  #projekt
+1  #urlaub

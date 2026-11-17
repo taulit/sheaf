@@ -1,0 +1,8 @@
+---
+source: crates/sheaf/tests/cli.rs
+expression: "sandbox.text(&[\"folders\"])"
+---
+4  /
+1  Arbeit
+1  Arbeit/Planung
+0  Archiv

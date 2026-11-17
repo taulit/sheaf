@@ -24,6 +24,10 @@ pub enum Error {
     #[error("already exists: {0}")]
     Exists(String),
 
+    /// The file changed on disk since the caller last read it; nothing was written.
+    #[error("changed on disk: {0}")]
+    Conflict(String),
+
     #[error("configuration: {0}")]
     Config(String),
 
@@ -42,6 +46,7 @@ impl Error {
             Error::Ambiguous { .. } => "ambiguous",
             Error::Invalid(_) => "invalid",
             Error::Exists(_) => "exists",
+            Error::Conflict(_) => "conflict",
             Error::Config(_) => "config",
             Error::Index(_) => "index",
             Error::Io(_) => "io",

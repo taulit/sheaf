@@ -1,0 +1,43 @@
+---
+source: crates/sheaf/tests/cli.rs
+expression: text
+---
+{
+  "hits": [
+    {
+      "conflict": false,
+      "created": "[time]",
+      "folder": "Arbeit",
+      "has_attachment": false,
+      "has_image": false,
+      "has_table": true,
+      "id": "[id1]",
+      "modified": "[time]",
+      "path": "[notes]/Arbeit/Besprechung Ausschreibung.md",
+      "pinned": false,
+      "score": "[score]",
+      "snippet": "Die Ausschreibung für das Projekt Frühling wurde besprochen. #projekt Phase Frist Angebot 30. November",
+      "snippet_highlights": [
+        [
+          4,
+          17
+        ]
+      ],
+      "tags": [
+        "projekt"
+      ],
+      "tasks_open": 0,
+      "tasks_total": 0,
+      "title": "Besprechung Ausschreibung",
+      "title_highlights": [
+        [
+          12,
+          25
+        ]
+      ]
+    }
+  ],
+  "query": "ausschreibung",
+  "schema": 1,
+  "total": 1
+}

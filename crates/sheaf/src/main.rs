@@ -1,3 +1,7 @@
 //! `sheaf`: the notes app and its command line in one binary.
 
-fn main() {}
+mod cli;
+
+fn main() -> std::process::ExitCode {
+    cli::run(std::env::args_os())
+}

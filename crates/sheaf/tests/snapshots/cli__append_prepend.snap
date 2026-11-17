@@ -1,0 +1,14 @@
+---
+source: crates/sheaf/tests/cli.rs
+expression: "sandbox.ok(&[\"show\", \"Ideen für den Garten\"])"
+---
+Ideen für den Garten
+
+Zuerst
+
+Wichtig!
+
+Tomaten und Kräuter pflanzen.
+Bohnen
+Gurken
+Kürbis

@@ -1,0 +1,26 @@
+---
+source: crates/sheaf/tests/cli.rs
+expression: "sandbox.json(&[\"show\", \"Besprechung\"], \"show\")"
+---
+{
+  "body": "# Besprechung Ausschreibung\n\nDie Ausschreibung für das Projekt Frühling wurde besprochen. #projekt\n\n| Phase | Frist |\n|---|---|\n| Angebot | 30. November |\n",
+  "note": {
+    "conflict": false,
+    "created": "[time]",
+    "folder": "Arbeit",
+    "has_attachment": false,
+    "has_image": false,
+    "has_table": true,
+    "id": "[id1]",
+    "modified": "[time]",
+    "path": "[notes]/Arbeit/Besprechung Ausschreibung.md",
+    "pinned": false,
+    "tags": [
+      "projekt"
+    ],
+    "tasks_open": 0,
+    "tasks_total": 0,
+    "title": "Besprechung Ausschreibung"
+  },
+  "schema": 1
+}
