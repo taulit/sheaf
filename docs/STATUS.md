@@ -7,7 +7,7 @@ Other sessions read only this file. Updated at the end of every phase.
 | S0 Setup | merged | [#1](https://github.com/taulit/sheaf/pull/1) |
 | S1 Core, searchd, CLI | merged | [#2](https://github.com/taulit/sheaf/pull/2), [#3](https://github.com/taulit/sheaf/pull/3) |
 | S2 App | gate green, in review | `phase/s2-app` |
-| S3 Features | merged locally, gate green, not pushed (GitHub login lost) | `phase/s3-features` |
+| S3 Features | review findings fixed, gate green, pushed | `phase/s3-features` |
 | S4 Release | not started | |
 
 ## What works (S1)
@@ -48,7 +48,8 @@ Other sessions read only this file. Updated at the end of every phase.
   (krilla, HarfRust shaping, Inter embedded as subsets, system mono and emoji
   fallbacks, page numbers, outline, links).
 - Attachments: dropped, pasted (files or images) or chosen files are copied to
-  `<folder>/_attachments/<id>/` and linked at the caret.
+  `<folder>/_attachments/<id>/` and linked at the caret; they go to the trash with
+  their note, except files another note still links to.
 - Backlinks: "N notes link here" under the text, folded; trashed notes are left out.
 - Settings window (Ctrl+,): notes folder (the whole app follows), default order (folders
   without their own), Quick Note folder and resume time (`.sheaf/config.toml`), editor
@@ -56,9 +57,9 @@ Other sessions read only this file. Updated at the end of every phase.
   its GNOME fallback, the keyboard shortcuts per context.
 - "Visor: Notes" in `visor-module/` against Visor `api-v1`, tested in a sandboxed shell
   (`scripts/test-visor-module.sh`).
-- Gate on 2026-11-17 after the merges: fmt and clippy clean, 411 tests passed (4
+- Gate on 2026-11-17 after the review fixes: fmt and clippy clean, 436 tests passed (4
   ignored: screenshots, run by `scripts/screenshot.sh`), `cargo deny check` ok, Visor
-  module 22 of 22.
+  module 23 of 23.
 
 ## Tags
 
@@ -78,13 +79,13 @@ None yet.
   `--filesystem=xdg-documents` (S4), passing an activation token to a window opened later
   by the running GPUI app (S2), reading the Settings portal inside the sandbox (S4).
 - `rust-version` is 1.95 (the editor's MSRV), above the 1.92 that `krilla` needs.
-- S3 is not pushed: `gh` lost its login on 2026-11-17, `git push` fails. `phase/s3-features`
-  is ahead of origin; no S3 PR yet, and no `bug-review` over the S3 diff yet.
+- S3 is pushed. Its `bug-review` found 12 issues, all fixed on 2026-11-17
+  (`a8c46c4..21290e9`); a narrow re-review of the fixes and the S3 PR are next.
 - Not built from plan 03 §9: `/vorlage` in the slash menu (the editor's `SlashItem`s are
   fixed when the editor is created, so they cannot follow the templates), the Print
   portal is not probed beforehand (Print shows always; the fallback comes after a
-  failure). Attachments of trashed notes stay in `_attachments/`, and images do not
-  show in the read-only trashed note (relative paths point beside the original).
+  failure). Images do not show in the read-only trashed note (relative paths point
+  beside the original).
 - PDF limits: no italic face (slanted Inter), checked items are grey but not struck
   through, `#tags` are not coloured, right-to-left text is set left to right, no
   hyphenation.
