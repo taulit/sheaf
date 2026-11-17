@@ -55,6 +55,8 @@ actions!(
         QuickNoteDone,
         /// Store the quick note, close its window and show the note in the main window.
         QuickNoteOpen,
+        /// Save the gallery's search as a smart folder.
+        SaveSearchAsSmartFolder,
     ]
 );
 
@@ -134,6 +136,10 @@ pub fn commands() -> Vec<CommandInfo> {
         command(Box::new(ToggleView), tr("Toggle View")),
         command(Box::new(ShowSortOptions), tr("Sort Notes")),
         command(Box::new(ShowFolders), tr("Show Folders")),
+        command(
+            Box::new(SaveSearchAsSmartFolder),
+            tr("Save Search as Smart Folder"),
+        ),
         command(Box::new(Back), tr("Back to Notes")),
         command(Box::new(ShowShortcuts), tr("Keyboard Shortcuts")),
         command(Box::new(OpenSettings), tr("Settings")),

@@ -27,6 +27,7 @@
 //! | `render` | header, search field, chip row, popovers, empty states |
 //! | `cards` | cards, list rows and their context menu |
 //! | [`trash`] | "Recently Deleted": restore, delete for good, the read-only note |
+//! | [`smart`] | smart folders: saved searches |
 //!
 //! Only metadata from the index is needed to show the gallery. The text of a note is
 //! read, in the background, when its card is first drawn, and its miniature is kept
@@ -39,6 +40,7 @@ pub mod dates;
 pub mod layout;
 pub mod preview;
 mod render;
+pub mod smart;
 pub mod trash;
 
 use std::collections::{BTreeSet, HashMap};
@@ -96,6 +98,8 @@ pub enum Scope {
     Tag(String),
     /// "Recently Deleted": the notes in the trash.
     Trash,
+    /// A smart folder, by name: what its saved search finds.
+    Smart(String),
 }
 
 impl Scope {
@@ -105,7 +109,7 @@ impl Scope {
             // Anchored, so that `Privat` does not also find `Arbeit/Privat`.
             Scope::Folder(path) => Some(Filter::Folder(format!("/{path}"))),
             Scope::Tag(tag) => Some(Filter::Tag(tag.clone())),
-            Scope::Trash => None,
+            Scope::Trash | Scope::Smart(_) => None,
         }
     }
 
@@ -113,7 +117,7 @@ impl Scope {
     fn config_key(&self) -> &str {
         match self {
             Scope::Folder(path) => path,
-            Scope::All | Scope::Tag(_) | Scope::Trash => "",
+            Scope::All | Scope::Tag(_) | Scope::Trash | Scope::Smart(_) => "",
         }
     }
 
@@ -124,6 +128,7 @@ impl Scope {
             Scope::Folder(path) => path.rsplit('/').next().unwrap_or(path).to_owned(),
             Scope::Tag(tag) => format!("#{tag}"),
             Scope::Trash => tr("Recently Deleted"),
+            Scope::Smart(name) => name.clone(),
         }
     }
 }
@@ -201,6 +206,7 @@ pub struct GalleryView {
     /// The name field of "New Folder" in the folder popover, while it is open.
     new_folder: Option<Entity<InputState>>,
     trash: trash::TrashState,
+    smart: smart::SmartState,
     generation: u64,
     focus_handle: FocusHandle,
     /// The pause before a search, while typing.
@@ -258,6 +264,7 @@ impl GalleryView {
             popover: None,
             new_folder: None,
             trash: trash::TrashState::default(),
+            smart: smart::SmartState::default(),
             generation: 0,
             focus_handle: cx.focus_handle(),
             debounce: Task::ready(()),
@@ -299,7 +306,7 @@ impl GalleryView {
     pub fn current_folder(&self) -> String {
         match &self.scope {
             Scope::Folder(path) => path.clone(),
-            Scope::All | Scope::Tag(_) | Scope::Trash => String::new(),
+            Scope::All | Scope::Tag(_) | Scope::Trash | Scope::Smart(_) => String::new(),
         }
     }
 
@@ -557,7 +564,9 @@ impl GalleryView {
         let library = self.library.read(cx);
         let mut filters: Vec<Filter> = self.scope.filter().into_iter().collect();
         filters.extend(self.chips.iter().cloned());
-        let text = searchable_text(&self.text);
+        let (smart_filters, smart_words) = self.smart_query();
+        filters.extend(smart_filters);
+        let text = searchable_text(&format!("{smart_words} {}", self.text));
         let listing: Task<sheaf_core::Result<Listing>> = if text.is_empty() {
             let sort = self.sort();
             let now = library.now();
@@ -833,6 +842,7 @@ impl GalleryView {
         }
         self.popover = popover;
         self.new_folder = None;
+        self.stop_smart_edit();
         cx.notify();
     }
 
