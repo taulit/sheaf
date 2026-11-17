@@ -149,7 +149,11 @@ mod tests {
     fn the_given_text_gives_the_title_and_follows_the_template() {
         let root = tempfile::tempdir().unwrap();
         fs::create_dir_all(dir(root.path())).unwrap();
-        fs::write(dir(root.path()).join("Protokoll.md"), "# {{title}}\n\nAm {{date}}").unwrap();
+        fs::write(
+            dir(root.path()).join("Protokoll.md"),
+            "# {{title}}\n\nAm {{date}}",
+        )
+        .unwrap();
         let text = |given: &str| note_text(root.path(), "Protokoll", given, &now()).unwrap();
         assert_eq!(text(""), "# \n\nAm 2026-11-16");
         assert_eq!(text(" Jour fixe "), "# Jour fixe\n\nAm 2026-11-16");

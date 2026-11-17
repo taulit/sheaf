@@ -12,6 +12,8 @@
 //! | [`gallery`], [`note`] | the two views |
 //! | [`overlays`] | toast, command palette, list of shortcuts, popover parts |
 //! | [`state`] | what is remembered between runs |
+//! | [`quick`] | the Quick Note window |
+//! | [`shortcut`] | the global Quick Note shortcut through the portal |
 
 pub mod actions;
 pub mod assets;
@@ -23,6 +25,8 @@ mod logger;
 pub mod note;
 pub mod overlays;
 pub mod portal;
+pub mod quick;
+pub mod shortcut;
 pub mod state;
 pub mod theme;
 pub mod window;
@@ -230,10 +234,26 @@ async fn show(request: Request, token: Option<String>, cx: &mut AsyncApp) {
         }
     }
     cx.update(|cx| {
+        let shown = match request {
+            // Only its own small window, not the main one (plan 03 §8).
+            Request::QuickNote => open_quick_note(cx),
+            request => present(request, cx),
+        };
+        if let Err(err) = shown {
+            log::error!("cannot show the window: {err:#}");
+        }
+    });
+}
+
+/// Opens the Quick Note window; what it asks of the main window opens that.
+fn open_quick_note(cx: &mut App) -> anyhow::Result<()> {
+    let library = cx.global::<Session>().library.clone();
+    let on_request: quick::RequestHandler = std::rc::Rc::new(|request, cx| {
         if let Err(err) = present(request, cx) {
             log::error!("cannot show the window: {err:#}");
         }
     });
+    quick::open(library, on_request, cx).map(|_| ())
 }
 
 fn present(request: Request, cx: &mut App) -> anyhow::Result<()> {
