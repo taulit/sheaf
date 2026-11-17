@@ -1027,3 +1027,30 @@ async fn a_pin_or_move_that_fails_says_so_and_shows_the_real_state(cx: &mut Test
         Some("Could not move the note: permission denied")
     );
 }
+
+#[gpui::test]
+async fn a_note_found_for_an_earlier_query_opens_with_that_query(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let mut app = open_app(&notes, cx);
+    app.cx.simulate_keystrokes("ctrl-k");
+    app.cx.simulate_input("shakshuka");
+    // Typed on and confirmed before the search for the longer query is back.
+    app.cx.update(|window, cx| {
+        for key in ["space", "x", "y"] {
+            window.dispatch_keystroke(gpui::Keystroke::parse(key).unwrap(), cx);
+        }
+    });
+    app.cx.update(|window, cx| window.draw(cx).clear(cx));
+    app.cx.update(|window, cx| {
+        window.dispatch_keystroke(gpui::Keystroke::parse("enter").unwrap(), cx);
+    });
+    app.cx.run_until_parked();
+    let shakshuka = app.id_of("Shakshuka");
+    assert_eq!(
+        app.route(),
+        Route::Note {
+            id: shakshuka,
+            query: "shakshuka".to_owned()
+        }
+    );
+}

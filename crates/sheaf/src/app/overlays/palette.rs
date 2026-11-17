@@ -43,6 +43,9 @@ pub struct CommandPalette {
     /// The keys of each command, as shown.
     keys: Vec<Option<String>>,
     notes: Vec<NoteMeta>,
+    /// The query the search found [`notes`](Self::notes) for, which can lag behind
+    /// [`query`](Self::query) while typing.
+    notes_query: String,
     query: String,
     _searching: Task<()>,
 }
@@ -79,6 +82,7 @@ impl CommandPalette {
             commands,
             keys,
             notes: Vec::new(),
+            notes_query: String::new(),
             query: String::new(),
             _searching: Task::ready(()),
         }
@@ -100,6 +104,7 @@ impl CommandPalette {
             return;
         }
         let found = self.library.read(cx).search(query, NOTES, cx);
+        let query = query.to_owned();
         self._searching = cx.spawn(async move |this, cx| {
             let notes = match found.await {
                 Ok(results) => results.hits.into_iter().map(|hit| hit.meta).collect(),
@@ -110,6 +115,7 @@ impl CommandPalette {
             };
             let _ = this.update(cx, |this, cx| {
                 this.notes = notes;
+                this.notes_query = query;
                 cx.notify();
             });
         });
@@ -127,7 +133,7 @@ impl CommandPalette {
                 .cloned()
                 .map(|note| PaletteEvent::Open {
                     note,
-                    query: self.query.clone(),
+                    query: self.notes_query.clone(),
                 }),
         };
         if let Some(event) = event {
