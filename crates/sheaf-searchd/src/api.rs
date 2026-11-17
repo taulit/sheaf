@@ -16,6 +16,7 @@ pub const APP_PATH: &str = "/io/github/taulit/Sheaf";
 pub const ACTION_OPEN_NOTE: &str = "open-note";
 pub const ACTION_SEARCH: &str = "search";
 pub const ACTION_QUICK_NOTE: &str = "quick-note";
+pub const ACTION_NEW_NOTE: &str = "new-note";
 
 /// The `parameter` argument of `ActivateAction` for an action taking `params`.
 ///

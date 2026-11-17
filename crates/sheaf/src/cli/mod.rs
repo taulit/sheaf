@@ -15,7 +15,10 @@ use clap::Parser;
 use clap::error::ErrorKind;
 use sheaf_core::i18n::{self, tr};
 
-use args::{Cli, Command, Format};
+use crate::app::Launch;
+use crate::app::instance::Request;
+
+use args::{AppArgs, Cli, Command, Format};
 use context::{Ctx, json_document};
 use error::{CliError, ErrorBody};
 
@@ -29,16 +32,38 @@ pub fn run(args: impl IntoIterator<Item = OsString>) -> ExitCode {
     };
     let json = cli.json
         || matches!(&cli.command, Some(Command::Show(show)) if matches!(show.format, Format::Json));
+    if cli.command.is_none() && !json {
+        return crate::app::run(launch(cli.app), cli.dir);
+    }
     match execute(cli, json) {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => report(&err, json),
     }
 }
 
+fn launch(args: AppArgs) -> Launch {
+    let request = if args.new {
+        Request::NewNote
+    } else if args.quick {
+        Request::QuickNote
+    } else {
+        Request::Activate
+    };
+    Launch {
+        request,
+        service: args.dbus_service,
+    }
+}
+
 fn execute(cli: Cli, json: bool) -> error::Result {
+    if cli.command.is_some() && cli.app.any() {
+        return Err(CliError::Usage(tr(
+            "--new and --quick start the app and take no command",
+        )));
+    }
     match cli.command {
         None => Err(CliError::Usage(tr(
-            "the app is not part of this build; run `sheaf help` for the commands",
+            "--json needs a command; run `sheaf help` for the commands",
         ))),
         Some(Command::Help(args)) => help::help(args, json),
         Some(Command::Completions(args)) => help::completions(args.shell),
