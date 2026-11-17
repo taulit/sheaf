@@ -74,3 +74,13 @@ jobs:
           ssh-private-key: ${{ secrets.EDITOR_DEPLOY_KEY }}
       - run: git config --global url."ssh://git@github.com/taulit/gpui-markdown-editor".insteadOf "https://github.com/taulit/gpui-markdown-editor"
       - run: cargo run --release --locked -p sheaf-core --features testgen --example search_budget
+
+  visor-module:
+    name: Visor module (gjs tests, zip)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install system packages
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends gjs gettext jq zip
+      - run: scripts/test-visor-module.sh
+      - run: scripts/pack-visor-module.sh
