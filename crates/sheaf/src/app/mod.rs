@@ -37,7 +37,7 @@ use sheaf_core::paths::Env;
 
 use instance::{Activation, Bus, Instance, Request};
 use library::Library;
-use state::StateFile;
+use state::{Recovery, StateFile};
 use window::MainWindow;
 
 /// How the app was started.
@@ -95,6 +95,9 @@ pub fn run(launch: Launch, dir: Option<PathBuf>) -> ExitCode {
                 return;
             }
         };
+        if let Some(recovery) = Recovery::from_process() {
+            cx.set_global(recovery);
+        }
         cx.set_global(Session {
             library,
             state_file: StateFile::from_process(),

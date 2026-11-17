@@ -35,7 +35,7 @@ use super::note::{NoteEvent, NoteView};
 use super::overlays::palette::{CommandPalette, PaletteEvent};
 use super::overlays::shortcuts::ShortcutsSheet;
 use super::overlays::{Toast, ToastHost};
-use super::state::{StateFile, WindowState};
+use super::state::{Recovery, StateFile, WindowState};
 use super::theme::{ActiveTokens as _, motion, size};
 
 /// The shadow gpui-component draws around a client-decorated window, on every side.
@@ -101,7 +101,7 @@ impl MainWindow {
                 GalleryEvent::Trashed(ids) => this.offer_undo(ids.clone(), cx),
             });
         gallery.focus_handle(cx).focus(window, cx);
-        MainWindow {
+        let mut main = MainWindow {
             library,
             gallery,
             note: None,
@@ -118,7 +118,16 @@ impl MainWindow {
             _note_events: None,
             _overlay_events: None,
             _subscriptions: [gallery_event],
+        };
+        if let Some(recovery) = cx.try_global::<Recovery>().cloned()
+            && recovery.take_unseen()
+        {
+            let folder = recovery.dir().to_owned();
+            let toast = Toast::new(tr("Recovered unsaved notes"))
+                .action(tr("Open Folder"), move |_, cx| cx.open_with_system(&folder));
+            main.toast(toast, cx);
         }
+        main
     }
 
     pub fn route(&self, cx: &App) -> Route {

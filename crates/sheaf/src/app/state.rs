@@ -1,11 +1,13 @@
-//! What the app remembers between runs: `$XDG_STATE_HOME/sheaf/state.toml`.
+//! What the app remembers between runs: `$XDG_STATE_HOME/sheaf/state.toml`, and the
+//! notes it could not save when it closed, in `$XDG_STATE_HOME/sheaf/recovered/`.
 
-use std::io;
+use std::fs::{self, File};
+use std::io::{self, Write as _};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use gpui::Pixels;
+use gpui::{Global, Pixels};
 
 use super::theme::size;
 
@@ -48,14 +50,7 @@ impl StateFile {
     /// The file of this user: below `$XDG_STATE_HOME`, or `~/.local/state`. `None`
     /// without either, in which case nothing is remembered.
     pub fn from_process() -> Option<Self> {
-        let var = |name: &str| {
-            std::env::var_os(name)
-                .map(PathBuf::from)
-                .filter(|path| path.is_absolute())
-        };
-        let state_home =
-            var("XDG_STATE_HOME").or_else(|| Some(var("HOME")?.join(".local/state")))?;
-        Some(StateFile(state_home.join("sheaf/state.toml")))
+        Some(StateFile(state_home()?.join("sheaf/state.toml")))
     }
 
     pub fn path(&self) -> &Path {
@@ -90,6 +85,82 @@ impl StateFile {
     }
 }
 
+/// `$XDG_STATE_HOME`, or `~/.local/state`.
+fn state_home() -> Option<PathBuf> {
+    let var = |name: &str| {
+        std::env::var_os(name)
+            .map(PathBuf::from)
+            .filter(|path| path.is_absolute())
+    };
+    var("XDG_STATE_HOME").or_else(|| Some(var("HOME")?.join(".local/state")))
+}
+
+/// Where the text of a note goes that could not be saved in the notes folder when the
+/// window closed or the app quit. A marker beside the files tells the next start that
+/// there is something new.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Recovery(PathBuf);
+
+impl Global for Recovery {}
+
+/// The marker: notes were kept since the last start.
+const UNSEEN: &str = ".unseen";
+
+impl Recovery {
+    pub fn at(dir: impl Into<PathBuf>) -> Self {
+        Recovery(dir.into())
+    }
+
+    /// `$XDG_STATE_HOME/sheaf/recovered/` of this user; `None` without a state folder.
+    pub fn from_process() -> Option<Self> {
+        Some(Recovery(state_home()?.join("sheaf/recovered")))
+    }
+
+    pub fn dir(&self) -> &Path {
+        &self.0
+    }
+
+    /// Writes `text` to `<title>-<time>.md` and returns where.
+    pub fn keep(&self, title: &str, text: &str) -> io::Result<PathBuf> {
+        fs::create_dir_all(&self.0)?;
+        let stem: String = title
+            .chars()
+            .map(|c| if c == '/' || c.is_control() { '-' } else { c })
+            .take(60)
+            .collect();
+        let stem = match stem.trim().trim_start_matches('.') {
+            "" => "Untitled",
+            stem => stem,
+        };
+        let time = jiff::Timestamp::now()
+            .to_zoned_datetime(jiff::tz::TimeZone::system())
+            .strftime("%Y-%m-%d-%H%M%S");
+        let mut number = 1;
+        loop {
+            let name = match number {
+                1 => format!("{stem}-{time}.md"),
+                _ => format!("{stem}-{time}-{number}.md"),
+            };
+            let path = self.0.join(name);
+            match File::create_new(&path) {
+                Ok(mut file) => {
+                    file.write_all(text.as_bytes())?;
+                    file.sync_all()?;
+                    File::create(self.0.join(UNSEEN))?;
+                    return Ok(path);
+                }
+                Err(err) if err.kind() == io::ErrorKind::AlreadyExists => number += 1,
+                Err(err) => return Err(err),
+            }
+        }
+    }
+
+    /// Whether notes were kept since this was last asked; forgets it.
+    pub fn take_unseen(&self) -> bool {
+        fs::remove_file(self.0.join(UNSEEN)).is_ok()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -111,6 +182,35 @@ mod tests {
             std::fs::write(file.path(), broken).expect("a file");
             assert_eq!(file.load(), None, "{broken}");
         }
+    }
+
+    #[test]
+    fn recovered_notes_get_a_file_each_and_are_new_once() {
+        let dir = tempfile::tempdir().expect("a temporary directory");
+        let recovery = Recovery::at(dir.path().join("recovered"));
+        assert!(!recovery.take_unseen());
+        let first = recovery.keep("Plan/B", "Plan/B\n\nText\n").expect("kept");
+        let second = recovery.keep("Plan/B", "Plan/B\n\nMore\n").expect("kept");
+        assert_ne!(first, second);
+        assert!(
+            first
+                .file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("Plan-B-"))
+        );
+        assert_eq!(
+            fs::read_to_string(&second).expect("a file"),
+            "Plan/B\n\nMore\n"
+        );
+        assert!(
+            recovery
+                .keep("", "")
+                .expect("kept")
+                .to_string_lossy()
+                .contains("Untitled-")
+        );
+        assert!(recovery.take_unseen());
+        assert!(!recovery.take_unseen());
     }
 
     #[test]
