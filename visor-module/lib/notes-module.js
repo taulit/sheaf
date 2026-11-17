@@ -224,7 +224,7 @@ class NotesModule {
     try {
       await client.open(id);
     } catch (e) {
-      this._failed('cannot open the note', e, ctx.t('Could not open the note'));
+      this._failed('cannot open the note', e, ctx.t('Could not open Notes'));
     }
   }
 
@@ -241,7 +241,7 @@ class NotesModule {
     try {
       await client.quickNote();
     } catch (e) {
-      this._failed('cannot open the quick note', e, ctx.t('Could not open the note'));
+      this._failed('cannot open the quick note', e, ctx.t('Could not open Notes'));
     }
   }
 
