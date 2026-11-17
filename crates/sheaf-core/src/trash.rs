@@ -5,7 +5,8 @@
 //!
 //! Attachments (`<folder>/_attachments/<id>/`) go to `.trash/_attachments/<id>/` with
 //! their note, except files another note that is not in the trash links to: those
-//! stay where that link points. Restoring the note brings its files back together;
+//! stay where that link points, until the last such note goes to the trash as well
+//! and they follow. Restoring the note brings its files back together;
 //! deleting it for good removes only files no such note links to, and puts the
 //! others back beside the folder the note came from.
 
@@ -135,7 +136,23 @@ impl NoteStore {
             !linked.contains(name)
         })?;
         self.with_ids(|ids| ids.remove(id))?;
+        for owner in linked_owners(frontmatter::split(&note.text).body, id) {
+            self.follow_owner(&owner)?;
+        }
         Ok(self.load(&join_rel(TRASH_DIR, &name))?.meta)
+    }
+
+    /// Moves the files of `owner`, if it is in the trash, that stayed behind for links
+    /// and that no note outside the trash links to any more into the trash to it.
+    fn follow_owner(&self, owner: &NoteId) -> Result<()> {
+        let trashed = match self.trashed(owner) {
+            Ok(trashed) => trashed,
+            Err(Error::NotFound(_)) => return Ok(()),
+            Err(err) => return Err(err),
+        };
+        let folder = checked_folder(&trashed.from).unwrap_or_default();
+        let linked = self.linked_elsewhere(owner, &self.attachments_path(&folder, owner), None)?;
+        self.move_attachment_files(owner, &folder, TRASH_DIR, |name| !linked.contains(name))
     }
 
     fn trashed(&self, id: &NoteId) -> Result<TrashedNote> {
@@ -245,6 +262,28 @@ impl NoteStore {
         remove_if_empty(source.parent());
         Ok(())
     }
+}
+
+/// The other notes whose attachments `body` links to, by the id in
+/// `_attachments/<id>/`.
+fn linked_owners(body: &str, own: &NoteId) -> Vec<NoteId> {
+    let mut owners = Vec::new();
+    for target in scan::file_targets(body) {
+        let mut parts = target.split('/');
+        while let Some(part) = parts.next() {
+            if part != ATTACHMENTS_DIR {
+                continue;
+            }
+            if let Some(Ok(owner)) = parts.next().map(str::parse::<NoteId>)
+                && owner != *own
+                && !owners.contains(&owner)
+            {
+                owners.push(owner);
+            }
+            break;
+        }
+    }
+    owners
 }
 
 /// Removes `dir` if it is an empty folder; fails quietly otherwise, as it should.

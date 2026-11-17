@@ -330,3 +330,71 @@ fn links_count_as_the_app_resolves_them() {
     assert!(!dir.path().join(&folder).join("code.txt").exists());
     assert!(!dir.path().join(".trash/_attachments").exists());
 }
+
+/// Two notes in `Fotos` that show the same image, which belongs to the first.
+fn shared_image(store: &NoteStore) -> (NoteMeta, NoteMeta, String) {
+    let a = create_in(store, "Fotos", "Album\n");
+    let (a, foto) = store.add_attachment(&a.id, "foto.png", b"png").unwrap();
+    store
+        .write_body(
+            &a.id,
+            &format!("Album\n\n![Foto]({foto})\n"),
+            &Default::default(),
+        )
+        .unwrap();
+    let b = create_in(store, "Fotos", &format!("Bilder\n\n![Foto]({foto})\n"));
+    (a, b, foto)
+}
+
+#[test]
+fn deleting_a_folder_takes_attachments_its_notes_share() {
+    let (dir, store) = store();
+    let (a, _, foto) = shared_image(&store);
+    let now = time("2026-11-16T12:00:00Z");
+
+    assert_eq!(store.delete_folder("Fotos", now).unwrap().len(), 2);
+    assert!(!dir.path().join("Fotos").exists());
+    assert!(dir.path().join(".trash").join(&foto).is_file());
+
+    let restored = store.restore(&a.id).unwrap();
+    assert!(dir.path().join(&restored.folder).join(&foto).is_file());
+}
+
+#[test]
+fn the_last_note_linking_a_kept_file_takes_it_along() {
+    let (dir, store) = store();
+    let (a, b, foto) = shared_image(&store);
+    let now = time("2026-11-16T12:00:00Z");
+    store.trash(&a.id, now).unwrap();
+    assert!(dir.path().join("Fotos").join(&foto).is_file());
+
+    store.trash(&b.id, now).unwrap();
+    assert!(dir.path().join(".trash").join(&foto).is_file());
+    assert!(store.delete_folder("Fotos", now).unwrap().is_empty());
+    assert!(!dir.path().join("Fotos").exists());
+
+    store.restore(&a.id).unwrap();
+    assert_eq!(
+        fs::read(dir.path().join("Fotos").join(&foto)).unwrap(),
+        b"png"
+    );
+}
+
+#[test]
+fn a_live_note_elsewhere_keeps_a_shared_file() {
+    let (dir, store) = store();
+    let (a, b, foto) = shared_image(&store);
+    let c = create_in(
+        &store,
+        "Andere",
+        &format!("Fremd\n\n![Foto](../Fotos/{foto})\n"),
+    );
+    let now = time("2026-11-16T12:00:00Z");
+    store.trash(&a.id, now).unwrap();
+    store.trash(&b.id, now).unwrap();
+    assert!(dir.path().join("Fotos").join(&foto).is_file());
+
+    store.purge(&a.id).unwrap();
+    assert!(dir.path().join("Fotos").join(&foto).is_file());
+    assert!(store.get(&c.id).is_ok());
+}
