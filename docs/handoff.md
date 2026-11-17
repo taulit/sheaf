@@ -15,7 +15,7 @@ Written 2026-11-17 for whoever continues without the session's context. Read
 
 ## Running
 
-Nothing. S2 is in review as a PR against `main`.
+Nothing. S2 is in review: https://github.com/taulit/sheaf/pull/4 (against `main`).
 
 ## Second and third S2 review: no blocking finding left
 
