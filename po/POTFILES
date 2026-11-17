@@ -28,6 +28,20 @@ crates/sheaf-searchd/src/library.rs
 crates/sheaf-searchd/src/logger.rs
 crates/sheaf-searchd/src/main.rs
 crates/sheaf-searchd/src/service.rs
+crates/sheaf/src/app/actions.rs
+crates/sheaf/src/app/assets.rs
+crates/sheaf/src/app/chrome.rs
+crates/sheaf/src/app/gallery/mod.rs
+crates/sheaf/src/app/instance.rs
+crates/sheaf/src/app/library.rs
+crates/sheaf/src/app/library/service.rs
+crates/sheaf/src/app/logger.rs
+crates/sheaf/src/app/mod.rs
+crates/sheaf/src/app/note/mod.rs
+crates/sheaf/src/app/portal.rs
+crates/sheaf/src/app/state.rs
+crates/sheaf/src/app/theme.rs
+crates/sheaf/src/app/window.rs
 crates/sheaf/src/cli/args.rs
 crates/sheaf/src/cli/commands/app.rs
 crates/sheaf/src/cli/commands/mod.rs
@@ -39,4 +53,6 @@ crates/sheaf/src/cli/error.rs
 crates/sheaf/src/cli/help.rs
 crates/sheaf/src/cli/mod.rs
 crates/sheaf/src/cli/output.rs
+crates/sheaf/src/lib.rs
 crates/sheaf/src/main.rs
+crates/sheaf/src/searchd.rs

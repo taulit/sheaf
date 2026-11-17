@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: sheaf\n"
 "Report-Msgid-Bugs-To: https://github.com/taulit/sheaf/issues\n"
-"POT-Creation-Date: 2026-11-16 22:17+0100\n"
+"POT-Creation-Date: 2026-11-17 10:34+0100\n"
 "PO-Revision-Date: 2026-11-16 22:17+0100\n"
 "Last-Translator: Automatically generated\n"
 "Language-Team: German\n"
@@ -23,7 +23,8 @@ msgid "Quick Notes"
 msgstr "Schnellnotizen"
 
 #: crates/sheaf-core/src/i18n.rs:51 crates/sheaf-core/src/store/fsops.rs:132
-#: crates/sheaf-searchd/src/library.rs:190 crates/sheaf/src/cli/output.rs:183
+#: crates/sheaf-searchd/src/library.rs:190
+#: crates/sheaf/src/app/gallery/mod.rs:255 crates/sheaf/src/cli/output.rs:183
 msgid "Untitled"
 msgstr "Ohne Titel"
 
@@ -34,7 +35,8 @@ msgid_plural "{} notes"
 msgstr[0] "{} Notiz"
 msgstr[1] "{} Notizen"
 
-#: crates/sheaf-core/src/paths.rs:75
+#: crates/sheaf-core/src/paths.rs:75 crates/sheaf/src/app/note/mod.rs:302
+#: crates/sheaf/src/app/window.rs:368
 msgid "Notes"
 msgstr "Notizen"
 
@@ -42,7 +44,71 @@ msgstr "Notizen"
 msgid "conflict"
 msgstr "Konflikt"
 
-#: crates/sheaf/src/cli/commands/app.rs:28
+#: crates/sheaf/src/app/chrome.rs:266
+msgid "Close"
+msgstr "Schließen"
+
+#: crates/sheaf/src/app/gallery/mod.rs:216
+msgid "Search"
+msgstr "Suchen"
+
+#: crates/sheaf/src/app/gallery/mod.rs:326
+msgid "Folders"
+msgstr "Ordner"
+
+#: crates/sheaf/src/app/gallery/mod.rs:327
+msgid "All Notes"
+msgstr "Alle Notizen"
+
+#: crates/sheaf/src/app/gallery/mod.rs:330
+msgid "Gallery"
+msgstr "Galerie"
+
+#: crates/sheaf/src/app/gallery/mod.rs:333
+msgid "List"
+msgstr "Liste"
+
+#: crates/sheaf/src/app/gallery/mod.rs:336
+msgid "New Note"
+msgstr "Neue Notiz"
+
+#: crates/sheaf/src/app/gallery/mod.rs:366
+msgid "No notes yet"
+msgstr "Noch keine Notizen"
+
+#: crates/sheaf/src/app/gallery/mod.rs:368
+msgid "No results"
+msgstr "Keine Treffer"
+
+#: crates/sheaf/src/app/mod.rs:61
+msgid "the running app does not answer"
+msgstr "die laufende App antwortet nicht"
+
+#: crates/sheaf/src/app/mod.rs:65
+msgid "cannot open a window: neither WAYLAND_DISPLAY nor DISPLAY is set"
+msgstr "kein Fenster möglich: weder WAYLAND_DISPLAY noch DISPLAY ist gesetzt"
+
+#: crates/sheaf/src/app/note/mod.rs:307
+msgid "Pin"
+msgstr "Anheften"
+
+#: crates/sheaf/src/app/note/mod.rs:307
+msgid "Unpin"
+msgstr "Nicht mehr anheften"
+
+#: crates/sheaf/src/app/note/mod.rs:311
+msgid "Share"
+msgstr "Teilen"
+
+#: crates/sheaf/src/app/note/mod.rs:312
+msgid "More"
+msgstr "Mehr"
+
+#: crates/sheaf/src/app/window.rs:225
+msgid "Quick Note is not available yet"
+msgstr "Die Schnellnotiz gibt es noch nicht"
+
+#: crates/sheaf/src/cli/commands/app.rs:25
 msgid "sheaf-searchd cannot be reached or found"
 msgstr "sheaf-searchd ist nicht erreichbar und wurde nicht gefunden"
 
@@ -62,6 +128,10 @@ msgstr "Die Notiz wäre leer"
 msgid "neither $VISUAL nor $EDITOR is set"
 msgstr "Weder $VISUAL noch $EDITOR ist gesetzt"
 
-#: crates/sheaf/src/cli/mod.rs:41
-msgid "the app is not part of this build; run `sheaf help` for the commands"
-msgstr "Die App ist in diesem Build nicht enthalten; `sheaf help` zeigt die Befehle"
+#: crates/sheaf/src/cli/mod.rs:61
+msgid "--new and --quick start the app and take no command"
+msgstr "--new und --quick starten die App und nehmen keinen Befehl"
+
+#: crates/sheaf/src/cli/mod.rs:66
+msgid "--json needs a command; run `sheaf help` for the commands"
+msgstr "--json braucht einen Befehl; `sheaf help` zeigt die Befehle"
