@@ -184,7 +184,7 @@ sheaf/
   - `sheaf --quick`
   - D-Bus `QuickNote()`
   - Visor (Befehl `notiz` ohne Text, Dock-Ansicht)
-  - Tastenkürzel: Visor bietet es in seinen Einstellungen an. Ohne Visor über das GlobalShortcuts-Portal, solange die App läuft *(prüfen)*. Sonst steht eine Anleitung in den Einstellungen.
+  - Tastenkürzel: Visor bietet es in seinen Einstellungen an. Ohne Visor über das GlobalShortcuts-Portal, solange die App läuft. Bei Installation ohne Flatpak meldet sich die App dafür zuerst bei `org.freedesktop.host.portal.Registry` an (geprüft, siehe `docs/verified.md` §1). Sonst steht eine Anleitung in den Einstellungen (GNOME-Tastenkürzel auf `sheaf --quick`).
 - Neue Schnellnotizen landen im Ordner „Schnellnotizen“. Die letzte Schnellnotiz wird innerhalb von 5 min fortgesetzt, statt eine neue zu öffnen (einstellbar).
 
 ## 9. Weitere Funktionen 1.0
@@ -192,7 +192,7 @@ sheaf/
 - **Intelligente Ordner:** gespeicherte Suche (Abschnitt 3) mit Name und Symbol, in `config.toml`.
 - **Vorlagen:** `.sheaf/templates/*.md`. Auswahl über `+ ▾` und `/vorlage`. Variablen `{{date}}`, `{{time}}`, `{{title}}`.
 - **Papierkorb:** „Zuletzt gelöscht“ mit Wiederherstellen und Endgültig löschen.
-- **Export:** Markdown-Kopie, PDF (über den Druckdialog des Portals *(prüfen)*, sonst HTML → PDF mit einer schlanken Rust-Crate), Drucken.
+- **Export:** Markdown-Kopie, PDF, Drucken. Das Druck-Portal nimmt nur eine fertige PDF-Datei an, deshalb rendert Sheaf die PDF immer selbst (`krilla` plus eigener Zeilenumbruch). „PDF exportieren“ schreibt die Datei über das FileChooser-Portal, „Drucken“ übergibt sie an das Druck-Portal (geprüft, siehe `docs/verified.md` §2).
 - **Einstellungen** (eigenes Fenster in der App): Notizordner, Sortierung, Schnellnotiz-Verhalten, Schrift (System, Serif, Mono), Zeilenbreite, Tastenkürzel.
 - **CLI**: siehe Abschnitt 9a.
 
@@ -242,9 +242,10 @@ sheaf/
 ## 11. Pakete
 
 - **Flatpak:**
-  - Runtime `org.freedesktop.Platform` 25.08 + Rust-SDK-Erweiterung. Für Vulkan gibt es GL-Erweiterungen, Software-Fallback über Mesa.
+  - Runtime `org.freedesktop.Platform` 26.08 + Rust-SDK-Erweiterung (geprüft, siehe `docs/verified.md` §4). Für Vulkan gibt es GL-Erweiterungen, Software-Fallback über Mesa.
   - Berechtigungen: `--socket=wayland --socket=fallback-x11 --device=dri --filesystem=xdg-documents --talk-name=org.freedesktop.portal.*`.
   - Andere Notizordner per Override (dokumentiert, Flatseal).
   - Exportiert: Desktop-Datei, Symbole, metainfo, D-Bus-Services, `search-provider.ini`.
+  - Flatpak schaltet exportierte Suchanbieter standardmäßig aus. Die README erklärt, wie man „Notizen“ unter Einstellungen → Suche einschaltet (`docs/verified.md` §3).
 - **AUR:** `sheaf` (aus Release-Tarball) und `sheaf-git`, ohne Sandbox. Der Ordner ist dort frei wählbar.
 - **Visor-Modul:** eigene Store-ZIP aus `visor-module/`.

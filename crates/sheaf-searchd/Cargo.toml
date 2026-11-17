@@ -1,0 +1,20 @@
+[package]
+name = "sheaf-searchd"
+description = "Headless D-Bus service of Sheaf: search index writer and GNOME Shell search provider"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+sheaf-core.workspace = true
+log.workspace = true
+zbus.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true
