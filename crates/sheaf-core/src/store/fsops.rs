@@ -2,7 +2,7 @@
 //! accident, plus the rules for file names.
 
 use std::fs::{self, File, OpenOptions};
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 
 use crate::i18n::tr;
@@ -40,6 +40,47 @@ pub(crate) fn write_new(
         let _ = fs::remove_file(&temp);
     }
     name
+}
+
+/// Like [`write_new`], with the bytes read from `source` in pieces, so that a large
+/// file is never in memory whole. Before each piece `go_on` is asked; if it says no,
+/// the copy is given up and leaves nothing behind.
+pub(crate) fn copy_new(
+    dir: &Path,
+    stem: &str,
+    sep: &str,
+    ext: &str,
+    source: &mut dyn Read,
+    go_on: &dyn Fn() -> bool,
+) -> io::Result<String> {
+    let temp = dir.join(format!("{TEMP_PREFIX}{}", ulid::Ulid::generate()));
+    let copied = copy_to(&temp, source, go_on);
+    let name = copied.and_then(|()| move_new(&temp, dir, stem, sep, ext));
+    if name.is_err() {
+        let _ = fs::remove_file(&temp);
+    }
+    name
+}
+
+fn copy_to(temp: &Path, source: &mut dyn Read, go_on: &dyn Fn() -> bool) -> io::Result<()> {
+    let mut file = OpenOptions::new().write(true).create_new(true).open(temp)?;
+    let mut piece = vec![0; 256 * 1024];
+    loop {
+        if !go_on() {
+            return Err(io::Error::new(
+                io::ErrorKind::Interrupted,
+                "the copy was given up",
+            ));
+        }
+        let read = match source.read(&mut piece) {
+            Ok(0) => break,
+            Ok(read) => read,
+            Err(err) if err.kind() == io::ErrorKind::Interrupted => continue,
+            Err(err) => return Err(err),
+        };
+        file.write_all(&piece[..read])?;
+    }
+    file.sync_all()
 }
 
 /// Moves `from` to `<dir>/<stem><ext>`, numbered like [`write_new`] while the name is

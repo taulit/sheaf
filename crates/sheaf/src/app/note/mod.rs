@@ -43,6 +43,7 @@ pub(crate) mod setup;
 mod worker;
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
@@ -135,6 +136,9 @@ pub struct NoteView {
     closed: bool,
     /// Leaving is under way.
     leaving: bool,
+    /// Set when the note is left or closed: copies of attachments still running are
+    /// given up, as leaving does not wait for them.
+    closing: Arc<AtomicBool>,
     /// Moving to the trash is under way.
     trashing: bool,
     /// The first line as last seen, to notice when the title changes.
@@ -243,6 +247,7 @@ impl NoteView {
             lookup,
             fresh: false,
             closed: false,
+            closing: Arc::default(),
             leaving: false,
             trashing: false,
             title: String::new(),
@@ -326,6 +331,7 @@ impl NoteView {
             return Some(Task::ready(false));
         }
         self.leaving = true;
+        self.closing.store(true, Ordering::SeqCst);
         self._save_timer = Task::ready(());
         self._rename_timer = Task::ready(());
         Some(cx.spawn(async move |this, cx| {
@@ -386,10 +392,12 @@ impl NoteView {
     fn left(&mut self, left: bool, text: &str, cx: &mut Context<Self>) -> bool {
         self.leaving = false;
         if !left {
+            self.closing = Arc::default();
             return false;
         }
         if self.editor.read(cx).markdown() != text {
             // Typed while leaving: stay, with what leaving stored as the note.
+            self.closing = Arc::default();
             worker::lock(&self.shared).finished = false;
             self.banner = None;
             self._save_timer = self.after(SAVE_DELAY, false, cx);
@@ -536,6 +544,7 @@ impl NoteView {
     /// Nothing more is written.
     fn finish(&mut self) {
         self.closed = true;
+        self.closing.store(true, Ordering::SeqCst);
         worker::lock(&self.shared).finished = true;
         self._save_timer = Task::ready(());
         self._rename_timer = Task::ready(());

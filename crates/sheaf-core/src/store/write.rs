@@ -292,13 +292,18 @@ impl NoteStore {
         file_name: &str,
         bytes: &[u8],
     ) -> Result<(NoteMeta, String)> {
+        let (meta, dir) = self.prepare_attachments(id)?;
+        let link = store_attachment(&dir, &meta.id, file_name, &mut &bytes[..], &|| true)?;
+        Ok((meta, link))
+    }
+
+    /// The first step of attaching files: gives the note its real id if it has none
+    /// yet, and returns the note with the folder its attachments go to. The files are
+    /// then copied with [`store_attachment`], which does not touch the note.
+    pub fn prepare_attachments(&self, id: &NoteId) -> Result<(NoteMeta, PathBuf)> {
         let meta = self.stamp(self.get(id)?)?.meta;
         let dir = self.attachments_path(&meta.folder, &meta.id);
-        fs::create_dir_all(&dir)?;
-        let (stem, ext) = attachment_name(file_name);
-        let name = fsops::write_new(&dir, &stem, "-", &ext, bytes)?;
-        let link = format!("{ATTACHMENTS_DIR}/{}/{name}", meta.id);
-        Ok((meta, link))
+        Ok((meta, dir))
     }
 
     pub(crate) fn attachments_path(&self, folder: &str, id: &NoteId) -> PathBuf {
@@ -408,6 +413,24 @@ pub(crate) fn stamped(note: &Note, text: String) -> (NoteId, String) {
         text = frontmatter::set(&text, "created", &format_local(note.meta.created));
     }
     (id, text)
+}
+
+/// Copies what `source` reads into `dir`, the attachment folder of the note `id` from
+/// [`NoteStore::prepare_attachments`], as a file named after `file_name`, and returns
+/// the target to use in a Markdown link or image. The copy goes to a hidden file
+/// first and gets its name only when it is complete; one that fails, or that is given
+/// up because `go_on` says no, leaves nothing.
+pub fn store_attachment(
+    dir: &Path,
+    id: &NoteId,
+    file_name: &str,
+    source: &mut dyn io::Read,
+    go_on: &dyn Fn() -> bool,
+) -> Result<String> {
+    fs::create_dir_all(dir)?;
+    let (stem, ext) = attachment_name(file_name);
+    let name = fsops::copy_new(dir, &stem, "-", &ext, source, go_on)?;
+    Ok(format!("{ATTACHMENTS_DIR}/{id}/{name}"))
 }
 
 /// A folder path in its canonical form: no leading or trailing `/`, empty for the root.

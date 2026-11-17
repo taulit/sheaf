@@ -5,6 +5,7 @@
 
 mod fixture;
 
+use std::io::Read as _;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -279,6 +280,68 @@ async fn attach_file_takes_the_chosen_files_and_gives_a_new_note_its_id(cx: &mut
     assert!(
         file.contains("liste.csv"),
         "saved without a conflict: {file}"
+    );
+}
+
+#[gpui::test]
+async fn leaving_the_note_gives_up_a_copy_that_runs(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let mut app = open_app(&notes, cx);
+    app.open("Notch-Ideen");
+    let big = notes.scratch("gross.bin");
+    std::fs::File::create(&big)
+        .unwrap()
+        .set_len(64 * 1024 * 1024)
+        .unwrap();
+
+    let note = app.note();
+    let left = app.cx.update(|window, cx| {
+        note.update(cx, |note, cx| {
+            note.attach(vec![Upload::File(big)], window, cx);
+            note.leave(cx)
+        })
+    });
+    app.cx.run_until_parked();
+    if let Some(left) = left {
+        assert!(
+            app.cx.foreground_executor().block_test(left),
+            "left at once"
+        );
+    }
+    let folder = notes
+        .dir
+        .join("Arbeit/_attachments/01JD3K8Z6Q4X7V9B2M5N8P0R03");
+    let left_behind: Vec<_> = std::fs::read_dir(&folder)
+        .map(|entries| entries.map(|entry| entry.unwrap().file_name()).collect())
+        .unwrap_or_default();
+    assert!(left_behind.is_empty(), "{left_behind:?}");
+    assert!(!notes.read("Arbeit/Notch-Ideen.md").contains("gross"));
+}
+
+#[test]
+fn a_copy_that_is_given_up_leaves_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let id: NoteId = "01JD3K8Z6Q4X7V9B2M5N8P0R03".parse().unwrap();
+    let pieces = std::sync::atomic::AtomicUsize::new(0);
+    let go_on = || pieces.fetch_add(1, std::sync::atomic::Ordering::SeqCst) < 2;
+    let mut source = std::io::repeat(7).take(10 * 1024 * 1024);
+    let given_up =
+        sheaf_core::store::store_attachment(dir.path(), &id, "a.bin", &mut source, &go_on);
+    assert!(given_up.is_err());
+    assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
+
+    let link = sheaf_core::store::store_attachment(
+        dir.path(),
+        &id,
+        "a.bin",
+        &mut std::io::repeat(7).take(1024 * 1024),
+        &|| true,
+    )
+    .unwrap();
+    assert_eq!(link, format!("_attachments/{id}/a.bin"));
+    assert_eq!(
+        std::fs::metadata(dir.path().join("a.bin")).unwrap().len(),
+        1024 * 1024
     );
 }
 

@@ -11,12 +11,14 @@
 //! worker is under way on another thread. So each step holds the lock from reading the
 //! file to recording what it wrote, and nothing is written once the note is `finished`.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use async_channel::{Receiver, Sender};
 use gpui::{AsyncApp, Entity, WeakEntity};
 use jiff::Timestamp;
 use sheaf_core::i18n::tr;
+use sheaf_core::store::store_attachment;
 use sheaf_core::{
     CreateOptions, Error, Fingerprint, Note, NoteId, NoteMeta, NoteStore, WriteOptions,
 };
@@ -78,9 +80,11 @@ pub enum Job {
     /// The note was deleted elsewhere: store this text as a new note in its folder.
     SaveAsNew(String),
     /// Copy these files into the note's attachment folder; `done` hears the links.
+    /// The copy runs apart from the other jobs and is given up once `closing` is set.
     Attach {
         files: Vec<Upload>,
         done: Sender<Attached>,
+        closing: Arc<AtomicBool>,
     },
 }
 
@@ -326,17 +330,34 @@ impl Worker {
                 })
                 .await
             }
-            Job::Attach { files, done } => {
-                let attached = Arc::new(Mutex::new(Attached::default()));
-                let sink = attached.clone();
+            Job::Attach {
+                files,
+                done,
+                closing,
+            } => {
+                // Only giving the note its id takes the lock; the copy runs on its own,
+                // so that the next save or leaving the note does not wait for it.
+                let prepared = Arc::new(Mutex::new(None));
+                let sink = prepared.clone();
                 let report = self
                     .change(cx, Change::Attach, move |store, id| {
-                        attach(store, id, &files, &sink)
+                        let (meta, dir) = store.prepare_attachments(id)?;
+                        *sink.lock().unwrap_or_else(PoisonError::into_inner) =
+                            Some((meta.id.clone(), dir));
+                        Ok(meta)
                     })
                     .await;
-                let attached =
-                    std::mem::take(&mut *attached.lock().unwrap_or_else(PoisonError::into_inner));
-                let _ = done.try_send(attached);
+                let prepared = prepared
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .take();
+                if let Some((id, dir)) = prepared {
+                    cx.background_executor()
+                        .spawn(async move {
+                            let _ = done.try_send(copy_attachments(&dir, &id, &files, &closing));
+                        })
+                        .detach();
+                }
                 report
             }
             Job::SaveAsNew(body) => {
@@ -434,52 +455,54 @@ impl Worker {
     }
 }
 
-/// Stores `files` as attachments of the note `id`. Files that cannot be read are
-/// noted in `attached` and skipped; it fails only if none could be stored.
-fn attach(
-    store: &NoteStore,
+/// Copies `files` into `dir`, the attachment folder of the note `id`. Files that
+/// cannot be copied are noted with the reason and skipped; once `closing` is set, the
+/// rest is given up.
+fn copy_attachments(
+    dir: &std::path::Path,
     id: &NoteId,
     files: &[Upload],
-    attached: &Mutex<Attached>,
-) -> sheaf_core::Result<NoteMeta> {
-    let mut attached = attached.lock().unwrap_or_else(PoisonError::into_inner);
-    let mut id = id.clone();
-    let mut last = None;
-    let mut first_error = None;
+    closing: &AtomicBool,
+) -> Attached {
+    let go_on = || !closing.load(Ordering::SeqCst);
+    let mut attached = Attached::default();
     for file in files {
-        let read = match file {
-            Upload::File(path) => std::fs::read(path)
-                .map(|bytes| {
-                    let name = path
-                        .file_name()
-                        .map(|name| name.to_string_lossy().into_owned())
-                        .unwrap_or_default();
-                    (name, bytes)
+        if !go_on() {
+            break;
+        }
+        let stored = match file {
+            Upload::File(path) => {
+                let name = path
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                open_regular(path).and_then(|mut source| {
+                    store_attachment(dir, id, &name, &mut source, &go_on).map(|link| (name, link))
                 })
-                .map_err(Error::from),
-            Upload::Bytes { name, bytes } => Ok((name.clone(), bytes.clone())),
-        };
-        match read.and_then(|(name, bytes)| {
-            store
-                .add_attachment(&id, &name, &bytes)
-                .map(|(meta, link)| (name, meta, link))
-        }) {
-            Ok((name, meta, link)) => {
-                id = meta.id.clone();
-                attached.links.push((name, link));
-                last = Some(meta);
             }
+            Upload::Bytes { name, bytes } => {
+                store_attachment(dir, id, name, &mut bytes.as_slice(), &go_on)
+                    .map(|link| (name.clone(), link))
+            }
+        };
+        match stored {
+            Ok(link) => attached.links.push(link),
             Err(err) => {
+                log::warn!("cannot attach a file: {err}");
                 attached.failed.push(reason(&err));
-                first_error.get_or_insert(err);
             }
         }
     }
-    match (last, first_error) {
-        (Some(meta), _) => Ok(meta),
-        (None, Some(err)) => Err(err),
-        (None, None) => Ok(store.get(&id)?.meta),
+    attached
+}
+
+/// The file at `path` opened for reading, if it is a regular file: a pipe or device
+/// would never end.
+fn open_regular(path: &std::path::Path) -> sheaf_core::Result<std::fs::File> {
+    if !std::fs::metadata(path)?.is_file() {
+        return Err(Error::Invalid(tr("not a file")));
     }
+    Ok(std::fs::File::open(path)?)
 }
 
 /// What came of a save.

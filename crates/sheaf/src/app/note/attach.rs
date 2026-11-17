@@ -1,6 +1,10 @@
 //! Attachments (plan 03 §2, §7): a file dropped or pasted into the note, or chosen
 //! with "Attach File…", is copied to `<folder>/_attachments/<id>/` and linked at the
 //! caret, an image as an image. Files no note links to any more stay where they are.
+//!
+//! The copy streams into a hidden file beside its target and runs apart from the
+//! note's other writes; leaving or closing the note gives it up, and what was copied
+//! so far is removed.
 
 use gpui::{AppContext as _, ClipboardEntry, Context, Window};
 use gpui_markdown_editor::Command;
@@ -64,7 +68,11 @@ impl NoteView {
             return;
         }
         let (done, attached) = async_channel::bounded(1);
-        self.send(Job::Attach { files, done });
+        self.send(Job::Attach {
+            files,
+            done,
+            closing: self.closing.clone(),
+        });
         self._attach = cx.spawn_in(window, async move |this, cx| {
             let Ok(attached) = attached.recv().await else {
                 return;
@@ -111,17 +119,18 @@ impl NoteView {
     }
 
     fn link(&mut self, attached: Attached, window: &mut Window, cx: &mut Context<Self>) {
+        if self.closed {
+            return;
+        }
         if !attached.links.is_empty() {
             let markdown = markdown(&attached.links);
             self.editor.update(cx, |editor, cx| {
                 editor.command(Command::InsertMarkdown(markdown), window, cx);
             });
-            // Some files went in and some did not: say which did not. If none did,
-            // the worker has said so.
-            for reason in attached.failed {
-                let message = tr("Could not attach: {}").replace("{}", &reason);
-                cx.emit(NoteEvent::Toast(Toast::new(message)));
-            }
+        }
+        for reason in attached.failed {
+            let message = tr("Could not attach: {}").replace("{}", &reason);
+            cx.emit(NoteEvent::Toast(Toast::new(message)));
         }
     }
 }
