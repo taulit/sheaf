@@ -466,8 +466,9 @@ async fn keep_mine_stores_the_edits_as_a_conflict_copy(cx: &mut TestAppContext) 
     assert!(notes.read(NOTCH).contains("Von Syncthing."));
 }
 
-/// Leaving a note deleted elsewhere keeps its text as a new note, whether the deletion
-/// was seen through a change event or by the save, and also without edits.
+/// Leaving a note deleted elsewhere keeps unsaved edits as a new note, whether the
+/// deletion was seen through a change event or by the save; without them it stays
+/// deleted.
 #[gpui::test]
 async fn leaving_a_note_deleted_elsewhere_keeps_its_text(cx: &mut TestAppContext) {
     let notes = Notes::seeded();
@@ -502,13 +503,19 @@ async fn leaving_a_note_deleted_elsewhere_keeps_its_text(cx: &mut TestAppContext
     let again = "Arbeit/Noch Rettung Notch-Ideen.md";
     assert!(notes.read(again).contains("Noch Rettung Notch-Ideen"));
 
-    // Without edits: the text exists nowhere else.
+    // Without edits since the last save: deleted elsewhere on purpose, it stays so.
     let note = app.open("Noch Rettung Notch-Ideen");
     let id = note.read_with(app.cx, |note, _| note.id().clone());
     std::fs::remove_file(notes.dir.join(again)).unwrap();
     app.changed_elsewhere(vec![id]);
+    assert_eq!(app.banner(), Some(Banner::DeletedOnDisk));
     app.cx.simulate_keystrokes("escape");
-    assert!(notes.read(again).contains("Noch Rettung Notch-Ideen"));
+    assert_eq!(app.route(), Route::Gallery);
+    assert!(
+        !notes.files().iter().any(|file| file.contains("Rettung")),
+        "{:?}",
+        notes.files()
+    );
 }
 
 #[gpui::test]

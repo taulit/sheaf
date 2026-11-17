@@ -339,9 +339,9 @@ impl NoteView {
         }
         match self.banner {
             Some(Banner::ChangedOnDisk) => Some(Leave::KeepMine(body)),
-            // Kept whether or not it was edited: the file is gone, the text exists only here.
+            // Unsaved edits exist only here; without them the deletion was meant.
             Some(Banner::DeletedOnDisk) => {
-                (!body.trim().is_empty()).then_some(Leave::SaveAsNew(body))
+                (editor.is_dirty() && !body.trim().is_empty()).then_some(Leave::SaveAsNew(body))
             }
             _ if editor.is_dirty() => Some(Leave::Save(body)),
             _ if self.rename_pending => Some(Leave::Rename),
