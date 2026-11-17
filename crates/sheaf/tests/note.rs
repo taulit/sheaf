@@ -146,7 +146,11 @@ async fn closing_the_window_saves_at_once(cx: &mut TestAppContext) {
     app.cx.simulate_input("Zu: ");
     app.cx.dispatch_action(actions::CloseWindow);
     app.cx.run_until_parked();
-    assert!(notes.read("Arbeit/Zu- Notch-Ideen.md").contains("Zu: Notch-Ideen"));
+    assert!(
+        notes
+            .read("Arbeit/Zu- Notch-Ideen.md")
+            .contains("Zu: Notch-Ideen")
+    );
 }
 
 #[gpui::test]
@@ -161,7 +165,11 @@ async fn the_file_follows_the_title_2_s_after_it_changed(cx: &mut TestAppContext
     app.wait(RENAME_DELAY - SAVE_DELAY - Duration::from_millis(1));
     assert!(notes.files().contains(&NOTCH.to_owned()));
     app.wait(Duration::from_millis(1));
-    assert!(notes.files().contains(&"Arbeit/Neue Notch-Ideen.md".to_owned()));
+    assert!(
+        notes
+            .files()
+            .contains(&"Arbeit/Neue Notch-Ideen.md".to_owned())
+    );
     assert!(!notes.files().contains(&NOTCH.to_owned()));
     assert_eq!(notes.files().len(), 14);
 
@@ -193,7 +201,11 @@ async fn a_file_without_id_keeps_working_after_its_first_save(cx: &mut TestAppCo
     app.cx.simulate_input("own ");
     app.wait(SAVE_DELAY);
     app.cx.simulate_keystrokes("escape");
-    assert!(notes.read("My own Reading list.md").contains("My own Reading list"));
+    assert!(
+        notes
+            .read("My own Reading list.md")
+            .contains("My own Reading list")
+    );
     assert_eq!(notes.files().len(), 14, "no conflict copy");
 }
 
@@ -205,7 +217,10 @@ async fn a_new_note_left_empty_is_not_kept(cx: &mut TestAppContext) {
     assert_eq!(notes.files(), ["Untitled.md"]);
     app.cx.simulate_keystrokes("escape");
     assert!(notes.files().is_empty());
-    assert!(!notes.dir.join(".trash/Untitled.md").exists(), "not in the trash either");
+    assert!(
+        !notes.dir.join(".trash/Untitled.md").exists(),
+        "not in the trash either"
+    );
 
     app.cx.simulate_keystrokes("ctrl-n");
     app.cx.simulate_input("Idee");
@@ -237,7 +252,11 @@ async fn a_change_elsewhere_is_taken_silently_when_nothing_is_unsaved(cx: &mut T
     // The next save expects the file as it was reloaded: no conflict.
     app.cx.simulate_input("A");
     app.wait(SAVE_DELAY);
-    assert!(notes.read(NOTCH).contains("ANotch-Ideen\n\nVom Handy ergänzt."));
+    assert!(
+        notes
+            .read(NOTCH)
+            .contains("ANotch-Ideen\n\nVom Handy ergänzt.")
+    );
     assert_eq!(app.banner(), None);
 }
 
@@ -274,7 +293,10 @@ async fn a_change_elsewhere_with_unsaved_edits_asks_and_reload_takes_the_disk(
     edit_elsewhere(&notes, "Notch-Ideen\n\nVon Syncthing.\n");
     app.changed_elsewhere(vec![id]);
     assert_eq!(app.banner(), Some(Banner::ChangedOnDisk));
-    assert!(app.editor_text().starts_with("Meins Notch-Ideen"), "the edits stay");
+    assert!(
+        app.editor_text().starts_with("Meins Notch-Ideen"),
+        "the edits stay"
+    );
 
     // While it asks, nothing is written.
     app.wait(RENAME_DELAY);
@@ -303,16 +325,25 @@ async fn keep_mine_stores_the_edits_as_a_conflict_copy(cx: &mut TestAppContext) 
     assert_eq!(app.banner(), None);
     assert!(notes.read(NOTCH).contains("Von Syncthing."), "theirs stays");
     let copy = "Arbeit/Meins Notch-Ideen (conflict).md";
-    assert!(notes.read(copy).contains("Meins Notch-Ideen\n\nWas die Notch"));
+    assert!(
+        notes
+            .read(copy)
+            .contains("Meins Notch-Ideen\n\nWas die Notch")
+    );
     let Route::Note { id, .. } = app.route() else {
         panic!("the note is open");
     };
-    assert!(notes.read(copy).contains(&format!("id: {id}")), "the view edits the copy");
+    assert!(
+        notes.read(copy).contains(&format!("id: {id}")),
+        "the view edits the copy"
+    );
 
     app.cx.simulate_input("!");
     app.cx.simulate_keystrokes("escape");
     assert!(
-        notes.files().contains(&"Arbeit/Meins !Notch-Ideen.md".to_owned()),
+        notes
+            .files()
+            .contains(&"Arbeit/Meins !Notch-Ideen.md".to_owned()),
         "{:?}",
         notes.files()
     );
@@ -334,7 +365,11 @@ async fn a_note_deleted_elsewhere_can_be_saved_as_new(cx: &mut TestAppContext) {
 
     app.note_do(|note, cx| note.save_as_new(cx));
     assert_eq!(app.banner(), None);
-    assert!(notes.read("Arbeit/Rettung Notch-Ideen.md").contains("Was die Notch"));
+    assert!(
+        notes
+            .read("Arbeit/Rettung Notch-Ideen.md")
+            .contains("Was die Notch")
+    );
 }
 
 // ---- Header -------------------------------------------------------------------------
@@ -354,19 +389,28 @@ async fn pin_move_copy_and_delete_with_undo(cx: &mut TestAppContext) {
     let copied = app.cx.read_from_clipboard().and_then(|item| item.text());
     assert!(copied.unwrap().starts_with("Notch-Ideen\n\n"));
     let toast = app.main.read_with(app.cx, |main, cx| {
-        main.toasts().read(cx).shown().map(|toast| toast.message.to_string())
+        main.toasts()
+            .read(cx)
+            .shown()
+            .map(|toast| toast.message.to_string())
     });
     assert_eq!(toast.as_deref(), Some("Copied as Markdown"));
 
     app.note_do(|note, cx| note.set_popover(Some(Popover::Move(Vec::new())), cx));
-    let folders = app.note().read_with(app.cx, |note, _| match note.popover() {
-        Some(Popover::Move(folders)) => folders.len(),
-        _ => 0,
-    });
+    let folders = app
+        .note()
+        .read_with(app.cx, |note, _| match note.popover() {
+            Some(Popover::Move(folders)) => folders.len(),
+            _ => 0,
+        });
     assert_eq!(folders, 7, "the root and the six folders");
     app.note_do(|note, cx| note.move_to("Privat", cx));
     assert!(notes.files().contains(&"Privat/Notch-Ideen.md".to_owned()));
-    assert_eq!(app.note().read_with(app.cx, |note, _| note.popover().cloned()), None);
+    assert_eq!(
+        app.note()
+            .read_with(app.cx, |note, _| note.popover().cloned()),
+        None
+    );
 
     app.cx.simulate_input("Zuletzt ");
     app.cx.dispatch_action(actions::Trash);
@@ -388,8 +432,14 @@ async fn pin_move_copy_and_delete_with_undo(cx: &mut TestAppContext) {
     });
     app.cx.run_until_parked();
     let restored = notes.read("Privat/Notch-Ideen.md");
-    assert!(restored.contains("Zuletzt Notch-Ideen"), "saved before it went");
-    assert!(app.main.read_with(app.cx, |main, cx| main.toasts().read(cx).shown().is_none()));
+    assert!(
+        restored.contains("Zuletzt Notch-Ideen"),
+        "saved before it went"
+    );
+    assert!(
+        app.main
+            .read_with(app.cx, |main, cx| main.toasts().read(cx).shown().is_none())
+    );
 }
 
 #[gpui::test]
@@ -400,7 +450,11 @@ async fn escape_closes_a_popover_before_it_leaves(cx: &mut TestAppContext) {
     app.note_do(|note, cx| note.set_popover(Some(Popover::Menu), cx));
     app.cx.simulate_keystrokes("escape");
     assert!(matches!(app.route(), Route::Note { .. }));
-    assert_eq!(app.note().read_with(app.cx, |note, _| note.popover().cloned()), None);
+    assert_eq!(
+        app.note()
+            .read_with(app.cx, |note, _| note.popover().cloned()),
+        None
+    );
     app.cx.simulate_keystrokes("escape");
     assert_eq!(app.route(), Route::Gallery);
 }
@@ -435,7 +489,11 @@ async fn wiki_links_open_their_note_or_create_it(cx: &mut TestAppContext) {
     assert!(matches!(app.route(), Route::Note { id, .. } if id == plan));
 
     app.editor_emits(EditorEvent::WikiLinkClicked("Venue shortlist".into()));
-    assert!(notes.read("Work/Venue shortlist.md").contains("Venue shortlist"));
+    assert!(
+        notes
+            .read("Work/Venue shortlist.md")
+            .contains("Venue shortlist")
+    );
     assert!(app.editor_text().starts_with("Venue shortlist"));
 }
 
@@ -517,8 +575,17 @@ async fn the_palette_lists_commands_and_notes_and_runs_them(cx: &mut TestAppCont
 
     app.cx.simulate_keystrokes("ctrl-k");
     let entries = palette_entries(&mut app).expect("the palette is open");
-    for label in ["New Note", "Search", "Pin or Unpin", "Move to Trash", "Keyboard Shortcuts"] {
-        assert!(entries.contains(&label.to_owned()), "{label} in {entries:?}");
+    for label in [
+        "New Note",
+        "Search",
+        "Pin or Unpin",
+        "Move to Trash",
+        "Keyboard Shortcuts",
+    ] {
+        assert!(
+            entries.contains(&label.to_owned()),
+            "{label} in {entries:?}"
+        );
     }
     assert!(!entries.contains(&"Select Next Note".to_owned()));
     app.cx.simulate_keystrokes("escape");
@@ -528,7 +595,10 @@ async fn the_palette_lists_commands_and_notes_and_runs_them(cx: &mut TestAppCont
     app.cx.simulate_keystrokes("ctrl-k");
     app.cx.simulate_input("shakshuka");
     let entries = palette_entries(&mut app).unwrap();
-    assert!(entries.contains(&"Open note: Shakshuka".to_owned()), "{entries:?}");
+    assert!(
+        entries.contains(&"Open note: Shakshuka".to_owned()),
+        "{entries:?}"
+    );
     app.cx.simulate_keystrokes("enter");
     assert!(palette_entries(&mut app).is_none());
     let shakshuka = app.id_of("Shakshuka");
@@ -538,7 +608,11 @@ async fn the_palette_lists_commands_and_notes_and_runs_them(cx: &mut TestAppCont
     app.cx.simulate_keystrokes("ctrl-k");
     app.cx.simulate_input("pin or");
     app.cx.simulate_keystrokes("enter");
-    assert!(notes.read("Privat/Rezepte/Shakshuka.md").contains("pinned: true"));
+    assert!(
+        notes
+            .read("Privat/Rezepte/Shakshuka.md")
+            .contains("pinned: true")
+    );
 
     app.cx.simulate_keystrokes("ctrl-k");
     app.cx.simulate_input("back to");
@@ -551,7 +625,10 @@ async fn the_shortcuts_list_shows_every_binding(cx: &mut TestAppContext) {
     let notes = Notes::seeded();
     let mut app = open_app(&notes, cx);
     app.cx.simulate_keystrokes("ctrl-?");
-    assert!(app.main.read_with(app.cx, |main, _| main.shortcuts().is_some()));
+    assert!(
+        app.main
+            .read_with(app.cx, |main, _| main.shortcuts().is_some())
+    );
 
     let (groups, bindings) = app.cx.update(|_, cx| {
         let keymap = cx.key_bindings();
@@ -570,18 +647,27 @@ async fn the_shortcuts_list_shows_every_binding(cx: &mut TestAppContext) {
         .collect();
     assert!(!bindings.is_empty());
     for keys in &bindings {
-        assert!(shown.contains(&keys.as_str()), "{keys} is missing from {groups:?}");
+        assert!(
+            shown.contains(&keys.as_str()),
+            "{keys} is missing from {groups:?}"
+        );
     }
     let titles: Vec<&str> = groups.iter().map(|group| group.title.as_str()).collect();
     assert_eq!(titles, ["General", "Gallery", "Note"]);
     let note = &groups[2].lines;
-    assert_eq!(note, &[("Back to Notes".to_owned(), "Ctrl+W, Esc".to_owned())]);
+    assert_eq!(
+        note,
+        &[("Back to Notes".to_owned(), "Ctrl+W, Esc".to_owned())]
+    );
 
     app.cx.simulate_keystrokes("escape");
-    assert!(app.main.read_with(app.cx, |main, _| main.shortcuts().is_none()));
+    assert!(
+        app.main
+            .read_with(app.cx, |main, _| main.shortcuts().is_none())
+    );
     assert_eq!(app.route(), Route::Gallery);
-    let listed = app
-        .library
-        .read_with(app.cx, |library, cx| library.notes(Vec::new(), Sort::Title, cx));
+    let listed = app.library.read_with(app.cx, |library, cx| {
+        library.notes(Vec::new(), Sort::Title, cx)
+    });
     assert_eq!(listed.await.unwrap().len(), 14);
 }

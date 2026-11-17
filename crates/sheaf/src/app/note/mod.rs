@@ -724,6 +724,8 @@ impl Render for NoteView {
             )
             .child(div().flex_1().min_h_0().child(self.editor.clone()))
             .children(saved)
-            .when(self.popover.is_some(), |pane| pane.child(header::dismiss_layer(cx)))
+            .when(self.popover.is_some(), |pane| {
+                pane.child(header::dismiss_layer(cx))
+            })
     }
 }

@@ -37,7 +37,10 @@ pub enum Job {
     /// editing the copy.
     KeepMine(String),
     /// The note was deleted elsewhere: store this text as a new note in `folder`.
-    SaveAsNew { body: String, folder: String },
+    SaveAsNew {
+        body: String,
+        folder: String,
+    },
 }
 
 /// A job and who waits for it to be done.
@@ -50,7 +53,10 @@ pub struct Queued {
 pub enum Report {
     Loaded(Note),
     /// The note was written; `saved` if this text is now on disk.
-    Written { meta: NoteMeta, saved: bool },
+    Written {
+        meta: NoteMeta,
+        saved: bool,
+    },
     /// A [`Job::Save`] is done, whatever came of it.
     SaveDone,
     /// The text went into another note, after "Keep Mine" or "Save as New Note"; the

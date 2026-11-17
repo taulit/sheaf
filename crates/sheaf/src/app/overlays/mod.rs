@@ -99,7 +99,10 @@ impl MenuRow {
         self
     }
 
-    pub fn on_click(mut self, handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static) -> Self {
+    pub fn on_click(
+        mut self,
+        handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    ) -> Self {
         self.on_click = Some(Box::new(handler));
         self
     }
@@ -133,10 +136,18 @@ impl gpui::RenderOnce for MenuRow {
                 row.cursor_pointer().hover(move |style| style.bg(hover))
             })
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-            .when_some(self.icon, |row, name| row.child(icon(name, color).size(px(16.))))
+            .when_some(self.icon, |row, name| {
+                row.child(icon(name, color).size(px(16.)))
+            })
             .child(div().flex_1().min_w_0().truncate().child(self.label))
             .when_some(self.trailing, |row, text| {
-                row.child(div().flex_none().text_size(tokens.text(12.5)).text_color(muted).child(text))
+                row.child(
+                    div()
+                        .flex_none()
+                        .text_size(tokens.text(12.5))
+                        .text_color(muted)
+                        .child(text),
+                )
             })
             .when_some(self.on_click.filter(|_| !self.disabled), |row, handler| {
                 row.on_click(move |event, window, cx| handler(event, window, cx))
@@ -192,7 +203,7 @@ pub fn format_keys(binding: &gpui::KeyBinding) -> String {
 fn key_name(key: &str) -> String {
     match key {
         "escape" => tr("Esc"),
-        "delete" => tr("Delete"),
+        "delete" => tr("Del"),
         "backspace" => tr("Backspace"),
         "enter" => tr("Enter"),
         "space" => tr("Space"),

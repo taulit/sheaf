@@ -6,9 +6,9 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use gpui::{
-    AnimationExt as _, App, Context, FontWeight, InteractiveElement as _, IntoElement,
-    MouseButton, ParentElement as _, Render, SharedString, StatefulInteractiveElement as _,
-    Styled as _, Task, Window, div, prelude::FluentBuilder as _, px,
+    AnimationExt as _, App, Context, FontWeight, InteractiveElement as _, IntoElement, MouseButton,
+    ParentElement as _, Render, SharedString, StatefulInteractiveElement as _, Styled as _, Task,
+    Window, div, prelude::FluentBuilder as _, px,
 };
 
 use crate::app::theme::{ActiveTokens as _, motion};

@@ -29,7 +29,10 @@ pub enum PaletteEvent {
     /// Run this action where the keyboard was before the palette opened.
     Run(Box<dyn Action>),
     /// Open this note, which the search found for `query`.
-    Open { note: NoteMeta, query: String },
+    Open {
+        note: NoteMeta,
+        query: String,
+    },
     Dismiss,
 }
 
@@ -84,7 +87,7 @@ impl CommandPalette {
     /// The labels of the entries the palette offers now, commands first.
     pub fn entries(&self) -> Vec<String> {
         let commands = self.commands.iter().map(|command| command.label.clone());
-        let notes = self.notes.iter().map(|note| open_label(note));
+        let notes = self.notes.iter().map(open_label);
         commands.chain(notes).collect()
     }
 
@@ -118,10 +121,14 @@ impl CommandPalette {
                 .commands
                 .get(index.row)
                 .map(|command| PaletteEvent::Run(command.action.boxed_clone())),
-            _ => self.notes.get(index.row).cloned().map(|note| PaletteEvent::Open {
-                note,
-                query: self.query.clone(),
-            }),
+            _ => self
+                .notes
+                .get(index.row)
+                .cloned()
+                .map(|note| PaletteEvent::Open {
+                    note,
+                    query: self.query.clone(),
+                }),
         };
         if let Some(event) = event {
             cx.emit(event);
@@ -186,11 +193,7 @@ impl Render for CommandPalette {
         let confirmed = this.clone();
         let cancelled = this.clone();
         let palette = Command::new(&self.state)
-            .group(
-                CommandGroup::new()
-                    .label(tr("Commands"))
-                    .items(commands),
-            )
+            .group(CommandGroup::new().label(tr("Commands")).items(commands))
             .group(CommandGroup::new().label(tr("Notes")).items(notes))
             .placeholder(tr("Search commands and notes"))
             .bordered(false)
@@ -216,6 +219,7 @@ impl Render for CommandPalette {
             .bg(gpui::black().opacity(0.18))
             .flex()
             .justify_center()
+            .items_start()
             .pt(px(72.))
             .on_mouse_down(
                 gpui::MouseButton::Left,

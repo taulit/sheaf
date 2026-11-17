@@ -4,8 +4,8 @@
 use std::collections::HashMap;
 
 use gpui_markdown_editor::{Block, BlockId, BlockKind, MarkdownEditor, TextRange};
-use sheaf_core::query::{self, ItemKind};
 use sheaf_core::Filter;
+use sheaf_core::query::{self, ItemKind};
 
 /// The words, phrases and tags of `query`, as the editor can find them in the text.
 fn terms(query: &str) -> Vec<String> {

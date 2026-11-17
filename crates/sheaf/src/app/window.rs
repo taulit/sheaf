@@ -294,15 +294,16 @@ impl MainWindow {
                 self.back(window, cx);
                 let library = self.library.clone();
                 let id = trashed.id.clone();
-                let toast = Toast::new(tr("Note moved to trash")).action(tr("Undo"), move |_, cx| {
-                    let restored = library.update(cx, |library, cx| library.restore(&id, cx));
-                    cx.background_spawn(async move {
-                        if let Err(err) = restored.await {
-                            log::error!("cannot restore the note: {err}");
-                        }
-                    })
-                    .detach();
-                });
+                let toast =
+                    Toast::new(tr("Note moved to trash")).action(tr("Undo"), move |_, cx| {
+                        let restored = library.update(cx, |library, cx| library.restore(&id, cx));
+                        cx.background_spawn(async move {
+                            if let Err(err) = restored.await {
+                                log::error!("cannot restore the note: {err}");
+                            }
+                        })
+                        .detach();
+                    });
                 self.toast(toast, cx);
             }
             NoteEvent::Toast(toast) => self.toast(toast.clone(), cx),

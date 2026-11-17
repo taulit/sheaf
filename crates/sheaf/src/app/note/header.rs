@@ -3,8 +3,8 @@
 
 use gpui::{
     AnyElement, App, Context, FontWeight, InteractiveElement as _, IntoElement, MouseButton,
-    ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _, deferred,
-    div, prelude::FluentBuilder as _, px,
+    ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _, deferred, div,
+    prelude::FluentBuilder as _, px,
 };
 use sheaf_core::i18n::tr;
 
@@ -98,19 +98,22 @@ fn back_button(cx: &App) -> impl IntoElement {
 /// A header button with its popover hanging from its right edge, drawn over
 /// everything else.
 fn anchor(button: FlatButton, popover: Option<AnyElement>) -> impl IntoElement {
-    div().relative().child(button).when_some(popover, |anchor, popover| {
-        anchor.child(
-            deferred(
-                div()
-                    .absolute()
-                    .top(size::FLAT_BUTTON + px(6.))
-                    .right_0()
-                    .w(px(POPOVER_WIDTH))
-                    .child(popover),
+    div()
+        .relative()
+        .child(button)
+        .when_some(popover, |anchor, popover| {
+            anchor.child(
+                deferred(
+                    div()
+                        .absolute()
+                        .top(size::FLAT_BUTTON + px(6.))
+                        .right_0()
+                        .w(px(POPOVER_WIDTH))
+                        .child(popover),
+                )
+                .with_priority(2),
             )
-            .with_priority(2),
-        )
-    })
+        })
 }
 
 /// Catches a click beside an open popover, which closes it without doing anything
@@ -229,19 +232,27 @@ fn info_popover(view: &NoteView, cx: &mut Context<NoteView>) -> AnyElement {
 
 fn move_popover(view: &NoteView, folders: &[Folder], cx: &mut Context<NoteView>) -> AnyElement {
     let current = view.folder();
-    let rows: Vec<MenuRow> = folders.iter().enumerate().map(|(index, folder)| {
-        let label = if folder.path.is_empty() {
-            tr("Notes")
-        } else {
-            folder.path.clone()
-        };
-        let here = folder.path == current;
-        let path = folder.path.clone();
-        let row = MenuRow::new(("folder", index), label)
-            .icon(if here { IconName::Check } else { IconName::Folder })
-            .disabled(here);
-        row.on_click(cx.listener(move |this, _, _, cx| this.move_to(&path, cx)))
-    }).collect();
+    let rows: Vec<MenuRow> = folders
+        .iter()
+        .enumerate()
+        .map(|(index, folder)| {
+            let label = if folder.path.is_empty() {
+                tr("Notes")
+            } else {
+                folder.path.clone()
+            };
+            let here = folder.path == current;
+            let path = folder.path.clone();
+            let row = MenuRow::new(("folder", index), label)
+                .icon(if here {
+                    IconName::Check
+                } else {
+                    IconName::Folder
+                })
+                .disabled(here);
+            row.on_click(cx.listener(move |this, _, _, cx| this.move_to(&path, cx)))
+        })
+        .collect();
     overlays::popover("move-popover", cx)
         .child(page_title(tr("Move to…"), cx))
         .child(overlays::separator(cx))
