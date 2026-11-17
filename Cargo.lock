@@ -6706,6 +6706,7 @@ dependencies = [
  "assert_cmd",
  "async-channel",
  "async-io",
+ "async-signal",
  "clap",
  "clap_complete",
  "futures-util",

@@ -43,6 +43,7 @@ ashpd = { version = "0.14", default-features = false, features = ["async-io", "s
 anyhow = "1"
 async-channel = "2.5"
 async-io = "2.6"
+async-signal = "0.2.14"
 futures-util = { version = "0.3", default-features = false }
 # The version GPUI decodes images with; covers are decoded by hand to scale them down.
 image = { version = "0.25", default-features = false, features = ["gif", "jpeg", "png", "webp"] }

@@ -30,6 +30,8 @@ pub mod window;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+use async_signal::{Signal, Signals};
+use futures_util::StreamExt as _;
 use gpui::{App, AsyncApp, Entity, Global, GraphicalEnvironment, WindowHandle, WindowingRequest};
 use gpui_component::Root;
 use sheaf_core::i18n::tr;
@@ -81,6 +83,7 @@ pub fn run(launch: Launch, dir: Option<PathBuf>) -> ExitCode {
         application = application.with_windowing(WindowingRequest::Headless);
     }
     application.run(move |cx| {
+        quit_on_signals(cx);
         gpui_component::init(cx);
         theme::init(theme::Overrides::from_process(), cx);
         actions::bind_keys(cx);
@@ -117,6 +120,26 @@ pub fn run(launch: Launch, dir: Option<PathBuf>) -> ExitCode {
         .detach();
     });
     ExitCode::SUCCESS
+}
+
+/// Quits on SIGTERM (logout, `kill`), SIGINT (Ctrl+C) and SIGHUP (the terminal
+/// closing) the way the app quits itself, with the last save of the open note.
+/// Otherwise the signal would end the process before it.
+pub fn quit_on_signals(cx: &mut App) {
+    let mut signals = match Signals::new([Signal::Term, Signal::Int, Signal::Hup]) {
+        Ok(signals) => signals,
+        Err(err) => {
+            log::warn!("cannot follow the signals to quit: {err}");
+            return;
+        }
+    };
+    cx.spawn(async move |cx| {
+        if let Some(signal) = signals.next().await {
+            log::info!("quitting on {signal:?}");
+            cx.update(|cx| cx.quit());
+        }
+    })
+    .detach();
 }
 
 fn fail(message: &str) -> ExitCode {

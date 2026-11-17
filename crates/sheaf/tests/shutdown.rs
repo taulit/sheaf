@@ -1,5 +1,5 @@
-//! The last save when the window closes or the app quits, on the real platform without
-//! a display. GPUI runs no task while it quits, which `TestAppContext` hides: it drives
+//! The last save when the window closes, the app quits or is told to by SIGTERM, on
+//! the real platform without a display. GPUI runs no task while it quits, which `TestAppContext` hides: it drives
 //! every task until none is left.
 //!
 //! An app runs once per process, so each test starts this test binary again with
@@ -32,6 +32,8 @@ enum Ending {
     /// "Close Window", the last window: the app quits after it.
     Close,
     Quit,
+    /// SIGTERM, as at logout or from `kill`.
+    Terminate,
 }
 
 #[test]
@@ -42,6 +44,11 @@ fn closing_the_window_right_after_typing_saves() {
 #[test]
 fn quitting_right_after_typing_saves() {
     scenario("quitting_right_after_typing_saves", Ending::Quit);
+}
+
+#[test]
+fn sigterm_right_after_typing_saves() {
+    scenario("sigterm_right_after_typing_saves", Ending::Terminate);
 }
 
 fn scenario(name: &str, ending: Ending) {
@@ -84,6 +91,7 @@ fn run_app(notes: PathBuf, ending: Ending) {
         .with_windowing(WindowingRequest::Headless)
         .run(move |cx| {
             fixture::init_app(Look::default(), cx);
+            sheaf::app::quit_on_signals(cx);
             let library = Library::local(&notes, cx).unwrap();
             let (window, main) = window::open(library, None, cx).unwrap();
             cx.spawn(async move |cx| {
@@ -137,6 +145,11 @@ async fn type_and_end(
             match ending {
                 Ending::Close => window.dispatch_action(Box::new(CloseWindow), cx),
                 Ending::Quit => cx.quit(),
+                Ending::Terminate => {
+                    let pid = std::process::id().to_string();
+                    let sent = Command::new("kill").args(["-TERM", &pid]).status();
+                    assert!(sent.unwrap().success());
+                }
             }
         })
         .unwrap();
