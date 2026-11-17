@@ -26,7 +26,8 @@ use super::{GalleryEvent, GalleryView, Listing, Scope};
 use crate::app::assets::IconName;
 use crate::app::chrome::{FlatButton, HeaderBar, pane};
 use crate::app::overlays;
-use crate::app::theme::{ActiveTokens as _, Tokens, size};
+use crate::app::settings;
+use crate::app::theme::{ActiveTokens as _, Tokens};
 
 /// GNOME's colour of destructive buttons.
 const DESTRUCTIVE: u32 = 0xe01b24;
@@ -393,6 +394,7 @@ impl GalleryView {
                 pill("trashed-restore", tr("Restore"), Kind::Primary, &tokens)
                     .on_click(cx.listener(|this, _, _, cx| this.restore_shown(cx))),
             );
+        let editor = settings::config(cx).editor;
         let text = div()
             .id("trashed-text")
             .flex_1()
@@ -401,7 +403,8 @@ impl GalleryView {
             .child(
                 div()
                     .w_full()
-                    .max_w(size::EDITOR_MAX_WIDTH)
+                    .max_w(settings::column(editor.line_width))
+                    .font_family(settings::font_family(editor.font, cx))
                     .mx_auto()
                     .px(px(48.))
                     .pt(px(18.))

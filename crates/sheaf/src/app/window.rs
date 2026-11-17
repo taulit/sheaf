@@ -569,7 +569,9 @@ impl MainWindow {
             Some(dir) if previous.notes_dir.as_ref() != Some(&dir) => {
                 self.switch_notes_dir(dir, window, cx);
             }
-            _ => self.replace_gallery(window, cx),
+            _ => self
+                .gallery
+                .update(cx, |gallery, cx| gallery.load_config(cx)),
         }
     }
 
@@ -605,7 +607,8 @@ impl MainWindow {
         });
     }
 
-    /// A new gallery of the library, which reads the folder settings afresh.
+    /// A new gallery of the library that was just opened: trash, smart folders and
+    /// templates are those of the new notes folder.
     fn replace_gallery(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let library = self.library.clone();
         let gallery = cx.new(|cx| GalleryView::new(library, window, cx));

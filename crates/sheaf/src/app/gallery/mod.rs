@@ -534,7 +534,9 @@ impl GalleryView {
 
     // ---- Loading -------------------------------------------------------------------
 
-    fn load_config(&mut self, cx: &mut Context<Self>) {
+    /// Reads the folder settings, with the default order of the settings, and lists
+    /// again; the scope, search and selection stay.
+    pub fn load_config(&mut self, cx: &mut Context<Self>) {
         let config = self.library.read(cx).folder_config(cx);
         self.loading = cx.spawn(async move |this, cx| {
             let config = config.await;

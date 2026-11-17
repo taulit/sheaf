@@ -46,6 +46,7 @@ use super::instance::Request;
 use super::library::{Folder, Library};
 use super::note::{Banner, NoteEvent, NoteView, setup};
 use super::overlays::{self, MenuRow, Toast, ToastHost};
+use super::settings::Settings;
 use super::theme::ActiveTokens as _;
 
 /// The window of 04 "Schnellnotiz", without the shadow around it.
@@ -283,8 +284,12 @@ impl QuickNoteView {
                 ),
                 _ => {}
             }),
-            // After the note view's own observer, which sets the style of the note.
-            cx.observe_global::<Theme>(move |_, cx| {
+            // After the note view's own observers, which set the style of the note.
+            cx.observe_global::<Theme>({
+                let editor = editor.clone();
+                move |_, cx| editor.update(cx, |editor, cx| editor.set_style(style(cx), cx))
+            }),
+            cx.observe_global::<Settings>(move |_, cx| {
                 editor.update(cx, |editor, cx| editor.set_style(style(cx), cx));
             }),
         ];
@@ -590,7 +595,8 @@ fn button(
 }
 
 /// The note view's editor style at the size of 04 "Schnellnotiz": text 15/1.55 and a
-/// title no larger than the text, in the window's padding.
+/// title no larger than the text, in the window's padding. The font follows the
+/// settings; their line widths are all wider than this window.
 fn style(cx: &App) -> EditorStyle {
     let tokens = cx.tokens();
     let mut style = setup::style(cx);

@@ -514,3 +514,116 @@ async fn a_new_notes_folder_is_opened_at_once(cx: &mut TestAppContext) {
             .contains("notes_dir")
     );
 }
+
+// ---- With quick note, trash and templates ---------------------------------------------
+
+use sheaf::app::gallery::Scope;
+use sheaf::app::quick;
+
+#[gpui::test]
+async fn backlinks_leave_out_notes_in_the_trash(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let mut app = open_app(&notes, cx);
+    let linking = app.id_of("Meeting notes 2026-11-03");
+    app.open("Project plan");
+    assert_eq!(backlink_titles(&mut app), ["Meeting notes 2026-11-03"]);
+
+    let trashed = app
+        .library
+        .update(app.cx, |library, cx| library.trash(&linking, cx));
+    app.cx.run_until_parked();
+    trashed.await.unwrap();
+    app.cx.run_until_parked();
+    assert!(backlink_titles(&mut app).is_empty());
+}
+
+#[gpui::test]
+async fn a_note_from_a_template_links_like_any_other(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    notes.write(
+        ".sheaf/templates/Verweis.md",
+        "Verweis {{date}}\n\nSiehe [[Project plan]].\n",
+    );
+    let mut app = open_app(&notes, cx);
+    let created = app.library.update(app.cx, |library, cx| {
+        library.create_from_template("Verweis", sheaf_core::CreateOptions::default(), cx)
+    });
+    app.cx.run_until_parked();
+    created.await.unwrap();
+    app.cx.run_until_parked();
+    app.open("Project plan");
+    assert_eq!(
+        backlink_titles(&mut app),
+        ["Verweis 2026-11-16", "Meeting notes 2026-11-03"]
+    );
+}
+
+#[gpui::test]
+async fn the_quick_note_follows_the_settings(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    with_settings(&notes, cx);
+    let mut app = open_app(&notes, cx);
+    let (settings_view, settings_window) = app.open_settings();
+    app.settings_do(&settings_view, settings_window, |view, window, cx| {
+        view.set_quick_folder("Eingang", window, cx);
+        view.set_font(EditorFont::Mono, window, cx);
+    });
+
+    let library = app.library.clone();
+    let (_, view) = app
+        .cx
+        .update(|_, cx| quick::open(library, std::rc::Rc::new(|_, _| {}), cx))
+        .unwrap();
+    app.cx.run_until_parked();
+    let font = |app: &mut TestApp| {
+        app.cx.update(|_, cx| {
+            let note = view.read(cx).note().expect("the note is there").read(cx);
+            note.editor().read(cx).style().font_family.clone()
+        })
+    };
+    let folder = view.read_with(app.cx, |view, cx| view.folder(cx));
+    assert_eq!(folder, "Eingang");
+    let mono = app
+        .cx
+        .update(|_, cx| settings::font_family(EditorFont::Mono, cx));
+    assert_eq!(font(&mut app), mono);
+
+    app.settings_do(&settings_view, settings_window, |view, window, cx| {
+        view.set_font(EditorFont::System, window, cx);
+    });
+    let system = app
+        .cx
+        .update(|_, cx| settings::font_family(EditorFont::System, cx));
+    assert_eq!(font(&mut app), system, "an open quick note follows");
+    let size = app.cx.update(|_, cx| {
+        let note = view.read(cx).note().unwrap().read(cx);
+        note.editor().read(cx).style().title_size
+    });
+    let text = app.cx.update(|_, cx| {
+        let note = view.read(cx).note().unwrap().read(cx);
+        note.editor().read(cx).style().text_size
+    });
+    assert_eq!(size, text, "still the quick note's own style");
+}
+
+#[gpui::test]
+async fn a_new_default_order_keeps_the_trash_open(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    with_settings(&notes, cx);
+    let mut app = open_app(&notes, cx);
+    let gallery = app.main.read_with(app.cx, |main, _| main.gallery().clone());
+    gallery.update(app.cx, |gallery, cx| gallery.set_scope(Scope::Trash, cx));
+    app.cx.run_until_parked();
+    let (view, window) = app.open_settings();
+    app.settings_do(&view, window, |view, window, cx| {
+        view.set_sort(Order::Title, window, cx)
+    });
+    let (same, scope) = app.main.read_with(app.cx, |main, cx| {
+        (
+            *main.gallery() == gallery,
+            main.gallery().read(cx).scope().clone(),
+        )
+    });
+    assert!(same, "the gallery is kept");
+    assert_eq!(scope, Scope::Trash);
+}

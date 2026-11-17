@@ -1,15 +1,16 @@
 //! The settings window (Ctrl+,): notes folder, default order, Quick Note, the font and
-//! line width of the note text, and the keyboard shortcuts to read. Every choice takes
+//! line width of the note text, and the keyboard shortcuts to read, among them the
+//! global Quick Note shortcut with the fallback of plan 03 §8. Every choice takes
 //! effect at once; there is nothing to confirm.
 
 use std::path::PathBuf;
 
 use gpui::{
     AnyElement, App, AppContext as _, Bounds, Context, Entity, FocusHandle, Focusable, FontWeight,
-    InteractiveElement as _, IntoElement, KeyDownEvent, MouseButton, ParentElement as _, Render,
-    SharedString, StatefulInteractiveElement as _, Styled as _, Task, TitlebarOptions, Window,
-    WindowBounds, WindowDecorations, WindowHandle, WindowOptions, div, prelude::FluentBuilder as _,
-    px, size as size_of,
+    InteractiveElement as _, IntoElement, KeyBinding, KeyDownEvent, MouseButton,
+    ParentElement as _, Render, SharedString, StatefulInteractiveElement as _, Styled as _, Task,
+    TitlebarOptions, Window, WindowBounds, WindowDecorations, WindowHandle, WindowOptions, div,
+    prelude::FluentBuilder as _, px, size as size_of,
 };
 use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::notification::Notification;
@@ -19,11 +20,11 @@ use sheaf_core::i18n::tr;
 use sheaf_searchd::api::APP_NAME;
 
 use super::{config, update};
-use crate::app::actions::CloseWindow;
+use crate::app::actions::{CloseWindow, QuickNote as QuickNoteAction};
 use crate::app::chrome::{HeaderBar, pane};
 use crate::app::dialogs::dialogs;
 use crate::app::library::Library;
-use crate::app::overlays::shortcuts;
+use crate::app::overlays::{self, shortcuts};
 use crate::app::theme::ActiveTokens as _;
 
 const WIDTH: f32 = 640.;
@@ -42,7 +43,10 @@ pub struct SettingsView {
     reload_quick_note: bool,
     focus_handle: FocusHandle,
     _loading: Task<()>,
+    // Apart, so that one change does not cancel the write of another.
+    _choosing: Task<()>,
     _saving: Task<()>,
+    _saving_quick_note: Task<()>,
     _subscriptions: Vec<gpui::Subscription>,
 }
 
@@ -79,7 +83,9 @@ impl SettingsView {
             reload_quick_note: false,
             focus_handle,
             _loading: Task::ready(()),
+            _choosing: Task::ready(()),
             _saving: Task::ready(()),
+            _saving_quick_note: Task::ready(()),
             _subscriptions: subscriptions,
         };
         view.load_quick_note(window, cx);
@@ -124,7 +130,7 @@ impl SettingsView {
         let dialogs = dialogs(cx);
         let chosen =
             cx.background_spawn(async move { dialogs.choose_folder(&tr("Choose Notes Folder")) });
-        self._saving = cx.spawn_in(window, async move |this, cx| {
+        self._choosing = cx.spawn_in(window, async move |this, cx| {
             let folder = match chosen.await {
                 Ok(Some(folder)) => folder,
                 Ok(None) => return,
@@ -207,7 +213,7 @@ impl SettingsView {
     fn store_quick_note(&mut self, quick: QuickNote, window: &mut Window, cx: &mut Context<Self>) {
         self.quick = Some(quick.clone());
         let stored = self.library.read(cx).set_quick_note(quick, cx);
-        self._saving = cx.spawn_in(window, async move |this, cx| {
+        self._saving_quick_note = cx.spawn_in(window, async move |this, cx| {
             if let Err(err) = stored.await {
                 let reason = err.to_string();
                 let _ = this.update_in(cx, |_, window, cx| failed(&reason, window, cx));
@@ -307,6 +313,20 @@ fn row(
                 })),
         )
         .child(div().flex_none().child(control))
+        .into_any_element()
+}
+
+/// Keys as on the list of shortcuts.
+fn key_caps(keys: String, cx: &App) -> AnyElement {
+    let tokens = cx.tokens();
+    div()
+        .px(px(8.))
+        .py(px(3.))
+        .rounded(px(6.))
+        .bg(tokens.hover)
+        .text_size(tokens.text(12.5))
+        .text_color(tokens.muted)
+        .child(keys)
         .into_any_element()
 }
 
@@ -505,6 +525,22 @@ impl Render for SettingsView {
                     resume_control,
                     cx,
                 ),
+                row(
+                    tr("Shortcut from Anywhere"),
+                    Some(tr(
+                        "While Notes runs. Otherwise add a custom shortcut for “sheaf --quick” in GNOME Settings, Keyboard",
+                    )),
+                    key_caps(
+                        // The keys the global shortcut proposes to GNOME, see `shortcut`.
+                        overlays::format_keys(&KeyBinding::new(
+                            "ctrl-shift-n",
+                            QuickNoteAction,
+                            None,
+                        )),
+                        cx,
+                    ),
+                    cx,
+                ),
             ],
             cx,
         );
@@ -516,36 +552,35 @@ impl Render for SettingsView {
             ],
             cx,
         );
+        // One card per context: Esc closes the Quick Note and leaves a note.
         let keys: Vec<AnyElement> = shortcuts::groups(cx)
             .into_iter()
-            .flat_map(|group| group.lines)
-            .map(|(label, keys)| {
-                let keys = div()
-                    .px(px(8.))
-                    .py(px(3.))
-                    .rounded(px(6.))
-                    .bg(tokens.hover)
-                    .text_size(tokens.text(12.5))
-                    .text_color(tokens.muted)
-                    .child(keys);
-                div()
-                    .flex()
-                    .items_center()
-                    .min_h(px(40.))
-                    .px(px(14.))
-                    .py(px(5.))
-                    .child(
+            .map(|shortcuts| {
+                let rows = shortcuts
+                    .lines
+                    .into_iter()
+                    .map(|(label, keys)| {
                         div()
-                            .flex_1()
-                            .min_w_0()
-                            .text_size(tokens.text(13.5))
-                            .child(label),
-                    )
-                    .child(keys)
-                    .into_any_element()
+                            .flex()
+                            .items_center()
+                            .min_h(px(40.))
+                            .px(px(14.))
+                            .py(px(5.))
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .text_size(tokens.text(13.5))
+                                    .child(label),
+                            )
+                            .child(key_caps(keys, cx))
+                            .into_any_element()
+                    })
+                    .collect();
+                let title = format!("{} · {}", tr("Keyboard Shortcuts"), shortcuts.title);
+                group(title, rows, cx)
             })
             .collect();
-        let keys = group(tr("Keyboard Shortcuts"), keys, cx);
 
         pane(tokens.window, window, cx)
             .id("settings")
@@ -581,7 +616,7 @@ impl Render for SettingsView {
                                     .child(gallery)
                                     .child(quick)
                                     .child(editor)
-                                    .child(keys),
+                                    .children(keys),
                             ),
                     ),
             )
