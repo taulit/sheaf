@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/sheaf-core", "crates/sheaf-searchd", "crates/sheaf"]
+members = ["crates/sheaf-core", "crates/sheaf-searchd", "crates/sheaf", "crates/sheaf-export"]
 
 [workspace.package]
 version = "0.1.0"
@@ -14,6 +14,7 @@ publish = false
 [workspace.dependencies]
 sheaf-core = { path = "crates/sheaf-core" }
 sheaf-searchd = { path = "crates/sheaf-searchd" }
+sheaf-export = { path = "crates/sheaf-export" }
 
 clap = { version = "4.6", features = ["derive", "wrap_help"] }
 clap_complete = "4.6"
@@ -39,7 +40,7 @@ gpui_platform = { package = "gpui-pre-platform", version = "=0.3.12", features =
 gpui-component = "=0.10.0"
 gpui-kit-assets = "=0.10.0"
 gpui-markdown-editor = { git = "https://github.com/taulit/gpui-markdown-editor", tag = "v0.0.3", features = ["serde"] }
-ashpd = { version = "0.14", default-features = false, features = ["async-io", "settings", "global_shortcuts"] }
+ashpd = { version = "0.14", default-features = false, features = ["async-io", "settings", "global_shortcuts", "file_chooser", "print"] }
 anyhow = "1"
 async-channel = "2.5"
 async-io = "2.6"
@@ -76,4 +77,19 @@ debug = false
 [profile.dev.package.insta]
 opt-level = 3
 [profile.dev.package.similar]
+opt-level = 3
+
+# The PDF renderer's shaping, subsetting and compression are slow unoptimised; tests
+# render a 200-page note.
+[profile.dev.package.harfrust]
+opt-level = 3
+[profile.dev.package.krilla]
+opt-level = 3
+[profile.dev.package.subsetter]
+opt-level = 3
+[profile.dev.package.miniz_oxide]
+opt-level = 3
+[profile.dev.package.skrifa]
+opt-level = 3
+[profile.dev.package.read-fonts]
 opt-level = 3

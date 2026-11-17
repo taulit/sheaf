@@ -25,8 +25,52 @@ pub struct AppConfig {
     /// The notes folder, if the user chose one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub notes_dir: Option<PathBuf>,
+    /// The order of folders that have none of their own; see [`FolderConfig::view`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sort: Option<Sort>,
+    /// How the note view sets the text.
+    #[serde(default, skip_serializing_if = "EditorSettings::is_default")]
+    pub editor: EditorSettings,
     #[serde(flatten)]
     pub other: toml::Table,
+}
+
+/// How the note view sets the text: `[editor]` in the app configuration.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct EditorSettings {
+    pub font: EditorFont,
+    pub line_width: LineWidth,
+    #[serde(flatten)]
+    pub other: toml::Table,
+}
+
+impl EditorSettings {
+    fn is_default(&self) -> bool {
+        *self == EditorSettings::default()
+    }
+}
+
+/// The typeface of the note text.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum EditorFont {
+    /// The font of the desktop.
+    #[default]
+    System,
+    Serif,
+    Mono,
+}
+
+/// The longest line of note text.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LineWidth {
+    Narrow,
+    /// The 700 px column of plan 04.
+    #[default]
+    Medium,
+    Wide,
 }
 
 /// What Sheaf remembers about one notes folder.
@@ -47,6 +91,10 @@ pub struct FolderConfig {
     /// defines what is in it.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub notes: BTreeMap<NoteId, toml::Table>,
+    /// The order of folders without one of their own: [`AppConfig::sort`], put here
+    /// by whoever loads this for a view. Not stored in this file.
+    #[serde(skip)]
+    pub default_sort: Sort,
     #[serde(flatten)]
     pub other: toml::Table,
 }
@@ -89,14 +137,16 @@ pub enum View {
     List,
 }
 
-/// Settings of the Quick Note window.
+/// Settings of the Quick Note window, changed in the settings window. The Quick Note
+/// window and `sheaf-searchd` read them.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct QuickNote {
     /// The folder for quick notes; see [`QuickNote::folder_name`] for the default.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub folder: Option<String>,
-    /// A quick note younger than this is continued instead of starting a new one.
+    /// A quick note younger than this is continued instead of starting a new one;
+    /// 0 always starts a new one.
     pub resume_minutes: u32,
     #[serde(flatten)]
     pub other: toml::Table,
@@ -149,9 +199,16 @@ impl FolderConfig {
         save(self, &Self::path(root))
     }
 
-    /// How `folder` is shown; the defaults if nothing was stored for it.
+    /// How `folder` is shown; the defaults, with [`default_sort`](Self::default_sort),
+    /// if nothing was stored for it.
     pub fn view(&self, folder: &str) -> FolderView {
-        self.folders.get(folder).cloned().unwrap_or_default()
+        self.folders
+            .get(folder)
+            .cloned()
+            .unwrap_or_else(|| FolderView {
+                sort: self.default_sort,
+                ..FolderView::default()
+            })
     }
 }
 
@@ -333,7 +390,7 @@ enabled = true
         let path = dir.path().join("sheaf/config.toml");
         let mut config = AppConfig {
             notes_dir: Some(PathBuf::from("/home/me/Notizen")),
-            other: toml::Table::new(),
+            ..AppConfig::default()
         };
         config.other.insert(
             "window".to_owned(),
@@ -344,5 +401,43 @@ enabled = true
 
         fs::write(&path, "notes_dir = 5\n").unwrap();
         assert!(matches!(AppConfig::load(&path), Err(Error::Config(_))));
+    }
+
+    #[test]
+    fn app_settings_round_trip_and_keep_what_they_do_not_know() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        fs::write(
+            &path,
+            "notes_dir = \"/n\"\nsort = \"title\"\nwindow = \"big\"\n\n[editor]\nfont = \"serif\"\nline_width = \"wide\"\nligatures = false\n",
+        )
+        .unwrap();
+        let mut config = AppConfig::load(&path).unwrap();
+        assert_eq!(config.sort, Some(Sort::Title));
+        assert_eq!(config.editor.font, EditorFont::Serif);
+        assert_eq!(config.editor.line_width, LineWidth::Wide);
+        config.editor.font = EditorFont::Mono;
+        config.save(&path).unwrap();
+        let text = fs::read_to_string(&path).unwrap();
+        assert!(text.contains("window = \"big\""), "{text}");
+        assert!(text.contains("ligatures = false"), "{text}");
+        assert!(text.contains("font = \"mono\""), "{text}");
+        assert_eq!(AppConfig::load(&path).unwrap(), config);
+
+        AppConfig::default().save(&path).unwrap();
+        assert_eq!(fs::read_to_string(&path).unwrap(), "");
+    }
+
+    #[test]
+    fn folders_without_an_order_take_the_default_one() {
+        let mut config = FolderConfig::default();
+        config.folders.entry("Arbeit".to_owned()).or_default().sort = Sort::Created;
+        config.default_sort = Sort::Title;
+        assert_eq!(config.view("Privat").sort, Sort::Title);
+        assert_eq!(config.view("Arbeit").sort, Sort::Created);
+        let dir = tempfile::tempdir().unwrap();
+        config.save(dir.path()).unwrap();
+        let text = fs::read_to_string(FolderConfig::path(dir.path())).unwrap();
+        assert!(!text.contains("default_sort"), "{text}");
     }
 }

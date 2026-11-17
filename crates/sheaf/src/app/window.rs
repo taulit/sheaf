@@ -37,6 +37,7 @@ use super::overlays::palette::{CommandPalette, PaletteEvent};
 use super::overlays::shortcuts::ShortcutsSheet;
 use super::overlays::{Toast, ToastHost};
 use super::quick;
+use super::settings::{self, Settings, view::SettingsView};
 use super::state::{Recovery, StateFile, WindowState};
 use super::theme::{ActiveTokens as _, motion, size};
 
@@ -79,6 +80,27 @@ pub struct MainWindow {
     _note_events: Option<Subscription>,
     _overlay_events: Option<Subscription>,
     _subscriptions: [Subscription; 1],
+    /// The settings window, while it is open.
+    settings: Option<(WindowHandle<Root>, Entity<SettingsView>)>,
+    /// The settings the window last followed.
+    seen: Seen,
+    _settings_events: Subscription,
+}
+
+/// What of the settings the main window follows.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Seen {
+    sort: Option<sheaf_core::config::Sort>,
+    notes_dir: Option<std::path::PathBuf>,
+}
+
+impl Seen {
+    fn of(config: &sheaf_core::AppConfig) -> Seen {
+        Seen {
+            sort: config.sort,
+            notes_dir: config.notes_dir.clone(),
+        }
+    }
 }
 
 impl std::fmt::Debug for MainWindow {
@@ -98,18 +120,7 @@ impl MainWindow {
         cx: &mut Context<Self>,
     ) -> Self {
         let gallery = cx.new(|cx| GalleryView::new(library.clone(), window, cx));
-        let gallery_event =
-            cx.subscribe_in(&gallery, window, |this, _, event, window, cx| match event {
-                GalleryEvent::Open { id, query } => {
-                    this.open_note(id.clone(), query.clone(), window, cx);
-                }
-                GalleryEvent::Trashed(ids) => this.offer_undo(ids.clone(), cx),
-                GalleryEvent::Failed(message) => this.toast(Toast::new(message.clone()), cx),
-                GalleryEvent::Notice(message) => this.toast(Toast::new(message.clone()), cx),
-                GalleryEvent::NewFromTemplate(name) => {
-                    this.create_note(Some(name.clone()), window, cx);
-                }
-            });
+        let gallery_event = cx.subscribe_in(&gallery, window, Self::gallery_event);
         gallery.focus_handle(cx).focus(window, cx);
         let mut main = MainWindow {
             library,
@@ -129,6 +140,9 @@ impl MainWindow {
             _note_events: None,
             _overlay_events: None,
             _subscriptions: [gallery_event],
+            settings: None,
+            seen: Seen::of(&settings::config(cx)),
+            _settings_events: cx.observe_global_in::<Settings>(window, Self::settings_changed),
         };
         if let Some(recovery) = cx.try_global::<Recovery>().cloned()
             && recovery.take_unseen()
@@ -153,6 +167,11 @@ impl MainWindow {
 
     pub fn gallery(&self) -> &Entity<GalleryView> {
         &self.gallery
+    }
+
+    /// The notes the window shows; another one after the notes folder changed.
+    pub fn library(&self) -> &Entity<Library> {
+        &self.library
     }
 
     /// The open note, if the route is a note.
@@ -498,9 +517,104 @@ impl MainWindow {
         });
     }
 
-    /// Hook for the settings window (Ctrl+,), which does not exist yet.
-    fn open_settings(&mut self, _: &OpenSettings, _: &mut Window, _: &mut Context<Self>) {
-        log::debug!("the settings are not built yet");
+    /// Opens the settings window (Ctrl+,), or brings it to the front.
+    fn open_settings(&mut self, _: &OpenSettings, _: &mut Window, cx: &mut Context<Self>) {
+        if let Some((handle, _)) = &self.settings
+            && handle
+                .update(cx, |_, window, _| window.activate_window())
+                .is_ok()
+        {
+            return;
+        }
+        match settings::view::open(self.library.clone(), cx) {
+            Ok(opened) => self.settings = Some(opened),
+            Err(err) => log::error!("cannot open the settings: {err:#}"),
+        }
+    }
+
+    pub fn settings_window(&self) -> Option<&Entity<SettingsView>> {
+        self.settings.as_ref().map(|(_, view)| view)
+    }
+
+    fn gallery_event(
+        &mut self,
+        _: &Entity<GalleryView>,
+        event: &GalleryEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match event {
+            GalleryEvent::Open { id, query } => {
+                self.open_note(id.clone(), query.clone(), window, cx);
+            }
+            GalleryEvent::Trashed(ids) => self.offer_undo(ids.clone(), cx),
+            GalleryEvent::Failed(message) | GalleryEvent::Notice(message) => {
+                self.toast(Toast::new(message.clone()), cx);
+            }
+            GalleryEvent::NewFromTemplate(name) => {
+                self.create_note(Some(name.clone()), window, cx);
+            }
+        }
+    }
+
+    /// Follows the settings: another notes folder is opened, another default order
+    /// shows in the gallery.
+    fn settings_changed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let seen = Seen::of(&settings::config(cx));
+        if seen == self.seen {
+            return;
+        }
+        let previous = std::mem::replace(&mut self.seen, seen.clone());
+        match seen.notes_dir {
+            Some(dir) if previous.notes_dir.as_ref() != Some(&dir) => {
+                self.switch_notes_dir(dir, window, cx);
+            }
+            _ => self.replace_gallery(window, cx),
+        }
+    }
+
+    /// Leaves the open note and shows the notes folder `dir` instead of this one.
+    fn switch_notes_dir(
+        &mut self,
+        dir: std::path::PathBuf,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.leave_note(window, cx, move |this, note, window, cx| {
+            if let Some(note) = note {
+                this.slide_out(note, window, cx);
+            }
+            let reopened = Library::reopen(&this.library, &dir, cx);
+            match reopened {
+                Ok(library) => {
+                    super::use_library(library.clone(), cx);
+                    if let Some((_, view)) = &this.settings {
+                        let library = library.clone();
+                        view.update(cx, |view, cx| view.set_library(library, cx));
+                    }
+                    this.library = library;
+                    this.replace_gallery(window, cx);
+                }
+                Err(err) => {
+                    log::error!("cannot open the notes folder {}: {err}", dir.display());
+                    let message =
+                        tr("Could not open the notes folder: {}").replace("{}", &err.to_string());
+                    this.toast(Toast::new(message), cx);
+                }
+            }
+        });
+    }
+
+    /// A new gallery of the library, which reads the folder settings afresh.
+    fn replace_gallery(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let library = self.library.clone();
+        let gallery = cx.new(|cx| GalleryView::new(library, window, cx));
+        self._subscriptions = [cx.subscribe_in(&gallery, window, Self::gallery_event)];
+        if self.note.is_none() {
+            gallery.focus_handle(cx).focus(window, cx);
+        }
+        self.gallery = gallery;
+        cx.notify();
     }
 
     /// Shows the list of keyboard shortcuts (Ctrl+?), or closes it.

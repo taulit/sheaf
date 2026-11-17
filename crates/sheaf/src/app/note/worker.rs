@@ -77,6 +77,27 @@ pub enum Job {
     KeepMine(String),
     /// The note was deleted elsewhere: store this text as a new note in its folder.
     SaveAsNew(String),
+    /// Copy these files into the note's attachment folder; `done` hears the links.
+    Attach {
+        files: Vec<Upload>,
+        done: Sender<Attached>,
+    },
+}
+
+/// A file to attach: one on disk, or bytes such as a pasted image.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Upload {
+    File(std::path::PathBuf),
+    Bytes { name: String, bytes: Vec<u8> },
+}
+
+/// What came of [`Job::Attach`].
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Attached {
+    /// The name and link target of each file stored, in order.
+    pub links: Vec<(String, String)>,
+    /// Why files could not be stored.
+    pub failed: Vec<String>,
 }
 
 /// What leaving a note stores. Whatever it is, it does not end without the text on
@@ -150,6 +171,7 @@ pub enum Change {
     /// Pin, or unpin with `false`.
     Pin(bool),
     Move,
+    Attach,
 }
 
 /// Whether the file is as the worker last saw it.
@@ -304,6 +326,19 @@ impl Worker {
                 })
                 .await
             }
+            Job::Attach { files, done } => {
+                let attached = Arc::new(Mutex::new(Attached::default()));
+                let sink = attached.clone();
+                let report = self
+                    .change(cx, Change::Attach, move |store, id| {
+                        attach(store, id, &files, &sink)
+                    })
+                    .await;
+                let attached =
+                    std::mem::take(&mut *attached.lock().unwrap_or_else(PoisonError::into_inner));
+                let _ = done.try_send(attached);
+                report
+            }
             Job::SaveAsNew(body) => {
                 self.resolve(cx, body, |known, store, touched, body| {
                     known.create(store, touched, body)
@@ -396,6 +431,54 @@ impl Worker {
                 Ours::No(reason(&err))
             }
         }
+    }
+}
+
+/// Stores `files` as attachments of the note `id`. Files that cannot be read are
+/// noted in `attached` and skipped; it fails only if none could be stored.
+fn attach(
+    store: &NoteStore,
+    id: &NoteId,
+    files: &[Upload],
+    attached: &Mutex<Attached>,
+) -> sheaf_core::Result<NoteMeta> {
+    let mut attached = attached.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut id = id.clone();
+    let mut last = None;
+    let mut first_error = None;
+    for file in files {
+        let read = match file {
+            Upload::File(path) => std::fs::read(path)
+                .map(|bytes| {
+                    let name = path
+                        .file_name()
+                        .map(|name| name.to_string_lossy().into_owned())
+                        .unwrap_or_default();
+                    (name, bytes)
+                })
+                .map_err(Error::from),
+            Upload::Bytes { name, bytes } => Ok((name.clone(), bytes.clone())),
+        };
+        match read.and_then(|(name, bytes)| {
+            store
+                .add_attachment(&id, &name, &bytes)
+                .map(|(meta, link)| (name, meta, link))
+        }) {
+            Ok((name, meta, link)) => {
+                id = meta.id.clone();
+                attached.links.push((name, link));
+                last = Some(meta);
+            }
+            Err(err) => {
+                attached.failed.push(reason(&err));
+                first_error.get_or_insert(err);
+            }
+        }
+    }
+    match (last, first_error) {
+        (Some(meta), _) => Ok(meta),
+        (None, Some(err)) => Err(err),
+        (None, None) => Ok(store.get(&id)?.meta),
     }
 }
 

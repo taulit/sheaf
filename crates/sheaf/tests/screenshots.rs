@@ -137,6 +137,8 @@ const SCENES: &[(&str, Folder, Scene)] = &[
     ("shortcuts", Folder::Seeded, shortcuts),
     ("trash", Folder::Seeded, trash),
     ("templates-menu", Folder::Seeded, templates_menu),
+    ("note-share", Folder::Seeded, note_share),
+    ("note-backlinks", Folder::Seeded, note_backlinks),
 ];
 
 /// The start view as it opens.
@@ -313,6 +315,49 @@ fn note_save_error(stage: &mut Stage) {
     chmod(0o755);
 }
 
+/// The note with its share popover open.
+fn note_share(stage: &mut Stage) {
+    note(stage);
+    stage.update(|main, _, cx| {
+        let note = main.note().expect("the note is open").clone();
+        note.update(cx, |note, cx| {
+            note.set_popover(Some(NotePopover::Share), cx)
+        });
+    });
+}
+
+/// A note other notes link to, with "Linked from" unfolded.
+fn note_backlinks(stage: &mut Stage) {
+    let created = stage.cx.update(|cx| {
+        stage.library.update(cx, |library, cx| {
+            library.create(
+                "Kickoff\n\nAgenda aus dem [[Project plan]].\n",
+                sheaf_core::CreateOptions {
+                    folder: "Work".into(),
+                    ..Default::default()
+                },
+                cx,
+            )
+        })
+    });
+    stage.cx.run_until_parked();
+    pollster(&stage.cx, created);
+    let id = stage.cx.update(|cx| {
+        let gallery = stage.main.read(cx).gallery().read(cx);
+        gallery
+            .notes()
+            .iter()
+            .find(|note| note.title == "Project plan")
+            .map(|note| note.id.clone())
+    });
+    let id = id.expect("the fixture has the note");
+    stage.update(|main, window, cx| main.open_note(id, String::new(), window, cx));
+    stage.update(|main, _, cx| {
+        let note = main.note().expect("the note is open").clone();
+        note.update(cx, |note, cx| note.toggle_backlinks(cx));
+    });
+}
+
 /// The command palette over the gallery.
 fn palette(stage: &mut Stage) {
     stage.update(|_, window, cx| window.dispatch_action(Box::new(OpenCommandPalette), cx));
@@ -333,19 +378,41 @@ fn app_scenes() {
     }
 }
 
-/// Renders `scene` on `folder` and writes `docs/screenshots/<name>.png`. The image is
-/// twice the window size because the offscreen window has a scale factor of 2.
-fn capture(name: &str, dark: bool, folder: Folder, scene: Scene) {
+/// The settings window, at its default size.
+#[test]
+#[ignore = "needs a GPU and writes docs/screenshots, run scripts/screenshot.sh"]
+fn settings_scenes() {
+    for (theme, dark) in [("dark", true), ("light", false)] {
+        let notes = Notes::seeded();
+        let (mut cx, library) = headless(dark, &notes);
+        let window = cx
+            .open_window(
+                size(
+                    px(SETTINGS_WIDTH + 2. * MARGIN),
+                    px(SETTINGS_HEIGHT + 2. * MARGIN),
+                ),
+                |window, cx| {
+                    let (root, _) = sheaf::app::settings::view::build(library.clone(), window, cx);
+                    cx.new(|_| Desktop { root, dark })
+                },
+            )
+            .expect("failed to open the offscreen window");
+        cx.run_until_parked();
+        draw_and_save(&mut cx, window.into(), &format!("app-settings-{theme}"));
+    }
+}
+
+/// The default size of the settings window.
+const SETTINGS_WIDTH: f32 = 640.;
+const SETTINGS_HEIGHT: f32 = 720.;
+
+/// An offscreen app set up like the real one, with a Library over `notes`.
+fn headless(dark: bool, notes: &Notes) -> (HeadlessAppContext, Entity<Library>) {
     // Every platform instance starts its own worker threads, so the text system is
     // taken from one platform and shared by all screenshots.
     static TEXT_SYSTEM: OnceLock<Arc<dyn PlatformTextSystem>> = OnceLock::new();
     let text_system =
         TEXT_SYSTEM.get_or_init(|| gpui_platform::current_platform(true).text_system());
-
-    let notes = match folder {
-        Folder::Seeded => Notes::seeded(),
-        Folder::Empty => Notes::empty(),
-    };
     let mut cx = HeadlessAppContext::with_platform(
         text_system.clone(),
         Arc::new(Assets),
@@ -362,8 +429,19 @@ fn capture(name: &str, dark: bool, folder: Folder, scene: Scene) {
         cx.set_global(AssumeClientDecorations);
         // The surface behind the views would fill the rounded corners.
         Theme::update(cx, |theme| theme.background = gpui::transparent_black());
-        fixture::open_library(&notes, cx)
+        fixture::open_library(notes, cx)
     });
+    (cx, library)
+}
+
+/// Renders `scene` on `folder` and writes `docs/screenshots/<name>.png`. The image is
+/// twice the window size because the offscreen window has a scale factor of 2.
+fn capture(name: &str, dark: bool, folder: Folder, scene: Scene) {
+    let notes = match folder {
+        Folder::Seeded => Notes::seeded(),
+        Folder::Empty => Notes::empty(),
+    };
+    let (mut cx, library) = headless(dark, &notes);
 
     let mut main = None;
     let window = cx
@@ -391,24 +469,25 @@ fn capture(name: &str, dark: bool, folder: Folder, scene: Scene) {
     assert_eq!(pollster(&stage.cx, listed).len(), expected);
 
     scene(&mut stage);
-    stage.cx.run_until_parked();
+    draw_and_save(&mut stage.cx, stage.window, name);
+}
+
+/// Draws `window` until what loads in the background is there and writes it to
+/// `docs/screenshots/<name>.png`.
+fn draw_and_save(cx: &mut HeadlessAppContext, window: AnyWindowHandle, name: &str) {
+    cx.run_until_parked();
     // Miniatures and covers load in the background; the first frame asks for them.
     for _ in 0..3 {
-        stage
-            .cx
-            .update_window(stage.window, |_, window, cx| window.draw(cx).clear(cx))
+        cx.update_window(window, |_, window, cx| window.draw(cx).clear(cx))
             .expect("failed to draw");
         std::thread::sleep(std::time::Duration::from_millis(100));
-        stage.cx.run_until_parked();
+        cx.run_until_parked();
     }
-    stage
-        .cx
-        .update_window(stage.window, |_, window, cx| window.draw(cx).clear(cx))
+    cx.update_window(window, |_, window, cx| window.draw(cx).clear(cx))
         .expect("failed to draw");
 
-    let image = stage
-        .cx
-        .capture_screenshot(stage.window)
+    let image = cx
+        .capture_screenshot(window)
         .expect("offscreen rendering failed");
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../docs/screenshots")

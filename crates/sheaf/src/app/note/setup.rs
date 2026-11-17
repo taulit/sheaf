@@ -4,13 +4,26 @@
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, PoisonError};
 
-use gpui::{App, Edges, FontWeight, px};
+use gpui::{App, Edges, FontWeight, Pixels, px};
 use gpui_markdown_editor::extensions::{Highlight, Tag, WikiLink};
 use gpui_markdown_editor::{
     Completion, CompletionKind, EditorOptions, EditorStyle, SrcResolver, UiParts,
 };
+use sheaf_core::config::LineWidth;
 
-use crate::app::theme::{ActiveTokens as _, size};
+use crate::app::settings;
+use crate::app::theme::ActiveTokens as _;
+
+/// The space beside the text in the column, 04 "Editor".
+const SIDE: Pixels = px(48.);
+
+/// The space beside the text that makes the column of the chosen line width, for an
+/// editor `width` wide. The editor's column is [`settings::WIDEST_COLUMN`] at most.
+pub fn side_padding(width: Pixels, line_width: LineWidth) -> Pixels {
+    let room = width.min(settings::WIDEST_COLUMN);
+    let extra = ((room - settings::column(line_width)) / 2.).max(Pixels::ZERO);
+    SIDE + extra
+}
 
 /// More suggestions than a completion list can usefully show.
 const COMPLETIONS: usize = 12;
@@ -42,7 +55,8 @@ pub fn options(lookup: &SharedLookup) -> EditorOptions {
     };
     EditorOptions {
         first_line_is_title: true,
-        max_width: Some(size::EDITOR_MAX_WIDTH),
+        // Narrower line widths are padding inside it, see `side_padding`.
+        max_width: Some(settings::WIDEST_COLUMN),
         extensions: vec![Box::new(WikiLink), Box::new(Tag), Box::new(Highlight)],
         resolve_src: Some(resolver),
         completions: Some(completions),
@@ -98,16 +112,16 @@ fn complete(lookup: &SharedLookup, kind: CompletionKind, typed: &str) -> Vec<Com
 pub fn style(cx: &App) -> EditorStyle {
     let tokens = cx.tokens();
     let mut style = EditorStyle::from_theme(cx);
-    style.font_family = tokens.font_family.clone();
+    style.font_family = settings::font_family(settings::config(cx).editor.font, cx);
     style.text_color = tokens.fg;
     style.muted_color = tokens.muted;
     style.faint_color = tokens.faint;
     // The date line above the editor takes the top margin of 04.
     style.padding = Edges {
         top: px(0.),
-        right: px(48.),
+        right: SIDE,
         bottom: px(120.),
-        left: px(48.),
+        left: SIDE,
     };
     style.text_size = tokens.text(15.5);
     style.line_height = 1.6;
@@ -166,6 +180,22 @@ mod tests {
         let tags = complete(&lookup, CompletionKind::Tag, "RE");
         assert_eq!(tags.len(), 2);
         assert_eq!(tags[1].detail.as_deref(), Some("3"));
+    }
+
+    #[test]
+    fn narrower_lines_are_padding_in_the_widest_column() {
+        let text = |width: f32, line| {
+            f32::from(px(width).min(settings::WIDEST_COLUMN) - side_padding(px(width), line) * 2.)
+        };
+        assert_eq!(text(1200., LineWidth::Medium), 700. - 96.);
+        assert_eq!(text(1200., LineWidth::Narrow), 600. - 96.);
+        assert_eq!(text(1200., LineWidth::Wide), 860. - 96.);
+        assert_eq!(text(760., LineWidth::Medium), 700. - 96.);
+        assert_eq!(
+            text(500., LineWidth::Medium),
+            500. - 96.,
+            "narrow windows keep 48 px"
+        );
     }
 
     #[test]

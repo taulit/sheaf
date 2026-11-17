@@ -32,7 +32,10 @@
 //! A save that fails shows a banner and is tried again with the next change, with "Try
 //! Again" and on leaving; leaving that fails keeps the view open.
 
+mod attach;
+mod backlinks;
 mod date;
+mod export;
 pub(crate) mod files;
 mod header;
 mod jump;
@@ -46,21 +49,26 @@ use std::time::Duration;
 use async_channel::Sender;
 use gpui::{
     AnimationExt as _, App, AppContext as _, ClipboardItem, Context, Entity, EventEmitter,
-    FocusHandle, Focusable, InteractiveElement as _, IntoElement, ParentElement as _, Render,
-    Styled as _, Subscription, Task, Window, div, prelude::FluentBuilder as _, px,
+    ExternalPaths, FocusHandle, Focusable, InteractiveElement as _, IntoElement,
+    ParentElement as _, Render, Styled as _, Subscription, Task, Window, div,
+    prelude::FluentBuilder as _, px,
 };
 use gpui_component::Theme;
 use gpui_markdown_editor::{DocMeta, EditorEvent, MarkdownEditor};
 use sheaf_core::i18n::tr;
 use sheaf_core::{CreateOptions, Note, NoteId, NoteMeta, Sort};
 
-use super::actions::{self, Back, Trash};
+use super::actions::{
+    self, AttachFile, Back, ExportMarkdown, ExportPdf, PasteAttachment, Print, Trash,
+};
 use super::chrome::pane;
 use super::library::{Folder, Library, LibraryEvent};
 use super::overlays::Toast;
+use super::settings::{self, Settings};
 use super::state::Recovery;
 use super::theme::ActiveTokens as _;
 use setup::{Lookup, SharedLookup};
+pub use worker::Upload;
 use worker::{Change, Job, Leave, Queued, Report, Shared};
 
 /// How long typing may pause before the text is saved.
@@ -142,6 +150,13 @@ pub struct NoteView {
     _rename_timer: Task<()>,
     _lookup: Task<()>,
     _state: Task<()>,
+    /// The notes that link here, and the title they were looked up for.
+    backlinks: Vec<NoteMeta>,
+    backlinks_title: String,
+    backlinks_open: bool,
+    _backlinks: Task<()>,
+    _export: Task<()>,
+    _attach: Task<()>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -182,6 +197,11 @@ impl NoteView {
                 this.editor
                     .update(cx, |editor, cx| editor.set_style(style, cx));
             }),
+            cx.observe_global::<Settings>(|this, cx| {
+                let style = setup::style(cx);
+                this.editor
+                    .update(cx, |editor, cx| editor.set_style(style, cx));
+            }),
             // GPUI runs no task while it quits, so the save happens right here.
             cx.on_app_quit(|this, cx| {
                 this.save_now(cx);
@@ -196,6 +216,7 @@ impl NoteView {
                     this.send(Job::Check);
                 }
                 this.refresh_lookup(cx);
+                this.refresh_backlinks(true, cx);
             }),
         ];
 
@@ -234,6 +255,12 @@ impl NoteView {
             _rename_timer: Task::ready(()),
             _lookup: Task::ready(()),
             _state: Task::ready(()),
+            backlinks: Vec::new(),
+            backlinks_title: String::new(),
+            backlinks_open: false,
+            _backlinks: Task::ready(()),
+            _export: Task::ready(()),
+            _attach: Task::ready(()),
             _subscriptions: subscriptions,
         };
         view.load_state(cx);
@@ -629,6 +656,7 @@ impl NoteView {
             }
             Report::ChangeFailed { change, reason } => self.change_failed(change, &reason, cx),
         }
+        self.refresh_backlinks(false, cx);
         cx.notify();
     }
 
@@ -648,6 +676,7 @@ impl NoteView {
                 }
             }
             Change::Move => tr("Could not move the note: {}"),
+            Change::Attach => tr("Could not attach: {}"),
         };
         cx.emit(NoteEvent::Toast(Toast::new(message.replace("{}", reason))));
     }
@@ -772,6 +801,26 @@ impl NoteView {
         });
     }
 
+    /// Keeps the column of text at the line width of the settings for the width of
+    /// the window. The editor's column is fixed when it is created, so narrower lines
+    /// are space beside the text.
+    fn fit_column(&mut self, window: &Window, cx: &mut Context<Self>) {
+        let frame = match window.window_decorations() {
+            gpui::Decorations::Client { .. } if !window.is_maximized() => px(40.),
+            _ => px(0.),
+        };
+        let width = window.viewport_size().width - frame;
+        let side = setup::side_padding(width, settings::config(cx).editor.line_width);
+        let padding = self.editor.read(cx).style().padding;
+        if padding.left != side || padding.right != side {
+            let mut style = self.editor.read(cx).style().clone();
+            style.padding.left = side;
+            style.padding.right = side;
+            self.editor
+                .update(cx, |editor, cx| editor.set_style(style, cx));
+        }
+    }
+
     /// Hands the editor what it remembered about this note, such as column widths.
     fn load_state(&mut self, cx: &mut Context<Self>) {
         let state = self.library.read(cx).note_state(&self.id, cx);
@@ -847,6 +896,7 @@ impl Render for NoteView {
         if self.loaded && self.focus_handle.is_focused(window) {
             self.editor.focus_handle(cx).focus(window, cx);
         }
+        self.fit_column(window, cx);
         let tokens = cx.tokens().clone();
         let date = self.meta.as_ref().map(|meta| {
             let zone = self.library.read(cx).now().time_zone().clone();
@@ -880,6 +930,11 @@ impl Render for NoteView {
                 }
             }))
             .on_action(cx.listener(|this, _: &Trash, _, cx| this.trash(cx)))
+            .on_action(cx.listener(|this, _: &ExportMarkdown, _, cx| this.export_markdown(cx)))
+            .on_action(cx.listener(|this, _: &ExportPdf, _, cx| this.export_pdf(cx)))
+            .on_action(cx.listener(|this, _: &Print, _, cx| this.print(cx)))
+            .on_action(cx.listener(|this, _: &AttachFile, window, cx| this.attach_file(window, cx)))
+            .on_action(cx.listener(|this, _: &PasteAttachment, window, cx| this.paste(window, cx)))
             .child(header::header(self, cx))
             .children(self.banner.clone().map(|banner| header::banner(banner, cx)))
             .child(
@@ -894,10 +949,16 @@ impl Render for NoteView {
             )
             .child(
                 div()
+                    .id("note-text")
                     .flex_1()
                     .min_h_0()
+                    .on_drop(cx.listener(|this, paths: &ExternalPaths, window, cx| {
+                        let files = paths.paths().iter().cloned().map(Upload::File).collect();
+                        this.attach(files, window, cx);
+                    }))
                     .when(self.loaded, |area| area.child(self.editor.clone())),
             )
+            .children(self.backlinks_section(cx))
             .children(saved)
             .when(self.popover.is_some(), |pane| {
                 pane.child(header::dismiss_layer(cx))

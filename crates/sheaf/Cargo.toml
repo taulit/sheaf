@@ -11,6 +11,7 @@ publish.workspace = true
 [dependencies]
 sheaf-core.workspace = true
 sheaf-searchd.workspace = true
+sheaf-export.workspace = true
 clap.workspace = true
 clap_complete.workspace = true
 serde.workspace = true
