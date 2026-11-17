@@ -92,8 +92,9 @@ pub enum Leave {
     /// The note was deleted elsewhere: store the text as a new note, unless the note
     /// is back.
     SaveAsNew(String),
-    /// A new note left empty, at `0`: deleted if it is still the file the view created,
-    /// trashed if its text is empty but the file changed, kept if it has text.
+    /// A new note left empty, at `0`: deleted if the file is as the view last wrote it,
+    /// whatever text that had, as the user deleted it since; if another program
+    /// changed it, kept if it has text and trashed otherwise.
     Discard(Timestamp),
 }
 
@@ -592,11 +593,14 @@ impl Known {
             Err(Error::NotFound(_)) => return Ok(()),
             Err(err) => return Err(err),
         };
-        if !note.body().trim().is_empty() {
-            log::info!("keeping the new note {}: it has text on disk", self.id);
+        let untouched = self.fingerprint == Some(note.fingerprint);
+        if !untouched && !note.body().trim().is_empty() {
+            log::info!(
+                "keeping the new note {}: it has text from elsewhere",
+                self.id
+            );
             return Ok(());
         }
-        let untouched = self.fingerprint == Some(note.fingerprint);
         let trashed = store.trash(&note.meta.id, now)?;
         touched.removed(note.meta.id, note.meta.rel_path);
         touched.tell(trashed.id.clone());

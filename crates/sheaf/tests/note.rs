@@ -967,3 +967,26 @@ async fn a_second_new_note_while_the_first_is_created_leaves_nothing_behind(
     assert!(notes.files().is_empty(), "{:?}", notes.files());
     assert_eq!(app.route(), Route::Gallery);
 }
+
+#[gpui::test]
+async fn a_new_note_saved_and_then_emptied_is_not_kept(cx: &mut TestAppContext) {
+    let notes = Notes::empty();
+    let mut app = open_app(&notes, cx);
+    app.cx.simulate_keystrokes("ctrl-n");
+    app.cx.simulate_input("Geheim");
+    app.wait(SAVE_DELAY);
+    assert!(notes.read("Untitled.md").contains("Geheim"));
+
+    app.cx.simulate_keystrokes("ctrl-a backspace");
+    assert_eq!(app.editor_text().trim(), "");
+    app.cx.simulate_keystrokes("escape");
+    assert_eq!(app.route(), Route::Gallery);
+    assert!(notes.files().is_empty(), "{:?}", notes.files());
+    let trash = notes.dir.join(".trash");
+    let kept = std::fs::read_dir(&trash)
+        .into_iter()
+        .flatten()
+        .filter_map(|entry| std::fs::read_to_string(entry.unwrap().path()).ok())
+        .any(|text| text.contains("Geheim"));
+    assert!(!kept, "the deleted text is nowhere");
+}
