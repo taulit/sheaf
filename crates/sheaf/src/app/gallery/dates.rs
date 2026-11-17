@@ -200,7 +200,7 @@ mod tests {
 
     #[test]
     fn groups_sort_in_screen_order() {
-        let mut groups = vec![
+        let mut groups = [
             Group::Month {
                 year: 2026,
                 month: 9,

@@ -448,6 +448,7 @@ impl GalleryView {
         };
         surface(tokens)
             .id("folders-popover")
+            .on_action(cx.listener(|this, _: &input::Escape, _, cx| this.set_popover(None, cx)))
             .w(px(250.))
             .max_h(px(520.))
             .overflow_y_scroll()
