@@ -5,7 +5,7 @@ members = ["crates/sheaf-core", "crates/sheaf-searchd", "crates/sheaf"]
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.91"
+rust-version = "1.95"
 license = "GPL-3.0-or-later"
 repository = "https://github.com/taulit/sheaf"
 homepage = "https://github.com/taulit/sheaf"
@@ -32,6 +32,17 @@ unicode-normalization = "0.1"
 zbus = "6.3"
 zruntime = { version = "0.2.3", default-features = false }
 futures-core = { version = "0.3", default-features = false }
+
+# The editor pins the exact GPUI snapshot; all four move together (its docs/STATUS.md).
+gpui = { package = "gpui-pre", version = "=0.3.12" }
+gpui_platform = { package = "gpui-pre-platform", version = "=0.3.12", features = ["font-kit", "wayland", "x11"] }
+gpui-component = "=0.10.0"
+gpui-kit-assets = "=0.10.0"
+gpui-markdown-editor = { git = "https://github.com/taulit/gpui-markdown-editor", tag = "v0.0.1-api", features = ["serde"] }
+ashpd = { version = "0.14", default-features = false, features = ["async-io", "settings"] }
+anyhow = "1"
+async-channel = "2.5"
+futures-util = { version = "0.3", default-features = false }
 
 assert_cmd = "2.2"
 criterion = "0.8"

@@ -197,7 +197,7 @@ impl Sandbox {
     pub fn document(&self, text: &str, schema: &str) -> String {
         check_document(text, schema);
         let value: Value = serde_json::from_str(&self.normalise(text, false)).unwrap();
-        serde_json::to_string_pretty(&value).unwrap()
+        serde_json::to_string_pretty(&sorted(value)).unwrap()
     }
 
     /// Replaces what differs between runs: ids (numbered by first appearance), times,
@@ -242,6 +242,20 @@ impl Sandbox {
     /// Plain text output, normalised.
     pub fn text(&self, args: &[&str]) -> String {
         self.normalise(&self.ok(args), true)
+    }
+}
+
+/// Keys in sorted order: GPUI enables serde_json's `preserve_order` for the whole build,
+/// and snapshots must not depend on that.
+fn sorted(value: Value) -> Value {
+    match value {
+        Value::Object(map) => {
+            let mut entries: Vec<_> = map.into_iter().collect();
+            entries.sort_by(|a, b| a.0.cmp(&b.0));
+            Value::Object(entries.into_iter().map(|(k, v)| (k, sorted(v))).collect())
+        }
+        Value::Array(items) => Value::Array(items.into_iter().map(sorted).collect()),
+        other => other,
     }
 }
 
