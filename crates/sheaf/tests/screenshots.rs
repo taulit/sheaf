@@ -130,6 +130,7 @@ const SCENES: &[(&str, Folder, Scene)] = &[
     ("note", Folder::Seeded, note),
     ("note-menu", Folder::Seeded, note_menu),
     ("note-conflict", Folder::Seeded, note_conflict),
+    ("note-save-error", Folder::Seeded, note_save_error),
     ("palette", Folder::Seeded, palette),
     ("shortcuts", Folder::Seeded, shortcuts),
 ];
@@ -215,6 +216,34 @@ fn note_conflict(stage: &mut Stage) {
         let id = main.note().expect("the note is open").read(cx).id().clone();
         library.update(cx, |_, cx| cx.emit(LibraryEvent::Changed { ids: vec![id] }));
     });
+}
+
+/// The note after leaving it could not save it: its folder was read-only.
+fn note_save_error(stage: &mut Stage) {
+    use std::os::unix::fs::PermissionsExt as _;
+    note(stage);
+    let library = stage.library.clone();
+    let folder = stage
+        .cx
+        .update(|cx| library.read(cx).notes_dir().join("Arbeit"));
+    let chmod = |mode| {
+        std::fs::set_permissions(&folder, std::fs::Permissions::from_mode(mode))
+            .expect("the folder is ours")
+    };
+    chmod(0o555);
+    stage.update(|main, window, cx| {
+        let editor = main
+            .note()
+            .expect("the note is open")
+            .read(cx)
+            .editor()
+            .clone();
+        editor.update(cx, |editor, cx| {
+            editor.command(Command::InsertText("Neu: ".into()), window, cx);
+        });
+    });
+    stage.update(|main, window, cx| main.back(window, cx));
+    chmod(0o755);
 }
 
 /// The command palette over the gallery.
