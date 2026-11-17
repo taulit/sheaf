@@ -9,6 +9,7 @@ rust-version = "1.95"
 license = "GPL-3.0-or-later"
 repository = "https://github.com/taulit/sheaf"
 homepage = "https://github.com/taulit/sheaf"
+keywords = ["notes", "markdown", "gnome", "gpui", "note-taking"]
 publish = false
 
 [workspace.dependencies]
