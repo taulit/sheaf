@@ -25,6 +25,11 @@
 //! - **Per-note view state** (column widths, folded headings) with
 //!   [`note_state`](Library::note_state) and [`set_note_state`](Library::set_note_state);
 //!   it lives in the folder's `.sheaf/config.toml`, not in the note.
+//! - **Trash and templates**: [`trashed`](Library::trashed),
+//!   [`trashed_note`](Library::trashed_note), [`purge`](Library::purge),
+//!   [`empty_trash`](Library::empty_trash); [`templates`](Library::templates),
+//!   [`create_from_template`](Library::create_from_template) and
+//!   [`templates_dir`](Library::templates_dir).
 //! - **Follow** changes by subscribing to [`LibraryEvent`]. When a change task
 //!   resolves, the lists already show it: with `sheaf-searchd`, the app's own writes
 //!   are read from an overlay until the service indexed them (`overlay`).
@@ -43,6 +48,8 @@
 
 mod overlay;
 mod service;
+mod templates;
+mod trash;
 
 use std::fmt;
 use std::path::{Path, PathBuf};
