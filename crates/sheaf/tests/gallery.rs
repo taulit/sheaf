@@ -558,3 +558,32 @@ async fn only_the_visible_cards_are_built(cx: &mut TestAppContext) {
     let built = app.read(|gallery| gallery.previews_requested());
     assert!(built < 200, "{built} cards were built");
 }
+
+#[gpui::test]
+async fn shift_click_after_the_anchor_was_deleted_does_not_crash(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let mut app = open_app(&notes, cx);
+    let last = app.titles().last().cloned().unwrap();
+    app.click(&last, Modifiers::control());
+    app.keys("delete");
+    assert_eq!(app.titles().len(), 13);
+
+    let first = app.titles()[0].clone();
+    app.click(&first, Modifiers::shift());
+    assert_eq!(app.selected().as_deref(), Some(first.as_str()));
+    assert!(app.selection().contains(&first));
+
+    // The anchor is trashed from elsewhere: Shift+click still works.
+    let titles = app.titles();
+    let gone = titles.last().unwrap().clone();
+    app.click(&gone, Modifiers::control());
+    let id = app.read(|gallery| gallery.notes().last().unwrap().id.clone());
+    let library = app.library.clone();
+    library
+        .update(app.cx, |library, cx| library.trash(&id, cx))
+        .detach();
+    app.settle();
+    let third = app.titles()[2].clone();
+    app.click(&third, Modifiers::shift());
+    assert_eq!(app.selected().as_deref(), Some(third.as_str()));
+}

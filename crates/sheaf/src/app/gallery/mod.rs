@@ -177,9 +177,10 @@ pub struct GalleryView {
     list_width: Option<gpui::Pixels>,
     list_state: ListState,
     scroll_to_top: bool,
-    /// The cursor of the keyboard and the end a Shift+click extends from.
+    /// The cursor of the keyboard.
     selected: Option<usize>,
-    anchor: Option<usize>,
+    /// The note a Shift+click extends from: by id, as its index changes with a reload.
+    anchor: Option<NoteId>,
     /// Notes picked with Ctrl or Shift; when empty, the selection is the cursor.
     marked: BTreeSet<NoteId>,
     previews: HashMap<NoteId, CachedPreview>,
@@ -608,6 +609,10 @@ impl GalleryView {
             sections,
             marks,
         } = listing;
+        self.anchor = self
+            .anchor
+            .take()
+            .filter(|id| notes.iter().any(|note| &note.id == id));
         self.selected = cursor
             .and_then(|id| notes.iter().position(|note| note.id == id))
             .or(self.selected.filter(|_| !notes.is_empty()))
@@ -872,9 +877,15 @@ impl GalleryView {
                 self.marked.insert(id);
             }
             self.selected = Some(index);
-            self.anchor = Some(index);
+            self.anchor = Some(self.notes[index].id.clone());
         } else if modifiers.shift {
-            let anchor = self.anchor.or(self.selected).unwrap_or(index);
+            let anchor = self
+                .anchor
+                .as_ref()
+                .and_then(|id| self.position(id))
+                .or(self.selected)
+                .filter(|anchor| *anchor < self.notes.len())
+                .unwrap_or(index);
             let range = anchor.min(index)..=anchor.max(index);
             self.marked = self.notes[range]
                 .iter()
@@ -887,9 +898,23 @@ impl GalleryView {
         cx.notify();
     }
 
+    /// A click on the card of `id`, which may have moved since the card was drawn.
+    fn click_note(&mut self, id: &NoteId, modifiers: Modifiers, cx: &mut Context<Self>) {
+        if let Some(index) = self.position(id) {
+            self.click(index, modifiers, cx);
+        }
+    }
+
+    fn position(&self, id: &NoteId) -> Option<usize> {
+        self.notes.iter().position(|note| &note.id == id)
+    }
+
     fn select_only(&mut self, index: usize, cx: &mut Context<Self>) {
+        let Some(note) = self.notes.get(index) else {
+            return;
+        };
+        self.anchor = Some(note.id.clone());
         self.selected = Some(index);
-        self.anchor = Some(index);
         self.marked.clear();
         cx.notify();
     }

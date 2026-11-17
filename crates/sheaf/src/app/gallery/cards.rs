@@ -15,9 +15,9 @@ use gpui::{
 };
 use gpui_component::menu::{ContextMenuExt as _, PopupMenu, PopupMenuItem};
 use jiff::ZonedDateTime;
-use sheaf_core::NoteMeta;
 use sheaf_core::config::{Sort as SortOrder, View};
 use sheaf_core::i18n::tr;
+use sheaf_core::{NoteId, NoteMeta};
 
 use super::dates::{DateLabel, Group};
 use super::layout::Row;
@@ -183,12 +183,16 @@ impl GalleryView {
             .flex_1()
             .min_w_0()
             .cursor_pointer()
-            .on_click(cx.listener(move |this, event: &ClickEvent, _, cx| {
-                this.click(index, event.modifiers(), cx);
+            .on_click(cx.listener({
+                let id = note.id.clone();
+                move |this, event: &ClickEvent, _, cx| this.click_note(&id, event.modifiers(), cx)
             }))
             .on_mouse_down(
                 MouseButton::Right,
-                cx.listener(move |this, _, _, cx| this.select_for_menu(index, cx)),
+                cx.listener({
+                    let id = note.id.clone();
+                    move |this, _, _, cx| this.select_for_menu(&id, cx)
+                }),
             )
             .on_hover(cx.listener({
                 let id = note.id.clone();
@@ -313,12 +317,16 @@ impl GalleryView {
                         .bg(tokens.hair),
                 )
             })
-            .on_click(cx.listener(move |this, event: &ClickEvent, _, cx| {
-                this.click(index, event.modifiers(), cx);
+            .on_click(cx.listener({
+                let id = note.id.clone();
+                move |this, event: &ClickEvent, _, cx| this.click_note(&id, event.modifiers(), cx)
             }))
             .on_mouse_down(
                 MouseButton::Right,
-                cx.listener(move |this, _, _, cx| this.select_for_menu(index, cx)),
+                cx.listener({
+                    let id = note.id.clone();
+                    move |this, _, _, cx| this.select_for_menu(&id, cx)
+                }),
             )
             .child(
                 div()
@@ -394,8 +402,10 @@ impl GalleryView {
     }
 
     /// A right click on a note outside the selection makes it the selection.
-    fn select_for_menu(&mut self, index: usize, cx: &mut Context<Self>) {
-        if !self.is_selected(index) {
+    fn select_for_menu(&mut self, id: &NoteId, cx: &mut Context<Self>) {
+        if let Some(index) = self.position(id)
+            && !self.is_selected(index)
+        {
             self.select_only(index, cx);
         }
     }
