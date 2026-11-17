@@ -124,6 +124,9 @@ pub fn style(cx: &App) -> EditorStyle {
     style.checkbox_border_color = tokens.faint;
     style.checkbox_checked_color = tokens.accent;
     style.checkbox_check_color = tokens.on_accent;
+    style.table_text_size = tokens.text(14.5);
+    // The prototype's cells have the browser's "normal" line height.
+    style.table_line_height = 1.2;
     style.table_border_color = tokens.hair;
     style.table_header_background = tokens.hover;
     style.link_color = tokens.accent;
