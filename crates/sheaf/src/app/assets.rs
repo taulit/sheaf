@@ -1,5 +1,5 @@
-//! The files compiled into the binary: symbolic icons and the app icon. Their origin
-//! and licence are recorded in `crates/sheaf/assets/README.md`.
+//! The files compiled into the binary: symbolic icons, the app icon and the static
+//! Inter fonts. Their origin and licence are recorded in `crates/sheaf/assets/README.md`.
 
 use std::borrow::Cow;
 
@@ -61,6 +61,8 @@ icons! {
     Share => "send-to",
     Sidebar => "sidebar-show",
     SmartFolder => "folder-saved-search",
+    Sort => "view-sort-descending",
+    Text => "text-x-generic",
     Trash => "user-trash",
     Undo => "edit-undo",
 }
@@ -81,6 +83,19 @@ const APP_ICONS: &[(&str, &[u8])] = &[
             "../../../../data/icons/hicolor/symbolic/apps/io.github.taulit.Sheaf-symbolic.svg"
         ),
     ),
+];
+
+/// The family of [`FONTS`].
+pub const FONT_FAMILY: &str = "Inter";
+
+/// Inter in the weights the views use (400, 500, 600, 700, 800), for
+/// `TextSystem::add_fonts`; see `theme.rs` for when.
+pub const FONTS: &[&[u8]] = &[
+    include_bytes!("../../assets/fonts/Inter-Regular.ttf"),
+    include_bytes!("../../assets/fonts/Inter-Medium.ttf"),
+    include_bytes!("../../assets/fonts/Inter-SemiBold.ttf"),
+    include_bytes!("../../assets/fonts/Inter-Bold.ttf"),
+    include_bytes!("../../assets/fonts/Inter-ExtraBold.ttf"),
 ];
 
 /// `name` at the size icons have in the 34 px buttons of the header bar, in `color`.

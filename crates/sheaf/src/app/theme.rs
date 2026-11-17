@@ -13,8 +13,15 @@
 
 use std::time::Duration;
 
-use gpui::{Animation, App, Global, Hsla, Pixels, Rgba, SharedString, black, px, white};
+use std::borrow::Cow;
+
+use gpui::{
+    Animation, App, Font, FontWeight, Global, Hsla, Pixels, Rgba, SharedString, black, font, px,
+    white,
+};
 use gpui_component::{Theme, ThemeMode};
+
+use super::assets;
 
 /// Sizes and radii in logical pixels, from "Sheaf: Maße".
 pub mod size {
@@ -105,8 +112,9 @@ const DEFAULT_ACCENT: u32 = 0x3584e4;
 const DEFAULT_FONT: &str = "Adwaita Sans";
 /// The size of GNOME's default interface font, which the sizes of 04 are drawn for.
 const DEFAULT_FONT_POINTS: f32 = 11.0;
-/// Tried in this order when the font of the desktop is not installed.
-const FALLBACK_FONTS: [&str; 3] = [DEFAULT_FONT, "Inter", "Cantarell"];
+/// Tried in this order when the font of the desktop cannot be used. The embedded
+/// Inter always can.
+const FALLBACK_FONTS: [&str; 2] = [DEFAULT_FONT, assets::FONT_FAMILY];
 
 /// What the desktop asks for. The default is the fallback without a settings portal.
 #[derive(Clone, Debug, PartialEq)]
@@ -346,7 +354,43 @@ impl ActiveTokens for App {
 /// Installs the fallback appearance with `overrides`. Call it once, after
 /// `gpui_component::init`, before the first view is created.
 pub fn init(overrides: Overrides, cx: &mut App) {
+    register_fonts(cx);
     install(Appearance::default(), overrides, cx);
+}
+
+/// Adds the embedded Inter to the text system unless an Inter with a bold face of its
+/// own is there already (an earlier app on the same text system, or static Inter
+/// installed on the system).
+fn register_fonts(cx: &App) {
+    if has_bold_face(assets::FONT_FAMILY, cx) {
+        return;
+    }
+    let fonts = assets::FONTS
+        .iter()
+        .map(|bytes| Cow::Borrowed(*bytes))
+        .collect();
+    if let Err(err) = cx.text_system().add_fonts(fonts) {
+        log::warn!("cannot load the embedded fonts: {err:#}");
+    }
+}
+
+/// Whether `family` is installed with a face for bold that is not its regular face.
+/// A variable font is one face, and GPUI 0.3.12 draws every weight of it as regular.
+fn has_bold_face(family: &str, cx: &App) -> bool {
+    let text_system = cx.text_system();
+    if !text_system
+        .all_font_names()
+        .iter()
+        .any(|name| name == family)
+    {
+        return false;
+    }
+    let regular = font(family.to_owned());
+    let bold = Font {
+        weight: FontWeight::BOLD,
+        ..regular.clone()
+    };
+    text_system.resolve_font(&regular) != text_system.resolve_font(&bold)
 }
 
 /// The appearance last set, without the overrides.
@@ -376,13 +420,12 @@ fn install(appearance: Appearance, overrides: Overrides, cx: &mut App) {
     apply_to_component_theme(&tokens, cx);
 }
 
-/// `family` if it is installed, else the first installed fallback. `None` leaves the
-/// choice to gpui-component, which then uses the system font.
+/// `family` if it is installed with a real bold face, else the first fallback that is.
+/// `None` leaves the choice to gpui-component, which then uses the system font.
 fn installed_font(family: &SharedString, cx: &App) -> Option<SharedString> {
-    let installed = cx.text_system().all_font_names();
     std::iter::once(family.as_ref())
         .chain(FALLBACK_FONTS)
-        .find(|candidate| installed.iter().any(|name| name == candidate))
+        .find(|candidate| has_bold_face(candidate, cx))
         .map(|family| SharedString::from(family.to_owned()))
 }
 

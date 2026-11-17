@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use fixture::{Look, Notes};
 use gpui::{
-    Background, Entity, Hsla, TestAppContext, VisualTestContext, WindowHandle, point, px, size,
+    Background, Entity, Hsla, ListOffset, TestAppContext, VisualTestContext, WindowHandle, px, size,
 };
 use gpui_component::{Root, Theme, WindowExt as _};
 use sheaf::app::actions::{self, CloseWindow};
@@ -211,7 +211,9 @@ async fn library_indexes_the_folder_in_memory_without_a_service(cx: &mut TestApp
         .read_with(cx, |library, cx| library.body(shakshuka, cx))
         .await
         .unwrap();
-    assert!(body.unwrap().starts_with("Shakshuka\n\nFür 2 Personen"));
+    let body = body.unwrap();
+    assert!(body.starts_with("Shakshuka\n\n![Shakshuka]"));
+    assert!(body.contains("\n\nFür 2 Personen"));
 }
 
 #[gpui::test]
@@ -381,11 +383,15 @@ async fn opening_a_note_and_going_back_keeps_the_gallery_as_it_was(cx: &mut Test
     assert_eq!(app.route(), Route::Gallery);
     assert_eq!(app.titles().len(), 14);
 
-    app.cx.simulate_keystrokes("down down down");
+    // In the grid, down goes from the pinned row to the row of yesterday.
+    app.cx.simulate_keystrokes("down down");
     assert_eq!(app.selected().as_deref(), Some("Notch-Ideen"));
-    let scrolled = point(px(0.), px(-150.));
+    let scrolled = ListOffset {
+        item_ix: 3,
+        offset_in_item: px(20.),
+    };
     app.main.read_with(app.cx, |main, cx| {
-        main.gallery().read(cx).scroll_handle().set_offset(scrolled);
+        main.gallery().read(cx).list_state().scroll_to(scrolled);
     });
     let gallery = app
         .main
@@ -414,7 +420,8 @@ async fn opening_a_note_and_going_back_keeps_the_gallery_as_it_was(cx: &mut Test
             gallery,
             "the same view, not a new one"
         );
-        assert_eq!(main.gallery().read(cx).scroll_handle().offset(), scrolled);
+        let gallery = main.gallery().read(cx);
+        assert_eq!(gallery.list_state().logical_scroll_top(), scrolled);
     });
     assert_eq!(app.selected().as_deref(), Some("Notch-Ideen"));
 
@@ -485,7 +492,7 @@ async fn keys_of_the_gallery_pin_trash_and_focus_the_search(cx: &mut TestAppCont
     let notes = Notes::seeded();
     let mut app = open_app(&notes, None, cx);
 
-    app.cx.simulate_keystrokes("down down down ctrl-p");
+    app.cx.simulate_keystrokes("down down ctrl-p");
     let pinned: Vec<String> = app
         .listed()
         .into_iter()
@@ -519,7 +526,7 @@ async fn keys_of_the_gallery_pin_trash_and_focus_the_search(cx: &mut TestAppCont
 async fn the_pin_button_of_a_note_goes_through_its_worker(cx: &mut TestAppContext) {
     let notes = Notes::seeded();
     let app = open_app(&notes, None, cx);
-    app.cx.simulate_keystrokes("down down down enter");
+    app.cx.simulate_keystrokes("down down enter");
     app.cx.simulate_input("Vorab: ");
     app.cx.simulate_keystrokes("ctrl-p");
     assert!(notes.read("Arbeit/Notch-Ideen.md").contains("pinned: true"));

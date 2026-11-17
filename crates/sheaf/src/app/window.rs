@@ -92,7 +92,7 @@ impl MainWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let gallery = cx.new(|cx| GalleryView::new(library.clone(), cx));
+        let gallery = cx.new(|cx| GalleryView::new(library.clone(), window, cx));
         let gallery_event =
             cx.subscribe_in(&gallery, window, |this, _, event, window, cx| match event {
                 GalleryEvent::Open { id, query } => {
@@ -196,11 +196,15 @@ impl MainWindow {
         self.leaving = None;
     }
 
-    /// Creates an empty note and opens it.
+    /// Creates an empty note in the folder the gallery shows and opens it.
     pub fn new_note(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let created = self.library.update(cx, |library, cx| {
-            library.create("", CreateOptions::default(), cx)
-        });
+        let options = CreateOptions {
+            folder: self.gallery.read(cx).current_folder(),
+            ..CreateOptions::default()
+        };
+        let created = self
+            .library
+            .update(cx, |library, cx| library.create("", options, cx));
         self._opening = cx.spawn_in(window, async move |this, cx| match created.await {
             Ok(meta) => {
                 let _ = this.update_in(cx, |this, window, cx| {
