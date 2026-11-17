@@ -655,7 +655,7 @@ impl GalleryView {
         let offset = anchor
             .and_then(|(top, id, at_header)| {
                 let note = self.notes.iter().position(|note| note.id == id)?;
-                let row = self.layout.row_of(note)? - usize::from(at_header);
+                let row = self.layout.anchor_row(note, at_header)?;
                 Some(if row == top.item_ix {
                     top
                 } else {

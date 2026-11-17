@@ -103,6 +103,16 @@ impl Layout {
         self.row_of.get(note).copied()
     }
 
+    /// The row to scroll to for `note` at the top: its row, or the heading above it
+    /// if the heading was in view (`with_heading`) and this layout has one there.
+    pub fn anchor_row(&self, note: usize, with_heading: bool) -> Option<usize> {
+        let row = self.row_of(note)?;
+        let heading = row
+            .checked_sub(1)
+            .filter(|above| with_heading && matches!(self.rows[*above], Row::Header(_)));
+        Some(heading.unwrap_or(row))
+    }
+
     /// The note in the next row of notes below (`down`) or above, in the same column
     /// or the last one of a shorter row; `None` at the edge.
     pub fn vertical(&self, note: usize, down: bool) -> Option<usize> {
@@ -263,5 +273,38 @@ mod tests {
             results.rows(),
             [Row::Notes(0..1), Row::Notes(1..2), Row::Notes(2..3)]
         );
+    }
+
+    #[test]
+    fn the_anchor_row_takes_the_heading_only_where_there_is_one() {
+        let grouped = Layout::new(
+            &[
+                Section {
+                    group: Some(Group::Pinned),
+                    len: 1,
+                },
+                Section {
+                    group: Some(Group::Today),
+                    len: 2,
+                },
+            ],
+            1,
+        );
+        assert_eq!(grouped.anchor_row(0, true), Some(0));
+        assert_eq!(grouped.anchor_row(1, true), Some(2));
+        assert_eq!(grouped.anchor_row(2, true), Some(4));
+        assert_eq!(grouped.anchor_row(1, false), Some(3));
+
+        // The old layout had a heading at the top, search results have none.
+        let results = Layout::new(
+            &[Section {
+                group: None,
+                len: 3,
+            }],
+            1,
+        );
+        assert_eq!(results.anchor_row(0, true), Some(0));
+        assert_eq!(results.anchor_row(2, true), Some(2));
+        assert_eq!(results.anchor_row(3, true), None);
     }
 }
