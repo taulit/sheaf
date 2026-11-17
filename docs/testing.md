@@ -100,3 +100,106 @@ its zip), a real `sheaf-searchd` on a temporary notes folder, and a stand-in for
    Visor and a Visor without module API.
 
 Screenshots of the dock view go to `docs/screenshots/visor-notes-{dark,light}.png`.
+
+## Budgets
+
+```sh
+scripts/budgets.sh [RUNS]     # RUNS starts of the app, default 9
+```
+
+Builds the release binaries with `--locked` (`sheaf`, `sheaf-searchd`, the `search_budget` example and
+`sheaf-budgets`, the measuring binary behind the `budgets` feature of `crates/sheaf`), generates notes with
+`sheaf_core::testgen` (German and English, checklists, tables, tags; 15 % of the notes start with a
+1600×1067 JPEG cover, hard links to eight generated photos), prints one table and exits non-zero when a
+budget fails. A run takes about 4 minutes, most of it the two release builds.
+
+Nothing of yours is touched: every measurement runs under `env -i` with its own `HOME` and XDG directories
+in a temporary folder, the notes in `SHEAF_NOTES_DIR`, and a D-Bus session of its own whose only service
+file is `sheaf-searchd`'s, so no portal or other desktop service starts. `LANG` is `en_US.UTF-8`.
+
+| Budget (05 §1) | How it is measured | What the number leaves out |
+|---|---|---|
+| Cold start until the gallery is visible, 1,000 notes, < 250 ms | The real `sheaf` binary, started without a display and with `SHEAF_STARTUP_TRACE` (below). The index is built first by `sheaf-searchd --reindex`, as after a login; the app reads it and D-Bus-activates the service. Time from the spawn to the first painted frame in which every card shows its miniature; the first frame with cards is reported too. The budget is checked against the median of the runs after the first, with the binary, notes and index in the page cache (dropping the cache needs root). The first run, with a fresh XDG home, is reported apart. | The Wayland connection, the GPU device and surface, shader compilation and presenting: the headless platform has none. Its frame clock draws every 16.7 ms, so up to one frame of latency is in the number, as with a compositor. Covers still decoding do not delay the miniatures frame. |
+| Memory with 1,000 notes, gallery open, < 120 MB RSS | `VmRSS` from `/proc/<pid>/status` and `Pss` from `smaps_rollup`, 2 s after the miniatures frame of each start; median. | GPU memory, mapped driver libraries and the compositor's buffers: the headless platform has no GPU surfaces, so the number on a desktop is higher. |
+| Search p95, 10,000 notes, < 30 ms | `cargo run --release -p sheaf-core --features testgen --example search_budget`: an index of 10,000 notes on disk, the query mix of `testgen::QUERIES` (words, prefixes, typos, umlauts, phrases, filters), 25 rounds, 50 hits with snippets each. Also a CI job. | The D-Bus round trip of the shell or Visor. |
+| Gallery scrolling, 60 fps | `sheaf-budgets scroll`: the gallery of 10,000 notes in a 1140×760 window at scale 1 on the headless platform, in process. 240 frames at 30 px, 240 at 150 px and 120 at 600 px a frame (reading, scrolling on, a fling), each a scroll event through the window and a full draw (layout, prepaint, paint into the scene); after each frame the rest of 16.7 ms passes, so miniatures and covers arrive from the background as they would. CPU time per frame, p50, p95 and max; the budget is p95 < 16.7 ms. | This is CPU frame time on the UI thread, not frames on screen: no GPU rendering, no upload of cover textures, no compositor. A real fps figure needs a display (manual checklist below). |
+| `sheaf-searchd` idle memory, < 15 MB | `sheaf-budgets searchd`: the service on 1,000 and on 10,000 notes, `Sync()`, the query mix of `testgen::QUERIES` over D-Bus, then 10 s without a request (the service lets go of the index after 5 s); `VmRSS`, its anonymous part, and `Pss`. | Its short-lived `--index` child processes, which only live while they write. |
+
+### The startup trace
+
+`SHEAF_STARTUP_TRACE=<file>` makes the app append `<event> <µs since the Unix epoch>` for `run`
+(`app::run` begins), `window` (the main window is open), `cards` (the first painted frame with cards,
+followed by a line `card <path>` per note it shows) and `miniatures` (the first frame in which every card
+drawn has its miniature), each once. Without `WAYLAND_DISPLAY` and `DISPLAY` the app then runs on the
+headless platform and draws its windows at 60 Hz itself. Unset, it costs one look at a static per step.
+`tests/trace.rs` checks it, `scripts/e2e.sh` uses it to see what the gallery shows.
+
+### Not in CI
+
+Only the search budget runs in CI (`search-budget` job): it needs no GPUI build and its margin is large. The
+start, memory and scrolling budgets need a release build of GPUI and the editor (several minutes), and
+CI cannot fetch the private editor repository at all at the moment (`docs/STATUS.md`). Frame and start
+times on a shared runner also vary by more than the margins. They stay a local script; run it before a
+release on a quiet machine.
+
+## End-to-end scenarios
+
+```sh
+scripts/e2e.sh [--visor DIR]
+```
+
+Builds the workspace (debug), runs the scenarios of 05 §3 that involve Sheaf and can run without a visible
+desktop, and prints pass or fail for each. Needs what the Visor module check needs (above), plus `sed`.
+
+| 05 §3 | Coverage | By what |
+|---|---|---|
+| 5 Notiz anlegen | automated | `scripts/e2e.sh`: in the sandboxed headless shell with Visor (`api-v1`), the module and the real `sheaf-searchd`, `notiz Milch kaufen` in Visor's search; the notch confirms "Saved to Quick Notes"; the file is `Quick Notes/Milch kaufen.md`; the real app, started without a display, shows it in its first gallery frame (startup trace); the overview search finds "Milch kaufen" under the provider "Notes". |
+| 6 Externe Änderung | automated, without a window on screen | `crates/sheaf/tests/e2e.rs` (run by the script): private bus, the real `sheaf-searchd` watching the folder, the app's Library in service mode, the note open on the real headless platform. `sed` checks an item: the note reloads, no banner. After typing, `sed` again: the banner "changed on disk" shows and the typed text stays. The in-process tests of `tests/note.rs` cover the banner's buttons (reload, keep mine). |
+| 1–4, 7, 8 | not Sheaf's | Visor alone (notifications, timer, agent, calculator, module catalogue, switching off); tested in the Visor repository. |
+
+What only a person at a real desktop can check, in a GNOME 50 session with Sheaf, `sheaf-searchd`, Visor
+and the module installed:
+
+1. **Notiz anlegen.** Open Visor's search, type `notiz Milch kaufen`, press Enter.
+   Expected: the notch shows "In Schnellnotizen gespeichert" for about three seconds.
+2. Start Notes from the app grid. Expected: the window appears within a quarter of a second; the gallery
+   shows "Milch kaufen" under "Heute"; the chip "Schnellnotizen" lists it.
+3. Press Super, type `Milch`. Expected: a group "Notizen" with "Milch kaufen"; Enter opens it in the app
+   and the window comes to the front (activation token).
+4. **Externe Änderung.** Create a note `Einkauf` with `- [ ] Milch` and `- [ ] Brot`, leave it open, run
+   `sed -i 's/- \[ \] Milch/- [x] Milch/' ~/Dokumente/Notizen/Einkauf.md`. Expected: within a second the
+   circle of "Milch" is filled, no banner, the caret stays in the note.
+5. Type a word, then at once run `sed -i 's/Brot/Brötchen/'` on the file. Expected: the banner
+   "Datei wurde extern geändert" with "Neu laden" and "Meine behalten"; "Neu laden" shows
+   "Brötchen" without the word; "Meine behalten" keeps the word and writes a conflict copy next to it.
+6. **Scrolling.** With 10,000 notes (`cargo run --release -p sheaf --features budgets --bin sheaf-budgets
+   -- generate ~/Notizen-Test 10000 15`, then `sheaf --dir ~/Notizen-Test`), fling through the gallery
+   with the touchpad. Expected: no visible stutter on a 60 Hz display; covers fade in without moving the
+   cards. `GPUI` frame statistics or a screen recording at 60 fps show whether frames drop.
+7. **Portals.** Export a note as PDF (the file chooser opens), print it (the print dialog opens), set the
+   global Quick Note shortcut in Settings (the GNOME shortcut dialog opens). Expected: each dialog belongs
+   to the Notes window and the result arrives (a PDF, a print job, a working shortcut).
+
+## Coverage of plan 05 §2 "Sheaf"
+
+| 05 §2 | Tests |
+|---|---|
+| `sheaf-core`: saving, renaming, collisions | `sheaf-core/tests/storage_store.rs` (names, ` 2` suffixes, long names, the file following the title) |
+| Frontmatter minimal | `sheaf-core/src/frontmatter.rs`, `storage_store.rs` (byte-identical after a read/write cycle) |
+| Trash with expiry | `sheaf-core/tests/storage_trash.rs` (30 days exactly, purge, attachments), `sheaf-searchd` empties it on start |
+| External changes and conflicts | `storage_watch.rs`, sync conflict copies, `sheaf/tests/note.rs`, `tests/e2e.rs` |
+| Index and search language: typos, umlauts, prefixes, filters, phrases, weighting | `sheaf-core/tests/search_query.rs`, `search_index.rs`, `src/search.rs`, `src/analysis.rs` |
+| Benchmark with 10,000 generated notes | `sheaf-core/benches/search.rs`, `examples/search_budget.rs`, `scripts/budgets.sh` |
+| D-Bus: all methods of both interfaces under a private bus | `sheaf-searchd/tests/service.rs` (`Search`, `Recent`, `Create`, `Append`, `Open`, `QuickNote`, `Sync`, `Reindex`, `NotesDir`, `Changed`; the five methods of `SearchProvider2`), the idle release of the index |
+| UI with `TestAppContext`: gallery filters, navigation, Quick Note, saving on leave | `sheaf/tests/gallery.rs`, `app.rs`, `note.rs`, `quick.rs`, `shutdown.rs` (real headless platform) |
+| Screenshots of the app, light and dark | `sheaf/tests/screenshots.rs` (`scripts/screenshot.sh`) |
+| Visor module: the shell scenarios | `scripts/visor-module-check.sh`, `scripts/e2e.sh` |
+
+Left open:
+
+- The app's screenshots are rendered offscreen by `TestAppContext`, not in the headless shell as 05 §2 has
+  it: a GPUI window in the headless shell needs a GPU path the sandbox does not promise.
+- The Visor module check talks to a stand-in for the app (`fake-sheaf-app.js`), not the debug build of the
+  app; only scenario 5 runs the real app, without a display.
+- The card's context menu is not opened by any test (its actions are called directly): GPUI's test context
+  has no way to find the card's bounds without debug selectors.
