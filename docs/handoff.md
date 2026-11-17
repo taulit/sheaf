@@ -15,21 +15,30 @@ Written 2026-11-17 for whoever continues without the session's context. Read
 
 ## Running
 
-Nothing. S2 is merged (#4). S3 is in review as a PR against `main` (see `gh pr list`).
-Its three review rounds left no blocking or major finding; what is still open is in
-`docs/STATUS.md` under "Open".
+S2 is merged (#4). S3 is in review: https://github.com/taulit/sheaf/pull/5 (against
+`main`, mergeable; its checks are red because CI cannot fetch the editor, see below).
+S4 runs on `phase/s4-release` (branched from `phase/s3-features`) with two child agents:
+
+- WP-A (this checkout, commits and pushes per step): `scripts/budgets.sh` for the budgets
+  of plan 05 §1 (cold start < 250 ms and < 120 MB RSS with 1,000 notes, search p95
+  < 30 ms with 10,000, gallery frame time), fixes to meet them, `scripts/e2e.sh` for the
+  end-to-end scenarios of 05 §3, test gaps of 05 §2.
+- WP-B (own worktree, pushes its `t3/*` branch): metainfo, `build-aux/install.sh`,
+  Flatpak manifest, AUR PKGBUILDs, release workflow, `CHANGELOG.md`, README,
+  `docs/release-checklist.md`.
 
 ## Next
 
-1. S4 on `phase/s4-release`, branching from `phase/s3-features` (or from `main` once the
-   S3 PR is merged; `main` gets squash merges, so sync a branch that was built on the
-   unsquashed commits with `git merge -s ours origin/main` only after checking that the
-   trees match, as done for S3): budgets (start time, memory, search), translations
-   check, a final review, Flatpak manifest, AUR `PKGBUILD`, metainfo, README, release
-   notes. `flatpak-builder` and `git-cliff` are not installed on this machine.
-2. Check for newer editor tags (`gh api repos/taulit/gpui-markdown-editor/git/refs/tags`)
-   and bump from `v0.0.3`; the editor still lacks format bar, slash menu, completions,
-   image loading, `MetaChanged` and the APIs listed in `docs/STATUS.md`.
+1. Merge WP-B into `phase/s4-release`, run the gate (fmt, clippy, tests, deny, Visor
+   tests, `scripts/budgets.sh`, `scripts/e2e.sh`, screenshots).
+2. Reviews, once each, fresh agents (plan 05 §4): `bug-review` over
+   `git diff phase/s3-features...phase/s4-release`, plus `simplicity-review` and
+   `spec-review` over the whole app against `docs/design/plan/03-sheaf.md`; fix together.
+3. S4 PR against `main` (after #5 is merged; `main` gets squash merges, so first sync
+   with `git merge -s ours origin/main` after checking that the trees match).
+4. Known release blockers: Flathub and CI cannot fetch the private
+   `taulit/gpui-markdown-editor`; `flatpak-builder` and `git-cliff` are not installed
+   here; newer editor tags may exist (`gh api repos/taulit/gpui-markdown-editor/git/refs/tags`).
 
 ## Waiting for the user
 
