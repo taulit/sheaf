@@ -105,6 +105,9 @@ impl Global for Recovery {}
 
 /// The marker: notes were kept since the last start.
 const UNSEEN: &str = ".unseen";
+/// How long the title part of a recovery file name may be, in bytes: file names end
+/// at 255 bytes, and the time and a number follow.
+const STEM_BYTES: usize = 200;
 
 impl Recovery {
     pub fn at(dir: impl Into<PathBuf>) -> Self {
@@ -120,26 +123,28 @@ impl Recovery {
         &self.0
     }
 
-    /// Writes `text` to `<title>-<time>.md` and returns where.
+    /// Writes `text` to `<title>-<time>.md` and returns where; if the file system
+    /// takes no such name, to `<time>.md`.
     pub fn keep(&self, title: &str, text: &str) -> io::Result<PathBuf> {
         fs::create_dir_all(&self.0)?;
-        let stem: String = title
-            .chars()
-            .map(|c| if c == '/' || c.is_control() { '-' } else { c })
-            .take(60)
-            .collect();
-        let stem = match stem.trim().trim_start_matches('.') {
-            "" => "Untitled",
-            stem => stem,
-        };
         let time = jiff::Timestamp::now()
             .to_zoned_datetime(jiff::tz::TimeZone::system())
-            .strftime("%Y-%m-%d-%H%M%S");
+            .strftime("%Y-%m-%d-%H%M%S")
+            .to_string();
+        let titled = format!("{}-{time}", stem(title));
+        self.write_new(&titled, text).or_else(|err| {
+            log::warn!("cannot keep a note as {titled}.md: {err}");
+            self.write_new(&time, text)
+        })
+    }
+
+    /// Writes `text` to `<name>.md`, or `<name>-<number>.md` if that exists.
+    fn write_new(&self, name: &str, text: &str) -> io::Result<PathBuf> {
         let mut number = 1;
         loop {
             let name = match number {
-                1 => format!("{stem}-{time}.md"),
-                _ => format!("{stem}-{time}-{number}.md"),
+                1 => format!("{name}.md"),
+                _ => format!("{name}-{number}.md"),
             };
             let path = self.0.join(name);
             match File::create_new(&path) {
@@ -158,6 +163,23 @@ impl Recovery {
     /// Whether notes were kept since this was last asked; forgets it.
     pub fn take_unseen(&self) -> bool {
         fs::remove_file(self.0.join(UNSEEN)).is_ok()
+    }
+}
+
+/// The title as the start of a file name: no `/`, no control characters, no leading
+/// dot, at most [`STEM_BYTES`] long.
+fn stem(title: &str) -> String {
+    let mut stem = String::new();
+    for c in title.chars() {
+        let c = if c == '/' || c.is_control() { '-' } else { c };
+        if stem.len() + c.len_utf8() > STEM_BYTES {
+            break;
+        }
+        stem.push(c);
+    }
+    match stem.trim().trim_start_matches('.') {
+        "" => "Untitled".to_owned(),
+        stem => stem.to_owned(),
     }
 }
 
@@ -211,6 +233,26 @@ mod tests {
         );
         assert!(recovery.take_unseen());
         assert!(!recovery.take_unseen());
+    }
+
+    #[test]
+    fn a_long_title_of_wide_characters_still_names_a_file() {
+        let dir = tempfile::tempdir().expect("a temporary directory");
+        let recovery = Recovery::at(dir.path().join("recovered"));
+        let title = "🦀".repeat(70);
+        let kept = recovery.keep(&title, "Text\n").expect("kept");
+        let name = kept
+            .file_name()
+            .and_then(|name| name.to_str())
+            .expect("a name");
+        assert!(name.len() <= 255, "{} bytes", name.len());
+        assert!(name.starts_with("🦀🦀"));
+        assert_eq!(stem(&title).len(), STEM_BYTES);
+        assert_eq!(
+            stem(&"é".repeat(150)).len(),
+            STEM_BYTES,
+            "cut on a character"
+        );
     }
 
     #[test]
