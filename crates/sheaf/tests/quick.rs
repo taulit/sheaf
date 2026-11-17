@@ -242,3 +242,45 @@ async fn the_folder_menu_moves_the_note(cx: &mut TestAppContext) {
     window.end(Ending::Done);
     assert!(notes.files().contains(&"Privat/Nach Privat.md".to_owned()));
 }
+
+#[gpui::test]
+async fn an_unusable_quick_notes_folder_puts_the_note_at_the_top(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    notes.write(".sheaf/config.toml", "[quick_note]\nfolder = \"../x\"\n");
+    let quick = start(&notes, cx);
+    let mut window = quick.open(cx);
+    window.cx.simulate_input("Gerettet");
+    window.end(Ending::Done);
+    assert!(!window.is_open());
+    let saved: Vec<String> = notes
+        .files()
+        .into_iter()
+        .filter(|path| !path.contains('/') && notes.read(path).contains("Gerettet"))
+        .collect();
+    assert_eq!(saved.len(), 1, "{:?}", notes.files());
+}
+
+#[cfg(unix)]
+#[gpui::test]
+async fn a_quick_note_window_without_a_note_still_closes(cx: &mut TestAppContext) {
+    use std::os::unix::fs::PermissionsExt as _;
+    let notes = Notes::seeded();
+    let quick = start(&notes, cx);
+    let read_only = std::fs::Permissions::from_mode(0o555);
+    std::fs::set_permissions(&notes.dir, read_only).unwrap();
+
+    let mut window = quick.open(cx);
+    let created = window
+        .view
+        .read_with(window.cx, |view, _| view.note().is_some());
+    let closes = window
+        .cx
+        .update(|_, cx| window.view.update(cx, |view, cx| view.should_close(cx)));
+    std::fs::set_permissions(&notes.dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+    assert!(!created, "the folder is read-only");
+    assert!(closes, "the window closes without a note");
+
+    let mut again = quick.open(cx);
+    again.end(Ending::Done);
+    assert!(!again.is_open());
+}

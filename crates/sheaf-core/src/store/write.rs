@@ -412,7 +412,7 @@ pub(crate) fn stamped(note: &Note, text: String) -> (NoteId, String) {
 
 /// A folder path in its canonical form: no leading or trailing `/`, empty for the root.
 /// Paths that leave the notes folder or name something the store hides are refused.
-pub(crate) fn checked_folder(folder: &str) -> Result<String> {
+pub fn checked_folder(folder: &str) -> Result<String> {
     let invalid = || Error::Invalid(format!("not a folder inside the notes folder: {folder}"));
     if folder.starts_with('/') {
         return Err(invalid());

@@ -31,6 +31,8 @@ const WIDTH: f32 = 640.;
 const HEIGHT: f32 = 720.;
 /// The rows stop growing here and stay in the middle.
 const CONTENT_WIDTH: f32 = 560.;
+/// GNOME's colour of errors.
+const ERROR: u32 = 0xe01b24;
 /// Choices for continuing the last quick note, in minutes; 0 is never.
 const RESUME_MINUTES: [u32; 4] = [0, 5, 15, 60];
 
@@ -39,6 +41,8 @@ pub struct SettingsView {
     /// The Quick Note settings of the notes folder; `None` until they are read.
     quick: Option<QuickNote>,
     quick_folder: Entity<InputState>,
+    /// Why the folder typed for quick notes cannot be used; it is not stored.
+    quick_folder_error: Option<String>,
     /// The notes folder changed: its Quick Note settings are read on the next frame.
     reload_quick_note: bool,
     focus_handle: FocusHandle,
@@ -80,6 +84,7 @@ impl SettingsView {
             library,
             quick: None,
             quick_folder,
+            quick_folder_error: None,
             reload_quick_note: false,
             focus_handle,
             _loading: Task::ready(()),
@@ -102,6 +107,11 @@ impl SettingsView {
     /// The Quick Note settings as read from the notes folder.
     pub fn quick_note(&self) -> Option<&QuickNote> {
         self.quick.as_ref()
+    }
+
+    /// Why the folder typed for quick notes was not stored, if it was not.
+    pub fn quick_folder_error(&self) -> Option<&str> {
+        self.quick_folder_error.as_deref()
     }
 
     fn load_quick_note(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -189,8 +199,18 @@ impl SettingsView {
             .read(cx)
             .value()
             .trim()
-            .trim_matches('/')
+            .trim_end_matches('/')
             .to_owned();
+        if sheaf_core::store::checked_folder(&typed).is_err() {
+            self.quick_folder_error = Some(tr(
+                "Choose a folder inside the notes folder, without “..” or a leading dot",
+            ));
+            cx.notify();
+            return;
+        }
+        if self.quick_folder_error.take().is_some() {
+            cx.notify();
+        }
         let folder = (!typed.is_empty()).then_some(typed);
         if folder == quick.folder {
             return;
@@ -477,7 +497,15 @@ impl Render for SettingsView {
             cx,
             SettingsView::set_line_width,
         );
-        let folder_field = div()
+        let folder_error = self.quick_folder_error.clone().map(|error| {
+            div()
+                .w(px(180.))
+                .pt(px(4.))
+                .text_size(tokens.text(12.))
+                .text_color(gpui::rgb(ERROR))
+                .child(error)
+        });
+        let folder_input = div()
             .w(px(180.))
             .h(px(32.))
             .px(px(10.))
@@ -492,7 +520,15 @@ impl Render for SettingsView {
                     .h_full()
                     .px_0()
                     .text_size(tokens.text(13.5)),
-            );
+            )
+            .when(folder_error.is_some(), |field| {
+                field.border_1().border_color(gpui::rgb(ERROR))
+            });
+        let folder_field = div()
+            .flex()
+            .flex_col()
+            .child(folder_input)
+            .children(folder_error);
 
         let folder = group(
             tr("Notes Folder"),

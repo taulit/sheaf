@@ -21,7 +21,7 @@ use crate::frontmatter::{self, Frontmatter};
 use crate::model::{NoteDoc, NoteId, NoteMeta, NoteRef};
 use crate::scan::{self, Scan};
 
-pub use write::{CreateOptions, TaskRef, WriteOptions};
+pub use write::{CreateOptions, TaskRef, WriteOptions, checked_folder};
 
 pub(crate) const TRASH_DIR: &str = ".trash";
 pub(crate) const ATTACHMENTS_DIR: &str = "_attachments";

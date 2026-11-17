@@ -520,6 +520,28 @@ async fn quick_note_settings_go_to_the_notes_folder(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+async fn a_quick_notes_folder_outside_the_notes_is_refused(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let mut app = open_app(&notes, cx);
+    let (view, window) = app.open_settings();
+    for folder in ["../x", ".privat", "Arbeit/../..", "/etc", "_attachments"] {
+        app.settings_do(&view, window, |view, window, cx| {
+            view.set_quick_folder(folder, window, cx);
+        });
+        let error = view.read_with(app.cx, |view, _| view.quick_folder_error().is_some());
+        assert!(error, "{folder}");
+        let config = sheaf_core::FolderConfig::load(&notes.dir).unwrap();
+        assert_eq!(config.quick_note.folder, None, "{folder}");
+    }
+    app.settings_do(&view, window, |view, window, cx| {
+        view.set_quick_folder("Eingang/Heute", window, cx);
+    });
+    assert!(view.read_with(app.cx, |view, _| view.quick_folder_error().is_none()));
+    let config = sheaf_core::FolderConfig::load(&notes.dir).unwrap();
+    assert_eq!(config.quick_note.folder.as_deref(), Some("Eingang/Heute"));
+}
+
+#[gpui::test]
 async fn a_new_notes_folder_is_opened_at_once(cx: &mut TestAppContext) {
     let notes = Notes::seeded();
     let file = with_settings(&notes, cx);

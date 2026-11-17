@@ -19,7 +19,10 @@
 //! A new quick note that stays empty is deleted again.
 //!
 //! The note is created when the window opens, in the Quick Notes folder of the folder
-//! settings (`quick_note.folder`, the localised "Quick Notes" by default). The last
+//! settings (`quick_note.folder`, the localised "Quick Notes" by default), or at the
+//! top of the notes folder if that folder cannot be used. If no note can be created,
+//! the window says so and closes when asked; nothing was typed yet, as the editor
+//! comes with the note. The last
 //! quick note is continued instead if its window closed less than
 //! `quick_note.resume_minutes` (5) ago.
 
@@ -155,6 +158,8 @@ pub struct QuickNoteView {
     folders: Option<Vec<Folder>>,
     /// An ending asked for before the note was there, done when it is.
     pending: Option<Ending>,
+    /// No note could be created: the window closes without one.
+    failed: bool,
     leaving: bool,
     focus_handle: FocusHandle,
     toasts: Entity<ToastHost>,
@@ -190,6 +195,7 @@ impl QuickNoteView {
             folder: String::new(),
             folders: None,
             pending: None,
+            failed: false,
             leaving: false,
             focus_handle,
             toasts: cx.new(|_| ToastHost::default()),
@@ -238,19 +244,43 @@ impl QuickNoteView {
                     return;
                 }
             }
-            let options = CreateOptions {
-                folder,
-                ..CreateOptions::default()
+            let mut create = |folder: String| {
+                let options = CreateOptions {
+                    folder,
+                    ..CreateOptions::default()
+                };
+                library.update(cx, |library, cx| library.create("", options, cx))
             };
-            let created = library
-                .update(cx, |library, cx| library.create("", options, cx))
-                .await;
+            let mut created = create(folder.clone()).await;
+            let mut moved = None;
+            if let Err(err) = &created
+                && !folder.is_empty()
+            {
+                // The Quick Notes folder cannot be used: the top of the notes folder can.
+                log::warn!("cannot create a quick note in {folder:?}: {err}");
+                moved = Some(err.to_string());
+                created = create(String::new()).await;
+            }
             let _ = this.update_in(cx, |this, window, cx| match created {
-                Ok(meta) => this.attach(meta.id, true, window, cx),
+                Ok(meta) => {
+                    if let Some(reason) = moved {
+                        let message = tr(
+                            "Could not use the folder “{folder}”, the note is at the top: {reason}",
+                        )
+                        .replace("{folder}", &folder)
+                        .replace("{reason}", &reason);
+                        this.toast(Toast::new(message), cx);
+                    }
+                    this.attach(meta.id, true, window, cx);
+                }
                 Err(err) => {
                     log::error!("cannot create a quick note: {err}");
                     let message = tr("Could not create a note: {}").replace("{}", &err.to_string());
                     this.toast(Toast::new(message), cx);
+                    this.failed = true;
+                    if let Some(ending) = this.pending.take() {
+                        this.ended(ending, window, cx);
+                    }
                 }
             });
         })
@@ -326,8 +356,12 @@ impl QuickNoteView {
             return;
         }
         let Some(note) = self.note.clone() else {
-            // Still being created: done as soon as it is there.
-            self.pending = Some(ending);
+            if self.failed {
+                self.ended(ending, window, cx);
+            } else {
+                // Still being created: done as soon as it is there.
+                self.pending = Some(ending);
+            }
             return;
         };
         let Some(leaving) = note.update(cx, |note, cx| note.leave(cx)) else {
@@ -367,9 +401,13 @@ impl QuickNoteView {
 
     /// The window is closed from outside, such as by the window manager: the last save
     /// happens now, as the app may quit with it. Returns whether the window may close;
-    /// before the note is there it closes once it is.
+    /// before the note is there it closes once it is, or once creating it failed.
     pub fn should_close(&mut self, cx: &mut Context<Self>) -> bool {
         let Some(note) = self.note.clone() else {
+            if self.failed {
+                self.remember(cx);
+                return true;
+            }
             self.pending = Some(Ending::Done);
             return false;
         };
