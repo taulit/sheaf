@@ -66,8 +66,14 @@ Confirmed by the second review, except the cover cache (finding 3 above).
 
 ## Waiting for the user
 
-- CI for S2 needs the secret `EDITOR_DEPLOY_KEY` (read-only deploy key on the private
-  `taulit/gpui-markdown-editor`). Not created; needs the user's go-ahead.
+- **`gh` is logged out on this machine** (token invalid since 2026-11-17 evening), and
+  `git push` over https fails with it. Run `gh auth login -h github.com`, then push
+  `phase/s3-features` and the `t3/*` branches that are ahead of origin.
+- The user approved the CI deploy key (2026-11-17). Not created yet because of the login:
+  `ssh-keygen -t ed25519 -N "" -f <tmp>/key`, `gh repo deploy-key add <tmp>/key.pub --repo
+  taulit/gpui-markdown-editor --title "sheaf CI (read-only)"` (no `--allow-write`),
+  `gh secret set EDITOR_DEPLOY_KEY --repo taulit/sheaf < <tmp>/key`, delete the files,
+  `gh run rerun --failed` on PR #4.
 - PR screenshots are embedded
   from the repository instead.
 
