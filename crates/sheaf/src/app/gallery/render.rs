@@ -59,7 +59,11 @@ impl Render for GalleryView {
                 this.set_popover(Some(Popover::Folders), cx)
             }))
             .on_action(cx.listener(|this, action, window, cx| {
-                if this.popover.is_some() {
+                if this.confirming().is_some() {
+                    this.cancel_confirm(cx);
+                } else if this.shown_trashed().is_some() {
+                    this.close_trashed(cx);
+                } else if this.popover.is_some() {
                     this.set_popover(None, cx);
                 } else {
                     this.clear(action, window, cx);
@@ -73,6 +77,8 @@ impl Render for GalleryView {
             .children(self.render_scope_chips(&tokens, cx))
             .child(self.render_body(&tokens, cx))
             .children(self.render_popover(&tokens, cx))
+            .children(self.render_trash_page(window, cx))
+            .children(self.render_confirm(cx))
     }
 }
 
@@ -93,6 +99,22 @@ impl GalleryView {
                     .on_click(toggle(Popover::Folders)),
             )
             .title(self.scope.title())
+            .when(
+                self.scope == Scope::Trash && !self.notes.is_empty(),
+                |bar| {
+                    let tokens = cx.tokens().clone();
+                    bar.end(
+                        super::trash::pill(
+                            "empty-trash",
+                            tr("Empty Trash"),
+                            super::trash::Kind::Plain,
+                            &tokens,
+                        )
+                        .mr(px(4.))
+                        .on_click(cx.listener(|this, _, _, cx| this.ask_empty_trash(cx))),
+                    )
+                },
+            )
             .end(
                 FlatButton::new("sort", IconName::Sort)
                     .tooltip(tr("Sort"))
@@ -303,6 +325,7 @@ impl GalleryView {
                 Scope::All => tr("No notes yet"),
                 Scope::Folder(_) => tr("No notes in this folder"),
                 Scope::Tag(_) => tr("No notes with this tag"),
+                Scope::Trash => tr("No recently deleted notes"),
             }
         };
         let button = if searching {
@@ -315,6 +338,8 @@ impl GalleryView {
                 )
                 .on_click(cx.listener(|this, _, _, cx| this.search_without_filters(cx)))
             })
+        } else if self.scope == Scope::Trash {
+            None
         } else {
             Some(
                 pill("empty-new-note", tr("New Note"), true, tokens)
@@ -420,17 +445,17 @@ impl GalleryView {
                     .into_any_element(),
             );
         }
-        let trash = div()
-            .flex()
-            .items_center()
-            .gap(px(11.))
-            .h(px(34.))
-            .px(px(12.))
-            .text_size(tokens.text(13.5))
-            .font_weight(FontWeight::MEDIUM)
-            .text_color(tokens.faint)
-            .child(icon(IconName::Trash, tokens.faint).size(px(16.)))
-            .child(div().flex_1().child(tr("Recently Deleted")));
+        let trash = menu_row(
+            "folder-trash",
+            IconName::Trash,
+            tr("Recently Deleted"),
+            tokens,
+        )
+        .when(self.scope == Scope::Trash, |row| row.bg(tokens.selected))
+        .when_some(self.trash_count(), |row, notes| {
+            row.child(count(notes, tokens))
+        })
+        .on_click(cx.listener(|this, _, _, cx| this.set_scope(Scope::Trash, cx)));
         let new_folder = match &self.new_folder {
             Some(name) => div()
                 .flex()

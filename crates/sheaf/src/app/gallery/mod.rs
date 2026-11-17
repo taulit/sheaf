@@ -26,6 +26,7 @@
 //! | [`preview`] | the miniature of a note's text |
 //! | `render` | header, search field, chip row, popovers, empty states |
 //! | `cards` | cards, list rows and their context menu |
+//! | [`trash`] | "Recently Deleted": restore, delete for good, the read-only note |
 //!
 //! Only metadata from the index is needed to show the gallery. The text of a note is
 //! read, in the background, when its card is first drawn, and its miniature is kept
@@ -38,6 +39,7 @@ pub mod dates;
 pub mod layout;
 pub mod preview;
 mod render;
+pub mod trash;
 
 use std::collections::{BTreeSet, HashMap};
 use std::ops::Range;
@@ -80,6 +82,8 @@ pub enum GalleryEvent {
     Trashed(Vec<NoteId>),
     /// A change failed; the message says why, for a toast.
     Failed(String),
+    /// A change worth telling, such as notes restored, for a toast.
+    Notice(String),
 }
 
 /// Which notes the gallery shows: chosen in the chip row or the folder popover.
@@ -90,6 +94,8 @@ pub enum Scope {
     /// A folder with its subfolders, relative to the notes folder.
     Folder(String),
     Tag(String),
+    /// "Recently Deleted": the notes in the trash.
+    Trash,
 }
 
 impl Scope {
@@ -99,6 +105,7 @@ impl Scope {
             // Anchored, so that `Privat` does not also find `Arbeit/Privat`.
             Scope::Folder(path) => Some(Filter::Folder(format!("/{path}"))),
             Scope::Tag(tag) => Some(Filter::Tag(tag.clone())),
+            Scope::Trash => None,
         }
     }
 
@@ -106,7 +113,7 @@ impl Scope {
     fn config_key(&self) -> &str {
         match self {
             Scope::Folder(path) => path,
-            Scope::All | Scope::Tag(_) => "",
+            Scope::All | Scope::Tag(_) | Scope::Trash => "",
         }
     }
 
@@ -116,6 +123,7 @@ impl Scope {
             Scope::All => tr("All Notes"),
             Scope::Folder(path) => path.rsplit('/').next().unwrap_or(path).to_owned(),
             Scope::Tag(tag) => format!("#{tag}"),
+            Scope::Trash => tr("Recently Deleted"),
         }
     }
 }
@@ -192,6 +200,7 @@ pub struct GalleryView {
     popover: Option<Popover>,
     /// The name field of "New Folder" in the folder popover, while it is open.
     new_folder: Option<Entity<InputState>>,
+    trash: trash::TrashState,
     generation: u64,
     focus_handle: FocusHandle,
     /// The pause before a search, while typing.
@@ -248,6 +257,7 @@ impl GalleryView {
             hover: Hover::default(),
             popover: None,
             new_folder: None,
+            trash: trash::TrashState::default(),
             generation: 0,
             focus_handle: cx.focus_handle(),
             debounce: Task::ready(()),
@@ -289,7 +299,7 @@ impl GalleryView {
     pub fn current_folder(&self) -> String {
         match &self.scope {
             Scope::Folder(path) => path.clone(),
-            Scope::All | Scope::Tag(_) => String::new(),
+            Scope::All | Scope::Tag(_) | Scope::Trash => String::new(),
         }
     }
 
@@ -540,6 +550,10 @@ impl GalleryView {
     fn reload(&mut self, cx: &mut Context<Self>) {
         self.generation += 1;
         let generation = self.generation;
+        if self.scope == Scope::Trash {
+            self.reload_trash(generation, cx);
+            return;
+        }
         let library = self.library.read(cx);
         let mut filters: Vec<Filter> = self.scope.filter().into_iter().collect();
         filters.extend(self.chips.iter().cloned());
@@ -736,7 +750,11 @@ impl GalleryView {
                 preview: None,
             },
         );
-        let body = self.library.read(cx).body(&id, cx);
+        let body = if self.scope == Scope::Trash {
+            self.library.read(cx).trashed_body(&note.rel_path, cx)
+        } else {
+            self.library.read(cx).body(&id, cx)
+        };
         let built = cx.background_spawn(async move {
             let body = body.await.ok().flatten().unwrap_or_default();
             Arc::new(Preview::build(&body))
@@ -810,6 +828,9 @@ impl GalleryView {
 
     /// Opens or closes a popover of the header bar.
     pub fn set_popover(&mut self, popover: Option<Popover>, cx: &mut Context<Self>) {
+        if popover == Some(Popover::Folders) {
+            self.count_trash(cx);
+        }
         self.popover = popover;
         self.new_folder = None;
         cx.notify();
@@ -923,6 +944,10 @@ impl GalleryView {
     }
 
     fn open(&mut self, index: usize, cx: &mut Context<Self>) {
+        if self.scope == Scope::Trash {
+            self.open_trashed(index, cx);
+            return;
+        }
         let Some(note) = self.notes.get(index) else {
             return;
         };
@@ -941,6 +966,10 @@ impl GalleryView {
     }
 
     fn open_selected(&mut self, _: &OpenSelected, _: &mut Window, cx: &mut Context<Self>) {
+        if self.confirming().is_some() {
+            self.confirm(cx);
+            return;
+        }
         if let Some(index) = self.selected {
             self.open(index, cx);
         }
@@ -968,6 +997,9 @@ impl GalleryView {
 
     /// Pins the selected notes, or unpins them if all of them are pinned.
     pub fn toggle_pin(&mut self, cx: &mut Context<Self>) {
+        if self.scope == Scope::Trash {
+            return;
+        }
         let notes: Vec<(NoteId, bool)> = self
             .selection()
             .iter()
@@ -1126,7 +1158,11 @@ impl GalleryView {
     }
 
     fn trash(&mut self, _: &Trash, _: &mut Window, cx: &mut Context<Self>) {
-        self.trash_selection(cx);
+        if self.scope == Scope::Trash {
+            self.ask_purge_selection(cx);
+        } else {
+            self.trash_selection(cx);
+        }
     }
 
     fn search_action(&mut self, _: &Search, window: &mut Window, cx: &mut Context<Self>) {

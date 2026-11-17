@@ -105,6 +105,7 @@ impl MainWindow {
                 }
                 GalleryEvent::Trashed(ids) => this.offer_undo(ids.clone(), cx),
                 GalleryEvent::Failed(message) => this.toast(Toast::new(message.clone()), cx),
+                GalleryEvent::Notice(message) => this.toast(Toast::new(message.clone()), cx),
             });
         gallery.focus_handle(cx).focus(window, cx);
         let mut main = MainWindow {

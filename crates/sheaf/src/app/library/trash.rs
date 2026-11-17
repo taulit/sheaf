@@ -39,6 +39,13 @@ impl Library {
         })
     }
 
+    /// The text of the trashed note at `rel_path` (in `.trash/`), for its miniature.
+    pub fn trashed_body(&self, rel_path: &str, cx: &App) -> Task<Result<Option<String>>> {
+        let store = self.store.clone();
+        let rel_path = rel_path.to_owned();
+        cx.background_spawn(async move { Ok(Some(store.load(&rel_path)?.body().to_owned())) })
+    }
+
     /// Deletes a note in the trash for good.
     pub fn purge(&mut self, id: &NoteId, cx: &mut Context<Self>) -> Task<Result<()>> {
         let id = id.clone();

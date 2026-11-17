@@ -1,0 +1,217 @@
+//! "Recently Deleted" in a test window: the trash as a list with deletion dates and
+//! days left, restoring, deleting for good after asking, emptying, several notes at
+//! once, the read-only note, and the purge after 30 days.
+
+#![allow(clippy::unwrap_used)]
+
+mod fixture;
+
+use std::time::Duration;
+
+use fixture::{Look, Notes};
+use gpui::{Entity, Modifiers, TestAppContext, VisualTestContext};
+use jiff::Timestamp;
+use sheaf::app::gallery::trash::{Confirm, days_left};
+use sheaf::app::gallery::{GalleryView, Scope};
+use sheaf::app::library::Library;
+use sheaf::app::window::{self, MainWindow};
+
+struct TestApp {
+    library: Entity<Library>,
+    main: Entity<MainWindow>,
+    cx: &'static mut VisualTestContext,
+}
+
+/// The app with `titles` moved to the trash, showing it.
+fn open_trash(notes: &Notes, titles: &[&str], cx: &mut gpui::TestAppContext) -> TestApp {
+    let library = cx.update(|cx| {
+        fixture::init_app(Look::default(), cx);
+        fixture::open_library(notes, cx)
+    });
+    let (window, main) = cx
+        .update(|cx| window::open(library.clone(), None, cx))
+        .unwrap();
+    let cx = VisualTestContext::from_window(window.into(), cx).into_mut();
+    cx.run_until_parked();
+    let mut app = TestApp { library, main, cx };
+    for title in titles {
+        let id = app.read(|gallery| {
+            let note = gallery.notes().iter().find(|note| note.title == *title);
+            note.unwrap().id.clone()
+        });
+        let trashed = app
+            .library
+            .update(app.cx, |library, cx| library.trash(&id, cx));
+        app.cx.run_until_parked();
+        app.cx.foreground_executor().block_test(trashed).unwrap();
+    }
+    app.update(|gallery, cx| gallery.set_scope(Scope::Trash, cx));
+    app
+}
+
+impl TestApp {
+    fn gallery(&mut self) -> Entity<GalleryView> {
+        self.main
+            .read_with(self.cx, |main, _| main.gallery().clone())
+    }
+
+    fn read<R>(&mut self, read: impl FnOnce(&GalleryView) -> R) -> R {
+        let gallery = self.gallery();
+        gallery.read_with(self.cx, |gallery, _| read(gallery))
+    }
+
+    fn update(&mut self, update: impl FnOnce(&mut GalleryView, &mut gpui::Context<GalleryView>)) {
+        let gallery = self.gallery();
+        gallery.update(self.cx, update);
+        self.cx.run_until_parked();
+        self.cx.executor().advance_clock(Duration::from_millis(50));
+        self.cx.run_until_parked();
+        self.cx.update(|window, cx| window.draw(cx).clear(cx));
+        self.cx.run_until_parked();
+    }
+
+    fn titles(&mut self) -> Vec<String> {
+        self.read(|gallery| {
+            gallery
+                .notes()
+                .iter()
+                .map(|note| note.title.clone())
+                .collect()
+        })
+    }
+
+    fn click(&mut self, index: usize, modifiers: Modifiers) {
+        self.update(|gallery, cx| gallery.click(index, modifiers, cx));
+    }
+}
+
+fn in_trash(notes: &Notes) -> Vec<String> {
+    let Ok(entries) = std::fs::read_dir(notes.dir.join(".trash")) else {
+        return Vec::new();
+    };
+    let mut names: Vec<String> = entries
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .filter(|name| name.ends_with(".md"))
+        .collect();
+    names.sort();
+    names
+}
+
+#[gpui::test]
+async fn the_trash_lists_deleted_notes_with_their_days_left(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let mut app = open_trash(&notes, &["Einkauf", "Lesestoff"], cx);
+    assert_eq!(app.titles(), ["Einkauf", "Lesestoff"]);
+    assert_eq!(app.read(|gallery| gallery.trash_count()), Some(2));
+    let now: Timestamp = fixture::NOW.parse().unwrap();
+    let ids: Vec<_> = app.read(|gallery| gallery.notes().iter().map(|n| n.id.clone()).collect());
+    for id in &ids {
+        let deleted = app.read(|gallery| gallery.deleted_at(id)).unwrap();
+        assert_eq!(deleted, now);
+        assert_eq!(days_left(deleted, now), 30);
+    }
+    let title = app.read(|gallery| gallery.scope().title());
+    assert_eq!(title, "Recently Deleted");
+    // Searching the trash goes by title.
+    app.update(|gallery, cx| gallery.set_query("lese", cx));
+    assert_eq!(app.titles(), ["Lesestoff"]);
+}
+
+#[gpui::test]
+async fn restore_puts_notes_back_where_they_were(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let mut app = open_trash(&notes, &["Einkauf", "Lesestoff", "Notch-Ideen"], cx);
+    assert!(!notes.files().contains(&"Privat/Einkauf.md".to_owned()));
+    // Two of three, picked with Ctrl.
+    app.click(0, Modifiers::control());
+    app.click(2, Modifiers::control());
+    app.update(|gallery, cx| gallery.restore_selection(cx));
+    assert_eq!(app.titles(), ["Lesestoff"]);
+    let files = notes.files();
+    assert!(files.contains(&"Privat/Einkauf.md".to_owned()), "{files:?}");
+    assert!(
+        files.contains(&"Arbeit/Notch-Ideen.md".to_owned()),
+        "{files:?}"
+    );
+    assert_eq!(in_trash(&notes), ["Lesestoff.md"]);
+    let toast = app.main.read_with(app.cx, |main, cx| {
+        main.toasts()
+            .read(cx)
+            .shown()
+            .map(|toast| toast.message.to_string())
+    });
+    assert_eq!(toast.as_deref(), Some("2 notes restored"));
+}
+
+#[gpui::test]
+async fn delete_permanently_asks_first(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let mut app = open_trash(&notes, &["Einkauf", "Lesestoff"], cx);
+    app.click(0, Modifiers::control());
+    app.cx.simulate_keystrokes("delete");
+    app.cx.run_until_parked();
+    let asked = app.read(|gallery| gallery.confirming().cloned());
+    assert!(matches!(asked, Some(Confirm::Purge(ids)) if ids.len() == 1));
+    // Esc says no.
+    app.cx.simulate_keystrokes("escape");
+    assert_eq!(app.read(|gallery| gallery.confirming().cloned()), None);
+    assert_eq!(in_trash(&notes).len(), 2);
+
+    app.update(|gallery, cx| gallery.ask_purge_selection(cx));
+    app.update(|gallery, cx| gallery.confirm(cx));
+    assert_eq!(app.titles(), ["Lesestoff"]);
+    assert_eq!(in_trash(&notes), ["Lesestoff.md"]);
+}
+
+#[gpui::test]
+async fn empty_trash_deletes_everything_after_asking(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let mut app = open_trash(&notes, &["Einkauf", "Lesestoff", "Reading list"], cx);
+    let before = notes.files().len();
+    app.update(|gallery, cx| gallery.ask_empty_trash(cx));
+    assert_eq!(
+        app.read(|gallery| gallery.confirming().cloned()),
+        Some(Confirm::Empty)
+    );
+    assert_eq!(in_trash(&notes).len(), 3);
+    app.cx.simulate_keystrokes("enter");
+    app.update(|_, _| {});
+    assert!(in_trash(&notes).is_empty());
+    assert!(app.titles().is_empty());
+    assert_eq!(notes.files().len(), before, "the other notes stay");
+}
+
+#[gpui::test]
+async fn a_trashed_note_opens_read_only_with_restore(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let mut app = open_trash(&notes, &["Einkauf"], cx);
+    app.click(0, Modifiers::none());
+    let shown = app.read(|gallery| gallery.shown_trashed().map(|note| note.title.clone()));
+    assert_eq!(shown.as_deref(), Some("Einkauf"));
+    // No note view: the trashed note is not edited.
+    assert!(app.main.read_with(app.cx, |main, _| main.note().is_none()));
+
+    app.cx.simulate_keystrokes("escape");
+    assert!(app.read(|gallery| gallery.shown_trashed().is_none()));
+    app.click(0, Modifiers::none());
+    app.update(|gallery, cx| gallery.restore_shown(cx));
+    assert!(app.read(|gallery| gallery.shown_trashed().is_none()));
+    assert!(notes.files().contains(&"Privat/Einkauf.md".to_owned()));
+    assert!(app.titles().is_empty());
+}
+
+#[gpui::test]
+async fn notes_older_than_thirty_days_are_deleted(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    notes.write(
+        ".trash/Alt.md",
+        "---\nid: 01JD3K8Z6Q4X7V9B2M5N8P0R99\ndeleted: 2026-10-16T13:00:00+01:00\nfrom: \"\"\n---\nAlt\n",
+    );
+    notes.write(
+        ".trash/Neu.md",
+        "---\nid: 01JD3K8Z6Q4X7V9B2M5N8P0R98\ndeleted: 2026-10-20T13:00:00+01:00\nfrom: \"\"\n---\nNeu\n",
+    );
+    let mut app = open_trash(&notes, &[], cx);
+    assert_eq!(app.titles(), ["Neu"]);
+    assert_eq!(in_trash(&notes), ["Neu.md"]);
+}
