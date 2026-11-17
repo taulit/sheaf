@@ -15,29 +15,18 @@ Written 2026-11-17 for whoever continues without the session's context. Read
 
 ## Running
 
-- **Fixing the S2 bug-review findings** (child agent "S2 gate: fix review findings",
-  works in this checkout on `phase/s2-app`, commits one fix per finding). If it stopped
-  half-way: `git status` shows its uncommitted work; finish or commit it as WIP.
+- **Second bug review** (child agent "S2 gate: re-review after fixes", read-only): checks
+  the fixes below and reads the files the first review skipped.
 
-## Open review findings (S2 bug review; all must be fixed, each with a test)
+## Review findings of the first S2 bug review: all fixed (commits `9e47287..90700b4`)
 
-1. Blocking: closing the window or quitting right after typing loses the edit. The final
-   save is only queued on a foreground worker; the write must be guaranteed before exit.
-   Needs a test on the real headless platform, not `TestAppContext`.
-2. Blocking: a failed save is silent; the editor is marked saved before the write.
-   Needs a banner, retry, and a recovery file as last resort.
-3. Blocking: note deleted elsewhere, user leaves without "Save as New Note": text lost,
-   depending on event order.
-4. Major: a failed trash leaves the note open but no longer saving.
-5. Major: an empty new note is purged on leave without checking the file's content.
-6. Major (not demonstrated): gallery cover images decoded at full size, never released.
-7. Minor: deleting a note that changed on disk trashes the conflict copy.
-8. Minor (suspected): underflow restoring the scroll anchor, `gallery/mod.rs` near `row_of`.
-9. Visual: header title is not centred on the window.
+Close or quit right after typing, silent failed save (banner, retry, recovery folder
+`$XDG_STATE_HOME/sheaf/recovered/`), note deleted elsewhere, failed trash, discard of an
+empty new note, cover image cache, delete during a conflict, scroll anchor underflow,
+header title centring. After the fixes: fmt, clippy, `cargo deny check` clean, all
+workspace tests pass (`tests/shutdown.rs` runs on the real headless platform).
 
-The reviewer did not read `gallery/render.rs`, `note/header.rs`, `note/date.rs`,
-`overlays/**`, `theme.rs`, `chrome.rs`, `assets.rs`, the CLI changes. Check `git log` for
-`fix(` commits to see which findings are already done.
+Not yet confirmed by a second reviewer; findings of the second review, if any, are open.
 
 ## Next
 
