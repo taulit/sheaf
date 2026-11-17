@@ -124,22 +124,75 @@ pub fn run(launch: Launch, dir: Option<PathBuf>) -> ExitCode {
 
 /// Quits on SIGTERM (logout, `kill`), SIGINT (Ctrl+C) and SIGHUP (the terminal
 /// closing) the way the app quits itself, with the last save of the open note.
-/// Otherwise the signal would end the process before it.
+/// Otherwise the signal would end the process before it. A second signal ends the
+/// app at once, also while the last save hangs. SIGHUP is left alone if it was
+/// ignored at startup, as under `nohup`.
 pub fn quit_on_signals(cx: &mut App) {
-    let mut signals = match Signals::new([Signal::Term, Signal::Int, Signal::Hup]) {
+    let mut wanted = vec![Signal::Term, Signal::Int];
+    if !hangup_ignored() {
+        wanted.push(Signal::Hup);
+    }
+    let mut signals = match Signals::new(wanted) {
         Ok(signals) => signals,
         Err(err) => {
             log::warn!("cannot follow the signals to quit: {err}");
             return;
         }
     };
+    let (quit, quitting) = async_channel::bounded(1);
+    // Its own thread: the UI thread does not take a second signal while it saves.
+    let spawned = std::thread::Builder::new()
+        .name("sheaf-signals".to_owned())
+        .spawn(move || {
+            async_io::block_on(async move {
+                let Some(Ok(first)) = signals.next().await else {
+                    return;
+                };
+                log::info!("quitting on {first:?}");
+                let _ = quit.send(()).await;
+                if let Some(Ok(second)) = signals.next().await {
+                    log::warn!("{second:?} while quitting, ending at once");
+                    std::process::exit(128 + number(second));
+                }
+            });
+        });
+    if let Err(err) = spawned {
+        log::warn!("cannot follow the signals to quit: {err}");
+        return;
+    }
     cx.spawn(async move |cx| {
-        if let Some(signal) = signals.next().await {
-            log::info!("quitting on {signal:?}");
+        if quitting.recv().await.is_ok() {
             cx.update(|cx| cx.quit());
         }
     })
     .detach();
+}
+
+/// Whether SIGHUP was ignored when the process started. Read from
+/// `/proc/self/status`, since asking the kernel directly takes `unsafe`; where that
+/// cannot be read, it counts as ignored, and the app leaves SIGHUP alone.
+fn hangup_ignored() -> bool {
+    let status = std::fs::read_to_string("/proc/self/status").ok();
+    let ignored = status.as_deref().and_then(ignored_signals);
+    ignored.is_none_or(|mask| mask & (1 << (number(Signal::Hup) - 1)) != 0)
+}
+
+/// The mask of ignored signals in the text of `/proc/<pid>/status`: bit `n - 1`
+/// stands for signal `n`.
+fn ignored_signals(status: &str) -> Option<u64> {
+    let mask = status
+        .lines()
+        .find_map(|line| line.strip_prefix("SigIgn:"))?;
+    u64::from_str_radix(mask.trim(), 16).ok()
+}
+
+/// The number of one of the signals the app quits on, as on Linux.
+fn number(signal: Signal) -> i32 {
+    match signal {
+        Signal::Hup => 1,
+        Signal::Int => 2,
+        _ => 15,
+    }
 }
 
 fn fail(message: &str) -> ExitCode {
@@ -201,4 +254,18 @@ fn present(request: Request, cx: &mut App) -> anyhow::Result<()> {
         window.activate_window();
         main.update(cx, |main, cx| main.handle(request, window, cx));
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ignored_signals_are_read_from_the_status() {
+        let status = "Name:\tsheaf\nSigBlk:\t0000000000000000\nSigIgn:\t0000000000001001\nSigCgt:\t0000000180004002\n";
+        let mask = ignored_signals(status);
+        assert_eq!(mask, Some(0x1001));
+        assert_eq!(ignored_signals("Name:\tsheaf\n"), None);
+        assert_eq!(ignored_signals("SigIgn:\tzz\n"), None);
+    }
 }
