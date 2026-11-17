@@ -441,6 +441,41 @@ async fn editor_settings_apply_to_the_open_note_and_are_stored(cx: &mut TestAppC
 }
 
 #[gpui::test]
+async fn settings_this_version_cannot_read_survive_a_change(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let file = notes.scratch("config/sheaf/config.toml");
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    std::fs::write(&file, "sort = \"manual\"\nwindow = \"big\"\n").unwrap();
+    cx.update(|cx| cx.set_global(Settings::load(file.clone())));
+
+    let saved =
+        cx.update(|cx| settings::update(cx, |config| config.editor.font = EditorFont::Mono));
+    cx.run_until_parked();
+    cx.foreground_executor().block_test(saved).unwrap();
+
+    let stored: toml::Table = std::fs::read_to_string(&file).unwrap().parse().unwrap();
+    assert_eq!(stored["sort"].as_str(), Some("manual"), "{stored}");
+    assert_eq!(stored["window"].as_str(), Some("big"), "{stored}");
+    assert_eq!(stored["editor"]["font"].as_str(), Some("mono"), "{stored}");
+}
+
+#[gpui::test]
+async fn settings_that_are_not_toml_are_not_overwritten(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let file = notes.scratch("config/sheaf/config.toml");
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    std::fs::write(&file, "sort = [\n").unwrap();
+    cx.update(|cx| cx.set_global(Settings::load(file.clone())));
+
+    let saved =
+        cx.update(|cx| settings::update(cx, |config| config.editor.font = EditorFont::Mono));
+    cx.run_until_parked();
+    let reason = cx.foreground_executor().block_test(saved).unwrap_err();
+    assert!(reason.contains("config.toml"), "{reason}");
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), "sort = [\n");
+}
+
+#[gpui::test]
 async fn the_default_order_reaches_the_gallery(cx: &mut TestAppContext) {
     let notes = Notes::seeded();
     with_settings(&notes, cx);
