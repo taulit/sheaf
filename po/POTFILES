@@ -37,7 +37,17 @@ crates/sheaf/src/app/library.rs
 crates/sheaf/src/app/library/service.rs
 crates/sheaf/src/app/logger.rs
 crates/sheaf/src/app/mod.rs
+crates/sheaf/src/app/note/date.rs
+crates/sheaf/src/app/note/files.rs
+crates/sheaf/src/app/note/header.rs
+crates/sheaf/src/app/note/jump.rs
 crates/sheaf/src/app/note/mod.rs
+crates/sheaf/src/app/note/setup.rs
+crates/sheaf/src/app/note/worker.rs
+crates/sheaf/src/app/overlays/mod.rs
+crates/sheaf/src/app/overlays/palette.rs
+crates/sheaf/src/app/overlays/shortcuts.rs
+crates/sheaf/src/app/overlays/toast.rs
 crates/sheaf/src/app/portal.rs
 crates/sheaf/src/app/state.rs
 crates/sheaf/src/app/theme.rs
