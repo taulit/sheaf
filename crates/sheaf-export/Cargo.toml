@@ -1,0 +1,22 @@
+[package]
+name = "sheaf-export"
+description = "PDF rendering of Sheaf notes: Markdown in, laid-out pages out"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+krilla = { version = "0.8.2", default-features = false, features = ["raster-images"] }
+rustybuzz = "0.20"
+fontdb = "0.23"
+pulldown-cmark.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

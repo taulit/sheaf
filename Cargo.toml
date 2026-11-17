@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/sheaf-core", "crates/sheaf-searchd", "crates/sheaf"]
+members = ["crates/sheaf-core", "crates/sheaf-searchd", "crates/sheaf", "crates/sheaf-export"]
 
 [workspace.package]
 version = "0.1.0"
@@ -76,4 +76,21 @@ debug = false
 [profile.dev.package.insta]
 opt-level = 3
 [profile.dev.package.similar]
+opt-level = 3
+
+# The PDF renderer's shaping, subsetting and compression are slow unoptimised; tests
+# render a 200-page note.
+[profile.dev.package.rustybuzz]
+opt-level = 3
+[profile.dev.package.ttf-parser]
+opt-level = 3
+[profile.dev.package.krilla]
+opt-level = 3
+[profile.dev.package.subsetter]
+opt-level = 3
+[profile.dev.package.miniz_oxide]
+opt-level = 3
+[profile.dev.package.skrifa]
+opt-level = 3
+[profile.dev.package.read-fonts]
 opt-level = 3
