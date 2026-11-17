@@ -8,7 +8,7 @@ Other sessions read only this file. Updated at the end of every phase.
 | S1 Core, searchd, CLI | merged | [#2](https://github.com/taulit/sheaf/pull/2), [#3](https://github.com/taulit/sheaf/pull/3) |
 | S2 App | merged | [#4](https://github.com/taulit/sheaf/pull/4) |
 | S3 Features | gate green, in review | `phase/s3-features` |
-| S4 Release | not started | |
+| S4 Release | budgets and end-to-end scenarios measured | `phase/s4-release` |
 
 ## What works (S1)
 
@@ -60,6 +60,39 @@ Other sessions read only this file. Updated at the end of every phase.
 - Gate on 2026-11-17 after the review fixes: fmt and clippy clean, 436 tests passed (4
   ignored: screenshots, run by `scripts/screenshot.sh`), `cargo deny check` ok, Visor
   module 23 of 23.
+
+## Budgets
+
+Measured on 2026-11-18 with `scripts/budgets.sh` (release build, `--locked`, commit `7e15889`), Intel
+Core i5-11400F, 12 threads, 31 GB, Manjaro, Linux 6.18. How each number is taken: `docs/testing.md`,
+"Budgets".
+
+| Budget (05 §1) | Target | Measured | |
+|---|---|---|---|
+| Cold start to the gallery, 1,000 notes | < 250 ms | 174 ms to the frame with every miniature, 126 ms to the first cards (median of 8 warm starts; first start 181 ms) | pass |
+| Memory, 1,000 notes, gallery open | < 120 MB RSS | 65.3 MB RSS, 59.5 MB PSS | pass |
+| Search p95, 10,000 notes | < 30 ms | 5.3 ms | pass |
+| Gallery scrolling, 10,000 notes | 60 fps | CPU frame p50 6.4 ms, p95 12.5 ms, max 15.5 ms, none of 600 over 16.7 ms | pass |
+| `sheaf-searchd` idle | < 15 MB | 16.6 MB RSS with 1,000 notes, 18.1 MB with 10,000 (PSS 11.8 and 13.4 MB) | **fail** |
+
+- The start and memory are measured on the headless platform: no Wayland connection, GPU device,
+  shaders or presenting, and no GPU memory. Scrolling is CPU time per frame, not frames on screen.
+  Of the 174 ms, about 25 ms are GPUI's platform setup (fonts), 45 ms opening the window and its first
+  frame, 45 ms to the listing and 50 ms to the miniatures.
+- `sheaf-searchd` was at 53 MB after the query mix on 10,000 notes; it now lets go of the index 5 s after
+  the last request. What is left are 4–6 MB of its own memory (malloc arenas of the searches) and about
+  12 MB of mapped files, clean and shared: 7.7 MB of its own code, 2.3 MB of the locale archive (any
+  locale but C maps it) and libc. Not met; candidates are a smaller binary (fewer pages of code touched)
+  and returning freed memory to the system (needs `malloc_trim`, which takes `unsafe`).
+- Only the search budget runs in CI; the others are a local script (GPUI release build, timing noise on
+  shared runners, and CI cannot fetch the editor at the moment).
+
+## End-to-end scenarios
+
+`scripts/e2e.sh`: 5 "Notiz anlegen" (Visor, `sheaf-searchd`, the app's gallery, the overview search) and
+6 "Externe Änderung" (`sed` on an open checklist, through `sheaf-searchd`) pass. What needs a person at a
+desktop is a checklist in `docs/testing.md`. `scripts/visor-module-check.sh` (main en/dark, de/light,
+absent, old) and `scripts/shell-search-check.sh` (dark, light) pass on the current code.
 
 ## Tags
 
