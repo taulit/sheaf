@@ -15,7 +15,22 @@ Written 2026-11-17 for whoever continues without the session's context. Read
 
 ## Running
 
-Nothing. S2 is in review: https://github.com/taulit/sheaf/pull/4 (against `main`).
+S2 is in review: https://github.com/taulit/sheaf/pull/4 (against `main`; CI fails until the
+secret `EDITOR_DEPLOY_KEY` exists). S3 runs on `phase/s3-features` (branched from S2):
+the editor is at `v0.0.3` (rendered Markdown) and the S2 leftovers are fixed there.
+
+Three child agents work in their own worktrees, branched from `phase/s3-features`, and
+push their branches (`git branch -r | grep t3/`) after every commit:
+
+- WP-B: quick note, trash view, smart folders, templates.
+- WP-C: export (Markdown, PDF with `krilla`, print), settings window, backlinks, attachments.
+- WP-D: the Visor module in `visor-module/` (Visor has the tag `api-v1`).
+
+Next: merge the three branches into `phase/s3-features` (shared files `app/window.rs`,
+`app/actions.rs`, `app/library.rs`, `tests/screenshots.rs`, `po/` will conflict; keep
+both sides, regenerate `po/` and the screenshots), run the gate, one `bug-review` over
+`git diff phase/s2-app...phase/s3-features`, fix, then the S3 PR against `main` (after
+#4 is merged; until then against `phase/s2-app` is wrong: wait or rebase).
 
 ## Second and third S2 review: no blocking finding left
 
