@@ -459,8 +459,8 @@ impl GalleryView {
         self.reload(cx);
     }
 
-    /// Ctrl+F.
-    fn focus_search(&mut self, _: &Search, window: &mut Window, cx: &mut Context<Self>) {
+    /// Puts the cursor into the search field, as Ctrl+F does.
+    pub fn focus_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.search.update(cx, |state, cx| state.focus(window, cx));
         // The field reports its focus with the next frame; the state is true now.
         self.search_focused = true;
@@ -1000,6 +1000,10 @@ impl GalleryView {
 
     fn trash(&mut self, _: &Trash, _: &mut Window, cx: &mut Context<Self>) {
         self.trash_selection(cx);
+    }
+
+    fn search_action(&mut self, _: &Search, window: &mut Window, cx: &mut Context<Self>) {
+        self.focus_search(window, cx);
     }
 
     fn clear(&mut self, _: &ClearSearch, window: &mut Window, cx: &mut Context<Self>) {

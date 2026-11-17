@@ -229,11 +229,7 @@ impl MainWindow {
                 Ok(id) => self.open_note(id, query, window, cx),
                 Err(err) => log::warn!("cannot open a note: {err}"),
             },
-            Request::Search { query } => {
-                self.back(window, cx);
-                self.gallery
-                    .update(cx, |gallery, cx| gallery.set_query(&query, cx));
-            }
+            Request::Search { query } => self.search_in_gallery(Some(&query), window, cx),
             Request::OpenUris(uris) => {
                 let Some(uri) = uris.first() else { return };
                 let found = self.library.read(cx).note_at(uri, cx);
@@ -310,11 +306,7 @@ impl MainWindow {
     ) {
         match event {
             NoteEvent::Open(id) => self.open_note(id.clone(), String::new(), window, cx),
-            NoteEvent::Search(query) => {
-                self.back(window, cx);
-                self.gallery
-                    .update(cx, |gallery, cx| gallery.set_query(query, cx));
-            }
+            NoteEvent::Search(query) => self.search_in_gallery(Some(query), window, cx),
             NoteEvent::Trashed(trashed) => {
                 self.back(window, cx);
                 self.offer_undo(vec![trashed.id.clone()], cx);
@@ -375,11 +367,26 @@ impl MainWindow {
 
     /// Search from a note (the palette's "Search"): back to the gallery's search field.
     fn search(&mut self, _: &Search, window: &mut Window, cx: &mut Context<Self>) {
-        if self.note.is_none() {
-            return;
+        if self.note.is_some() {
+            self.search_in_gallery(None, window, cx);
         }
+    }
+
+    /// Shows the gallery with the cursor in its search field; with `query`, that
+    /// search replaces the one shown.
+    fn search_in_gallery(
+        &mut self,
+        query: Option<&str>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.back(window, cx);
-        window.dispatch_action(Box::new(Search), cx);
+        self.gallery.update(cx, |gallery, cx| {
+            if let Some(query) = query {
+                gallery.set_query(query, cx);
+            }
+            gallery.focus_search(window, cx);
+        });
     }
 
     /// Hook for the settings window (Ctrl+,), which does not exist yet.

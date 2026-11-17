@@ -49,7 +49,7 @@ impl Render for GalleryView {
             .on_action(cx.listener(Self::select_left))
             .on_action(cx.listener(Self::select_right))
             .on_action(cx.listener(Self::trash))
-            .on_action(cx.listener(Self::focus_search))
+            .on_action(cx.listener(Self::search_action))
             .on_action(cx.listener(|this, _: &ToggleView, _, cx| this.toggle_view(cx)))
             .on_action(cx.listener(|this, _: &ShowSortOptions, _, cx| {
                 this.set_popover(Some(Popover::Sort), cx)
