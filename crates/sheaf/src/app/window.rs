@@ -106,6 +106,9 @@ impl MainWindow {
                 GalleryEvent::Trashed(ids) => this.offer_undo(ids.clone(), cx),
                 GalleryEvent::Failed(message) => this.toast(Toast::new(message.clone()), cx),
                 GalleryEvent::Notice(message) => this.toast(Toast::new(message.clone()), cx),
+                GalleryEvent::NewFromTemplate(name) => {
+                    this.create_note(Some(name.clone()), window, cx);
+                }
             });
         gallery.focus_handle(cx).focus(window, cx);
         let mut main = MainWindow {
@@ -271,7 +274,17 @@ impl MainWindow {
     /// Creates an empty note in the folder the gallery shows and opens it, once the
     /// open note is left.
     pub fn new_note(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.leave_note(window, cx, |this, _, window, cx| {
+        self.create_note(None, window, cx);
+    }
+
+    /// [`new_note`](Self::new_note), from the template of that name if there is one.
+    fn create_note(
+        &mut self,
+        template: Option<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.leave_note(window, cx, move |this, _, window, cx| {
             if this.creating.is_some() {
                 return;
             }
@@ -279,9 +292,10 @@ impl MainWindow {
                 folder: this.gallery.read(cx).current_folder(),
                 ..CreateOptions::default()
             };
-            let created = this
-                .library
-                .update(cx, |library, cx| library.create("", options, cx));
+            let created = this.library.update(cx, |library, cx| match &template {
+                Some(name) => library.create_from_template(name, options, cx),
+                None => library.create("", options, cx),
+            });
             this.creating = Some(cx.spawn_in(window, async move |this, cx| {
                 let created = created.await;
                 let _ = this.update_in(cx, |this, window, cx| {

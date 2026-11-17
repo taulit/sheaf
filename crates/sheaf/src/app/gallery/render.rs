@@ -14,7 +14,7 @@ use sheaf_core::i18n::tr;
 
 use super::{GalleryView, Popover, Scope, chips};
 use crate::app::actions::{
-    self, NewNote, SaveSearchAsSmartFolder, ShowFolders, ShowSortOptions, ToggleView,
+    self, NewNote, SaveSearchAsSmartFolder, ShowFolders, ShowSortOptions, ShowTemplates, ToggleView,
 };
 use crate::app::assets::{IconName, icon};
 use crate::app::chrome::{FlatButton, HeaderBar, pane};
@@ -65,6 +65,7 @@ impl Render for GalleryView {
                     this.ask_smart_folder_name(window, cx)
                 }),
             )
+            .on_action(cx.listener(|this, _: &ShowTemplates, _, cx| this.show_templates(cx)))
             .on_action(cx.listener(|this, action, window, cx| {
                 if this.confirming().is_some() {
                     this.cancel_confirm(cx);
@@ -144,6 +145,12 @@ impl GalleryView {
                 FlatButton::new("new-note", IconName::Edit)
                     .tooltip(tr("New Note"))
                     .on_click(|_, window, cx| window.dispatch_action(Box::new(NewNote), cx)),
+            )
+            .end(
+                FlatButton::new("new-note-menu", IconName::PanDown)
+                    .tooltip(tr("New Note from Template"))
+                    .active(self.popover == Some(Popover::Templates))
+                    .on_click(toggle(Popover::Templates)),
             )
     }
 
@@ -378,6 +385,7 @@ impl GalleryView {
         let surface = match popover {
             Popover::Folders => self.render_folders(tokens, cx).into_any_element(),
             Popover::Sort => self.render_sort_menu(tokens, cx).into_any_element(),
+            Popover::Templates => self.render_templates_menu(tokens, cx).into_any_element(),
         };
         let overlay = div()
             .absolute()
@@ -408,7 +416,9 @@ impl GalleryView {
                     .when(popover == Popover::Folders, |slot| slot.left(px(8.)))
                     // Under the sort button: the bar's padding, the close button and
                     // three 34 px buttons with their gaps are right of it.
-                    .when(popover == Popover::Sort, |slot| slot.right(px(158.)))
+                    .when(popover == Popover::Sort, |slot| slot.right(px(196.)))
+                    // Under `+ ▾`, the last button before the close button.
+                    .when(popover == Popover::Templates, |slot| slot.right(px(44.)))
                     .child(surface),
             );
         Some(deferred(overlay).with_priority(1).into_any_element())
@@ -578,7 +588,7 @@ pub(super) fn ring(color: Hsla, width: f32) -> BoxShadow {
 }
 
 /// A popover's panel: `.popo` of the prototype.
-fn surface(tokens: &Tokens) -> Div {
+pub(super) fn surface(tokens: &Tokens) -> Div {
     div()
         .flex()
         .flex_col()
@@ -630,7 +640,7 @@ fn count(notes: usize, tokens: &Tokens) -> impl IntoElement {
         .child(notes.to_string())
 }
 
-fn separator(tokens: &Tokens) -> impl IntoElement {
+pub(super) fn separator(tokens: &Tokens) -> impl IntoElement {
     div()
         .flex_none()
         .h(px(1.))

@@ -33,7 +33,7 @@
 //! Again" and on leaving; leaving that fails keeps the view open.
 
 mod date;
-mod files;
+pub(crate) mod files;
 mod header;
 mod jump;
 pub(crate) mod setup;

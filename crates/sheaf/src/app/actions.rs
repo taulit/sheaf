@@ -57,6 +57,8 @@ actions!(
         QuickNoteOpen,
         /// Save the gallery's search as a smart folder.
         SaveSearchAsSmartFolder,
+        /// Open the `+ ▾` menu of the gallery: new notes from templates.
+        ShowTemplates,
     ]
 );
 
@@ -130,6 +132,7 @@ pub fn commands() -> Vec<CommandInfo> {
     vec![
         command(Box::new(NewNote), tr("New Note")),
         command(Box::new(QuickNote), tr("Quick Note")),
+        command(Box::new(ShowTemplates), tr("New Note from Template…")),
         command(Box::new(Search), tr("Search")),
         command(Box::new(TogglePin), tr("Pin or Unpin")),
         command(Box::new(Trash), tr("Move to Trash")),

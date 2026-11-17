@@ -28,6 +28,7 @@
 //! | `cards` | cards, list rows and their context menu |
 //! | [`trash`] | "Recently Deleted": restore, delete for good, the read-only note |
 //! | [`smart`] | smart folders: saved searches |
+//! | `templates` | the `+ ▾` menu: new notes from templates |
 //!
 //! Only metadata from the index is needed to show the gallery. The text of a note is
 //! read, in the background, when its card is first drawn, and its miniature is kept
@@ -41,6 +42,7 @@ pub mod layout;
 pub mod preview;
 mod render;
 pub mod smart;
+mod templates;
 pub mod trash;
 
 use std::collections::{BTreeSet, HashMap};
@@ -86,6 +88,8 @@ pub enum GalleryEvent {
     Failed(String),
     /// A change worth telling, such as notes restored, for a toast.
     Notice(String),
+    /// Create a note from this template and open it.
+    NewFromTemplate(String),
 }
 
 /// Which notes the gallery shows: chosen in the chip row or the folder popover.
@@ -138,6 +142,8 @@ impl Scope {
 pub enum Popover {
     Folders,
     Sort,
+    /// The `+ ▾` menu of new notes and templates.
+    Templates,
 }
 
 /// Where the query matched a note.
@@ -207,6 +213,7 @@ pub struct GalleryView {
     new_folder: Option<Entity<InputState>>,
     trash: trash::TrashState,
     smart: smart::SmartState,
+    templates: templates::TemplatesState,
     generation: u64,
     focus_handle: FocusHandle,
     /// The pause before a search, while typing.
@@ -265,6 +272,7 @@ impl GalleryView {
             new_folder: None,
             trash: trash::TrashState::default(),
             smart: smart::SmartState::default(),
+            templates: templates::TemplatesState::default(),
             generation: 0,
             focus_handle: cx.focus_handle(),
             debounce: Task::ready(()),
@@ -839,6 +847,9 @@ impl GalleryView {
     pub fn set_popover(&mut self, popover: Option<Popover>, cx: &mut Context<Self>) {
         if popover == Some(Popover::Folders) {
             self.count_trash(cx);
+        }
+        if popover == Some(Popover::Templates) {
+            self.load_templates(cx);
         }
         self.popover = popover;
         self.new_folder = None;
