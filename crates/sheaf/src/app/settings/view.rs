@@ -303,7 +303,6 @@ fn row(
                     div()
                         .text_size(tokens.text(12.5))
                         .text_color(tokens.muted)
-                        .truncate()
                         .child(subtitle)
                 })),
         )
@@ -529,7 +528,21 @@ impl Render for SettingsView {
                     .text_size(tokens.text(12.5))
                     .text_color(tokens.muted)
                     .child(keys);
-                row(label, None, keys, cx)
+                div()
+                    .flex()
+                    .items_center()
+                    .min_h(px(40.))
+                    .px(px(14.))
+                    .py(px(5.))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .text_size(tokens.text(13.5))
+                            .child(label),
+                    )
+                    .child(keys)
+                    .into_any_element()
             })
             .collect();
         let keys = group(tr("Keyboard Shortcuts"), keys, cx);

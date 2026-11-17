@@ -163,8 +163,8 @@ impl NoteView {
                         .pt(px(6.))
                         .border_t_1()
                         .border_color(tokens.hair)
-                        .child(div().flex().child(toggle))
-                        .children(rows),
+                        .child(div().flex().ml(px(-8.)).child(toggle))
+                        .children(rows.map(|rows| rows.ml(px(-8.)))),
                 )
                 .into_any_element(),
         )
