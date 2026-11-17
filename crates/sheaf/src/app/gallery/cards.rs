@@ -3,7 +3,6 @@
 
 use std::ops::Range;
 use std::path::{Path, PathBuf};
-use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui::{
@@ -433,14 +432,8 @@ impl GalleryView {
                 .context_menu(move |menu, _, _| super::trash::menu(menu, &gallery))
                 .into_any_element();
         }
-        let folders: Rc<Vec<String>> = Rc::new(
-            self.folders
-                .iter()
-                .map(|folder| folder.path.clone())
-                .collect(),
-        );
         element
-            .context_menu(move |menu, window, cx| note_menu(menu, &gallery, &folders, window, cx))
+            .context_menu(move |menu, window, cx| note_menu(menu, &gallery, window, cx))
             .into_any_element()
     }
 
@@ -490,13 +483,15 @@ impl GalleryView {
 fn note_menu(
     menu: PopupMenu,
     gallery: &WeakEntity<GalleryView>,
-    folders: &Rc<Vec<String>>,
     window: &mut Window,
     cx: &mut Context<PopupMenu>,
 ) -> PopupMenu {
-    let pinned = gallery.upgrade().is_some_and(|gallery| {
-        let selection = gallery.read(cx).selection();
-        !selection.is_empty() && selection.iter().all(|note| note.pinned)
+    let (pinned, targets) = gallery.upgrade().map_or((false, Vec::new()), |gallery| {
+        let gallery = gallery.read(cx);
+        let selection = gallery.selection();
+        let pinned = !selection.is_empty() && selection.iter().all(|note| note.pinned);
+        let folders = gallery.folders.iter().map(|folder| folder.path.clone());
+        (pinned, folders.collect::<Vec<_>>())
     });
     let act = |run: fn(&mut GalleryView, &mut Window, &mut Context<GalleryView>)| {
         let gallery = gallery.clone();
@@ -504,7 +499,6 @@ fn note_menu(
             let _ = gallery.update(cx, |gallery, cx| run(gallery, window, cx));
         }
     };
-    let targets = folders.clone();
     let mover = gallery.clone();
     menu.item(
         PopupMenuItem::new(if pinned { tr("Unpin") } else { tr("Pin") })

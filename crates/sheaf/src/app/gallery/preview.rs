@@ -5,10 +5,14 @@
 use sheaf_core::i18n::tr;
 use sheaf_core::snippet::{body_without_title, plain_text};
 
-/// More lines than fit on a card, even without a cover.
+/// More lines than fit on a card, even without a cover, counted as the widest card
+/// wraps them. What is left out costs layout in every frame the card is drawn.
 const MAX_LINES: usize = 10;
 /// A line longer than this wraps past the bottom of the card anyway.
 const MAX_LINE_CHARS: usize = 240;
+/// The most characters a line of the widest card holds: 388 px of 11.5 px text, at
+/// 5.2 px for a narrow character.
+const WIDEST_LINE_CHARS: usize = 75;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Preview {
@@ -36,8 +40,9 @@ impl Preview {
         let mut preview = Preview::default();
         let mut fenced = false;
         let mut first = true;
+        let mut wrapped = 0;
         for raw in body_without_title(body).lines() {
-            if preview.lines.len() == MAX_LINES {
+            if wrapped >= MAX_LINES {
                 break;
             }
             let line = raw.trim();
@@ -49,7 +54,7 @@ impl Preview {
                 continue;
             }
             if fenced {
-                preview.push(Line::Text(line.to_owned()));
+                wrapped += preview.push(Line::Text(line.to_owned()));
                 continue;
             }
             if let Some(source) = image(line) {
@@ -61,13 +66,14 @@ impl Preview {
             }
             first = false;
             if let Some(line) = block(line) {
-                preview.push(line);
+                wrapped += preview.push(line);
             }
         }
         preview
     }
 
-    fn push(&mut self, line: Line) {
+    /// Adds `line` and returns how many lines of the widest card it takes.
+    fn push(&mut self, line: Line) -> usize {
         let shorten = |text: String| match text.char_indices().nth(MAX_LINE_CHARS) {
             Some((end, _)) => text[..end].to_owned(),
             None => text,
@@ -81,7 +87,11 @@ impl Preview {
             Line::Tags(text) => Line::Tags(shorten(text)),
             Line::Text(text) => Line::Text(shorten(text)),
         };
+        let (Line::Heading(text) | Line::Task { text, .. } | Line::Tags(text) | Line::Text(text)) =
+            &line;
+        let wrapped = text.chars().count().div_ceil(WIDEST_LINE_CHARS).max(1);
         self.lines.push(line);
+        wrapped
     }
 
     /// One line for a list row: the open tasks, else the first text.
@@ -233,6 +243,19 @@ mod tests {
 
         let many: String = (0..30).map(|n| format!("Zeile {n}\n")).collect();
         assert_eq!(Preview::build(&format!("T\n{many}")).lines.len(), MAX_LINES);
+    }
+
+    #[test]
+    fn long_lines_count_as_the_lines_they_wrap_into() {
+        // Each takes four lines of the widest card: three of them fill it.
+        let paragraph = "Wort ".repeat(60);
+        let body = format!("T\n\n{paragraph}\n\n{paragraph}\n\n{paragraph}\n\nmehr\n");
+        let lines = Preview::build(&body).lines;
+        assert_eq!(lines.len(), 3);
+
+        let short = "- [ ] Milch\n".repeat(4);
+        let mixed = format!("T\n\n{paragraph}\n\n{paragraph}\n{short}");
+        assert_eq!(Preview::build(&mixed).lines.len(), 2 + 2);
     }
 
     #[test]
