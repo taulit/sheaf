@@ -237,7 +237,7 @@ fn measure_start(child: &mut Child, trace: &Path, spawned: SystemTime) -> Result
             .map_err(|_| format!("{name} before the spawn"))
     };
     std::thread::sleep(SETTLE);
-    let (rss, pss) = memory(child.id()).map_err(|err| err.to_string())?;
+    let Memory { rss, pss, .. } = memory(child.id()).map_err(|err| err.to_string())?;
     Ok(Start {
         run: since_spawn("run")?,
         window: since_spawn("window")?,
@@ -248,8 +248,17 @@ fn measure_start(child: &mut Child, trace: &Path, spawned: SystemTime) -> Result
     })
 }
 
-/// VmRSS and the proportional set size of process `pid`, in bytes.
-fn memory(pid: u32) -> std::io::Result<(u64, u64)> {
+/// The memory of a process, in bytes.
+struct Memory {
+    rss: u64,
+    /// The part of `rss` that is not backed by a file: what the process itself holds.
+    anonymous: u64,
+    /// The proportional set size: pages shared with other processes count in part.
+    pss: u64,
+}
+
+/// The memory of process `pid`, from `/proc`.
+fn memory(pid: u32) -> std::io::Result<Memory> {
     let kilobytes = |text: &str, key: &str| {
         text.lines()
             .find_map(|line| line.strip_prefix(key))
@@ -264,7 +273,11 @@ fn memory(pid: u32) -> std::io::Result<(u64, u64)> {
     };
     let status = fs::read_to_string(format!("/proc/{pid}/status"))?;
     let rollup = fs::read_to_string(format!("/proc/{pid}/smaps_rollup"))?;
-    Ok((kilobytes(&status, "VmRSS:"), kilobytes(&rollup, "Pss:")))
+    Ok(Memory {
+        rss: kilobytes(&status, "VmRSS:"),
+        anonymous: kilobytes(&status, "RssAnon:"),
+        pss: kilobytes(&rollup, "Pss:"),
+    })
 }
 
 /// Ends `child` with SIGTERM, as a logout would, and waits for it.
@@ -459,11 +472,16 @@ fn searchd(binary: &Path, notes: &str) -> Outcome {
         memory(child.id()).map_err(|err| err.to_string())
     });
     stop(&mut child)?;
-    let (rss, pss) = measured?;
+    let memory = measured?;
     Ok(row(
         &format!("sheaf-searchd idle memory, {notes} notes"),
-        "< 15 MB",
-        format!("{:.1} MB RSS, {:.1} MB PSS", megabytes(rss), megabytes(pss)),
-        rss < SEARCHD_MEMORY_BUDGET,
+        "< 15 MB RSS",
+        format!(
+            "{:.1} MB RSS ({:.1} MB anonymous, the rest mapped files), {:.1} MB PSS",
+            megabytes(memory.rss),
+            megabytes(memory.anonymous),
+            megabytes(memory.pss),
+        ),
+        memory.rss < SEARCHD_MEMORY_BUDGET,
     ))
 }
