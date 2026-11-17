@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: sheaf\n"
 "Report-Msgid-Bugs-To: https://github.com/taulit/sheaf/issues\n"
-"POT-Creation-Date: 2026-11-17 22:15+0100\n"
+"POT-Creation-Date: 2026-11-17 22:22+0100\n"
 "PO-Revision-Date: 2026-11-16 22:17+0100\n"
 "Last-Translator: Automatically generated\n"
 "Language-Team: German\n"
@@ -640,36 +640,40 @@ msgstr[1] "{} Notizen verweisen hierher"
 msgid "{day} {month} {year}, {time}"
 msgstr "{day}. {month} {year} um {time}"
 
-#: crates/sheaf/src/app/note/export.rs:95
+#: crates/sheaf/src/app/note/export.rs:111
 msgid "Markdown"
 msgstr "Markdown"
 
-#: crates/sheaf/src/app/note/export.rs:98
+#: crates/sheaf/src/app/note/export.rs:114
 msgid "Export as Markdown"
 msgstr "Als Markdown exportieren"
 
-#: crates/sheaf/src/app/note/export.rs:116
+#: crates/sheaf/src/app/note/export.rs:132
 msgid "PDF"
 msgstr "PDF"
 
-#: crates/sheaf/src/app/note/export.rs:119
+#: crates/sheaf/src/app/note/export.rs:135
 msgid "Export as PDF"
 msgstr "Als PDF exportieren"
 
-#: crates/sheaf/src/app/note/export.rs:140
+#: crates/sheaf/src/app/note/export.rs:159
 #, rust-format
 msgid "Could not print: {}"
 msgstr "Drucken fehlgeschlagen: {}"
 
-#: crates/sheaf/src/app/note/export.rs:157
+#: crates/sheaf/src/app/note/export.rs:160
+msgid "Open as PDF"
+msgstr "Als PDF öffnen"
+
+#: crates/sheaf/src/app/note/export.rs:180
 msgid "Exported"
 msgstr "Exportiert"
 
-#: crates/sheaf/src/app/note/export.rs:157 crates/sheaf/src/app/quick.rs:513
+#: crates/sheaf/src/app/note/export.rs:180 crates/sheaf/src/app/quick.rs:513
 msgid "Open"
 msgstr "Öffnen"
 
-#: crates/sheaf/src/app/note/export.rs:162
+#: crates/sheaf/src/app/note/export.rs:185
 #, rust-format
 msgid "Could not export: {}"
 msgstr "Exportieren fehlgeschlagen: {}"

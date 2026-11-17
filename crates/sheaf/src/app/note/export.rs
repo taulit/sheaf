@@ -5,7 +5,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
-use gpui::{AppContext as _, Context, Task};
+use gpui::{App, AppContext as _, Context, Task};
 use sheaf_core::i18n::tr;
 use sheaf_export::{FontFile, Fonts, Options, PageSetup};
 
@@ -70,6 +70,22 @@ fn write(path: &Path, bytes: &[u8]) -> Result<(), String> {
     std::fs::write(path, bytes).map_err(|err| format!("{}: {err}", path.display()))
 }
 
+/// Renders `source` on A4 into a file named `name` in the temporary folder and opens
+/// it with the system's PDF viewer. The viewer reads the file after this returns, so
+/// it stays.
+fn open_in_viewer(source: Source, name: String, cx: &mut App) {
+    let path = std::env::temp_dir().join(name);
+    let written = cx.background_spawn({
+        let path = path.clone();
+        async move { write(&path, &source.render(PageSetup::A4)?) }
+    });
+    cx.spawn(async move |cx| match written.await {
+        Ok(()) => cx.update(|cx| cx.open_with_system(&path)),
+        Err(reason) => log::error!("cannot open the PDF: {reason}"),
+    })
+    .detach();
+}
+
 impl NoteView {
     fn source(&self, cx: &Context<Self>) -> Source {
         let zone = self.library.read(cx).now().time_zone().clone();
@@ -126,10 +142,13 @@ impl NoteView {
         cx.notify();
     }
 
-    /// "Print…": the print dialog, then the PDF for the paper chosen there.
+    /// "Print…": the print dialog, then the PDF for the paper chosen there. If that
+    /// fails, as without a print portal, the toast offers the PDF in a viewer to print
+    /// from there (`docs/verified.md` §2).
     pub fn print(&mut self, cx: &mut Context<Self>) {
         self.popover = None;
         let source = self.source(cx);
+        let fallback = (source.clone(), file_name(&self.title, "pdf"));
         let title = self.title.clone();
         let dialogs = dialogs(cx);
         let printed =
@@ -138,7 +157,11 @@ impl NoteView {
             if let Err(reason) = printed.await {
                 log::error!("cannot print: {reason}");
                 let message = tr("Could not print: {}").replace("{}", &reason);
-                let _ = this.update(cx, |_, cx| cx.emit(NoteEvent::Toast(Toast::new(message))));
+                let toast = Toast::new(message).action(tr("Open as PDF"), move |_, cx| {
+                    let (source, name) = fallback.clone();
+                    open_in_viewer(source, name, cx);
+                });
+                let _ = this.update(cx, |_, cx| cx.emit(NoteEvent::Toast(toast)));
             }
         });
         cx.notify();

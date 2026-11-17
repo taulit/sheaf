@@ -287,6 +287,8 @@ pub struct Scripted {
     pub folders: Mutex<VecDeque<PathBuf>>,
     /// The page setup the print dialog answers with; `None` cancels.
     pub paper: Mutex<Option<PageSetup>>,
+    /// Why printing fails, as without a print portal; checked before `paper`.
+    pub print_error: Mutex<Option<String>>,
     /// Every PDF printed.
     pub printed: Mutex<Vec<Vec<u8>>>,
     /// The titles of the dialogs asked for, in order.
@@ -315,6 +317,9 @@ impl Backend for Arc<Scripted> {
 
     fn print(&self, title: &str, render: Renderer<'_>) -> Result<bool, String> {
         lock(&self.asked).push(title.to_owned());
+        if let Some(reason) = lock(&self.print_error).clone() {
+            return Err(reason);
+        }
         let Some(paper) = *lock(&self.paper) else {
             return Ok(false);
         };

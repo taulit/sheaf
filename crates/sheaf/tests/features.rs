@@ -190,6 +190,23 @@ async fn print_renders_for_the_chosen_paper(cx: &mut TestAppContext) {
     assert!(text.contains("/MediaBox[0 0 419.52"), "an A5 page");
 }
 
+#[gpui::test]
+async fn a_failed_print_offers_the_pdf_in_a_viewer(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let mut app = open_app(&notes, cx);
+    app.open("Reise nach Lissabon");
+    *app.dialogs.print_error.lock().unwrap() = Some("no print portal".to_owned());
+    app.note_do(|note, _, cx| note.print(cx));
+    assert_eq!(
+        app.toast(),
+        Some((
+            "Could not print: no print portal".to_owned(),
+            Some("Open as PDF".to_owned())
+        ))
+    );
+    assert!(app.dialogs.printed.lock().unwrap().is_empty());
+}
+
 // ---- Attachments ---------------------------------------------------------------------
 
 #[gpui::test]
