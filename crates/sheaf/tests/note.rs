@@ -990,3 +990,40 @@ async fn a_new_note_saved_and_then_emptied_is_not_kept(cx: &mut TestAppContext) 
         .any(|text| text.contains("Geheim"));
     assert!(!kept, "the deleted text is nowhere");
 }
+
+#[gpui::test]
+async fn a_pin_or_move_that_fails_says_so_and_shows_the_real_state(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let mut app = open_app(&notes, cx);
+    let note = app.open("Notch-Ideen");
+    let pinned = |app: &mut TestApp| {
+        let note = app.note();
+        note.read_with(app.cx, |note, _| note.meta().unwrap().pinned)
+    };
+
+    // Unsaved edits and the file changed on disk: nothing is pinned.
+    app.cx.simulate_input("Meins ");
+    edit_elsewhere(&notes, "Notch-Ideen\n\nVon Syncthing.\n");
+    app.note_do(|note, cx| note.toggle_pin(cx));
+    assert!(!notes.read(NOTCH).contains("pinned"));
+    assert!(!pinned(&mut app), "the icon flips back");
+    assert_eq!(
+        app.toast().as_deref(),
+        Some("Could not pin the note: the file changed elsewhere")
+    );
+    assert_eq!(app.banner(), Some(Banner::ChangedOnDisk));
+    app.note_do(|note, cx| note.reload_from_disk(cx));
+    let id = note.read_with(app.cx, |note, _| note.id().clone());
+    app.changed_elsewhere(vec![id]);
+
+    // A folder that cannot be written to.
+    let target = notes.dir.join("Privat");
+    chmod(&target, 0o555);
+    app.note_do(|note, cx| note.move_to("Privat", cx));
+    chmod(&target, 0o755);
+    assert!(notes.files().contains(&NOTCH.to_owned()));
+    assert_eq!(
+        app.toast().as_deref(),
+        Some("Could not move the note: permission denied")
+    );
+}

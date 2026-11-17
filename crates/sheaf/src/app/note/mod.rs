@@ -61,7 +61,7 @@ use super::overlays::Toast;
 use super::state::Recovery;
 use super::theme::ActiveTokens as _;
 use setup::{Lookup, SharedLookup};
-use worker::{Job, Leave, Queued, Report, Shared};
+use worker::{Change, Job, Leave, Queued, Report, Shared};
 
 /// How long typing may pause before the text is saved.
 pub const SAVE_DELAY: Duration = Duration::from_millis(600);
@@ -622,8 +622,29 @@ impl NoteView {
                     self.banner = Some(Banner::SaveFailed(reason));
                 }
             }
+            Report::ChangeFailed { change, reason } => self.change_failed(change, &reason, cx),
         }
         cx.notify();
+    }
+
+    /// A pin or move did not happen: the header shows the note as it is, a toast says
+    /// why. A file name that did not follow the title loses nothing and goes unmentioned.
+    fn change_failed(&mut self, change: Change, reason: &str, cx: &mut Context<Self>) {
+        let message = match change {
+            Change::Rename => return,
+            Change::Pin(pinned) => {
+                if let Some(meta) = &mut self.meta {
+                    meta.pinned = !pinned;
+                }
+                if pinned {
+                    tr("Could not pin the note: {}")
+                } else {
+                    tr("Could not unpin the note: {}")
+                }
+            }
+            Change::Move => tr("Could not move the note: {}"),
+        };
+        cx.emit(NoteEvent::Toast(Toast::new(message.replace("{}", reason))));
     }
 
     /// Shows `banner`, unless the view is done with the note; a trash that was under

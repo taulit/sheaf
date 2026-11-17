@@ -16,6 +16,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use async_channel::{Receiver, Sender};
 use gpui::{AsyncApp, Entity, WeakEntity};
 use jiff::Timestamp;
+use sheaf_core::i18n::tr;
 use sheaf_core::{
     CreateOptions, Error, Fingerprint, Note, NoteId, NoteMeta, NoteStore, WriteOptions,
 };
@@ -135,6 +136,29 @@ pub enum Report {
     SaveFailed(String),
     /// The note could not be moved to the trash, for this reason.
     TrashFailed(String),
+    /// A pin or move did not happen, for this reason.
+    ChangeFailed {
+        change: Change,
+        reason: String,
+    },
+}
+
+/// A write that changes the file but not its text.
+#[derive(Clone, Debug)]
+pub enum Change {
+    Rename,
+    /// Pin, or unpin with `false`.
+    Pin(bool),
+    Move,
+}
+
+/// Whether the file is as the worker last saw it.
+enum Ours {
+    Yes,
+    /// No, for this reason; the view knows.
+    No(String),
+    /// The note is finished; nothing more is written.
+    Finished,
 }
 
 pub async fn work(
@@ -233,14 +257,21 @@ impl Worker {
                     Err(err) => Some(Report::SaveFailed(reason(&err))),
                 }
             }
-            Job::Rename => self.change(cx, |store, id| store.sync_filename(id)).await,
-            Job::Pin(pinned) => {
-                self.change(cx, move |store, id| store.set_pinned(id, pinned))
+            Job::Rename => {
+                self.change(cx, Change::Rename, |store, id| store.sync_filename(id))
                     .await
             }
+            Job::Pin(pinned) => {
+                self.change(cx, Change::Pin(pinned), move |store, id| {
+                    store.set_pinned(id, pinned)
+                })
+                .await
+            }
             Job::Move(folder) => {
-                self.change(cx, move |store, id| store.move_to(id, &folder))
-                    .await
+                self.change(cx, Change::Move, move |store, id| {
+                    store.move_to(id, &folder)
+                })
+                .await
             }
             Job::Trash { body, now } => {
                 let trashed = self
@@ -287,23 +318,31 @@ impl Worker {
     async fn change(
         &self,
         cx: &mut AsyncApp,
+        kind: Change,
         change: impl FnOnce(&NoteStore, &NoteId) -> sheaf_core::Result<NoteMeta> + Send + 'static,
     ) -> Option<Report> {
-        if !self.still_ours(cx).await {
-            return None;
-        }
-        let changed = self
-            .step(cx, move |known, store, touched| {
-                known.change(store, touched, change)
-            })
-            .await;
-        match changed {
-            Ok(meta) => meta.map(Report::Written),
-            Err(err) => {
-                log::error!("cannot write the note: {err}");
-                None
+        let reason = match self.still_ours(cx).await {
+            Ours::Yes => {
+                let changed = self
+                    .step(cx, move |known, store, touched| {
+                        known.change(store, touched, change)
+                    })
+                    .await;
+                match changed {
+                    Ok(meta) => return meta.map(Report::Written),
+                    Err(err) => {
+                        log::error!("cannot write the note: {err}");
+                        reason(&err)
+                    }
+                }
             }
-        }
+            Ours::No(reason) => reason,
+            Ours::Finished => return None,
+        };
+        Some(Report::ChangeFailed {
+            change: kind,
+            reason,
+        })
     }
 
     /// "Keep Mine" or "Save as New Note": the text goes into another note.
@@ -329,28 +368,32 @@ impl Worker {
 
     /// Whether the file is as the worker last saw it. If not, the view hears that it
     /// changed or is gone, and takes the text from disk if it has nothing unsaved.
-    async fn still_ours(&self, cx: &mut AsyncApp) -> bool {
+    async fn still_ours(&self, cx: &mut AsyncApp) -> Ours {
         match self.step(cx, |known, store, _| known.check(store)).await {
-            Ok(Some(Checked::Same)) => true,
+            Ok(Some(Checked::Same)) => Ours::Yes,
             Ok(Some(Checked::Changed(note))) => {
                 let taken = self
                     .view
                     .update(cx, |view, cx| view.changed_on_disk(&note, cx))
                     .unwrap_or(false);
                 let mut known = lock(&self.shared);
-                if taken && !known.finished {
+                if known.finished {
+                    Ours::Finished
+                } else if taken {
                     known.adopt(&note);
+                    Ours::Yes
+                } else {
+                    Ours::No(tr("the file changed elsewhere"))
                 }
-                taken
             }
             Ok(Some(Checked::Deleted)) => {
                 self.report(Report::Deleted, cx);
-                false
+                Ours::No(tr("the file was deleted elsewhere"))
             }
-            Ok(None) => false,
+            Ok(None) => Ours::Finished,
             Err(err) => {
                 log::warn!("cannot look at the note: {err}");
-                false
+                Ours::No(reason(&err))
             }
         }
     }
