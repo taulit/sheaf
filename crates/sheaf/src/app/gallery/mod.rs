@@ -554,7 +554,12 @@ impl GalleryView {
             let _ = this.update(cx, |this, cx| {
                 match config {
                     Ok(config) => this.config = Some(config),
-                    Err(err) => log::warn!("cannot read the folder settings: {err}"),
+                    Err(err) => {
+                        log::warn!("cannot read the folder settings: {err}");
+                        let message = tr("Could not read the folder settings: {}")
+                            .replace("{}", &err.to_string());
+                        cx.emit(GalleryEvent::Failed(message));
+                    }
                 }
                 this.reload(cx);
             });
@@ -562,7 +567,8 @@ impl GalleryView {
     }
 
     /// Changes the folder settings shown and writes the keys `change` changes, after
-    /// the changes before it. Does nothing before the settings were read.
+    /// the changes before it. Does nothing before the settings were read. If the
+    /// write fails, the gallery says so and shows the settings as they are on disk.
     fn change_config(
         &mut self,
         change: impl Fn(&mut FolderConfig) + Send + 'static,
@@ -571,13 +577,22 @@ impl GalleryView {
         let Some(config) = &mut self.config else {
             return;
         };
+        let before = config.clone();
         change(config);
         let saved = self.library.read(cx).update_folder_config(change, cx);
         let previous = std::mem::replace(&mut self.saving, Task::ready(()));
-        self.saving = cx.background_spawn(async move {
+        self.saving = cx.spawn(async move |this, cx| {
             previous.await;
             if let Err(err) = saved.await {
                 log::warn!("cannot save the folder settings: {err}");
+                let message =
+                    tr("Could not save the folder settings: {}").replace("{}", &err.to_string());
+                let _ = this.update(cx, |this, cx| {
+                    cx.emit(GalleryEvent::Failed(message));
+                    this.config = Some(before);
+                    this.relayout();
+                    this.load_config(cx);
+                });
             }
         });
     }

@@ -666,6 +666,30 @@ async fn every_writer_of_the_folder_settings_keeps_the_keys_of_the_others(cx: &m
     assert_eq!(stored.view("").sort, SortOrder::Title);
 }
 
+#[cfg(unix)]
+#[gpui::test]
+async fn a_view_that_cannot_be_stored_says_so_and_goes_back(cx: &mut TestAppContext) {
+    use std::os::unix::fs::PermissionsExt as _;
+    let notes = Notes::seeded();
+    let mut app = open_app(&notes, cx);
+    let sheaf_dir = notes.dir.join(".sheaf");
+    std::fs::set_permissions(&sheaf_dir, std::fs::Permissions::from_mode(0o555)).unwrap();
+
+    app.update(|gallery, cx| gallery.set_view(View::List, cx));
+    std::fs::set_permissions(&sheaf_dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    assert_eq!(app.read(|gallery| gallery.view()), View::Gallery);
+    let toast = app.toast().unwrap_or_default();
+    assert!(
+        toast.starts_with("Could not save the folder settings"),
+        "{toast}"
+    );
+    assert_eq!(
+        FolderConfig::load(&notes.dir).unwrap().pinned_tags,
+        ["ausschreibung", "rezepte"]
+    );
+}
+
 #[gpui::test]
 async fn the_gallery_follows_changes_and_keeps_its_place(cx: &mut TestAppContext) {
     let notes = Notes::seeded();
