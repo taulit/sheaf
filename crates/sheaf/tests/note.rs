@@ -10,12 +10,14 @@ use std::time::Duration;
 
 use fixture::{Look, Notes};
 use gpui::{Entity, TestAppContext, VisualTestContext};
+use gpui_component::ActiveTheme as _;
 use gpui_markdown_editor::{DocMeta, EditorEvent};
 use sheaf::app::actions;
 use sheaf::app::instance::Request;
 use sheaf::app::library::{Library, LibraryEvent};
 use sheaf::app::note::{Banner, NoteView, Popover, RENAME_DELAY, SAVE_DELAY};
 use sheaf::app::overlays::shortcuts;
+use sheaf::app::theme::ActiveTokens as _;
 use sheaf::app::window::{self, MainWindow, Route};
 use sheaf_core::{NoteId, NoteMeta, Sort};
 
@@ -558,6 +560,27 @@ async fn the_editors_view_state_is_kept_per_note(cx: &mut TestAppContext) {
     let note = app.open("Ausschreibung – offene Fragen");
     let restored = note.read_with(app.cx, |note, cx| note.editor().read(cx).meta().clone());
     assert_eq!(restored, meta);
+}
+
+#[gpui::test]
+async fn the_editor_draws_with_the_font_the_theme_resolved(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let mut app = open_app(&notes, cx);
+    app.cx.simulate_keystrokes("down down enter");
+    let note = app.note();
+    let (editor, tokens, theme) = note.read_with(app.cx, |note, cx| {
+        let editor = note.editor().read(cx).style().font_family.clone();
+        (
+            editor,
+            cx.tokens().font_family.clone(),
+            cx.theme().font_family.clone(),
+        )
+    });
+    // The family with a real bold face (the embedded Inter if the desktop font is
+    // variable), not the one the desktop named.
+    assert!(!tokens.is_empty());
+    assert_eq!(editor, tokens);
+    assert_eq!(theme, tokens, "the overlays inherit it from gpui-component");
 }
 
 // ---- Palette and shortcuts ----------------------------------------------------------
