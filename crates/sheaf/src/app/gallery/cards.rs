@@ -122,6 +122,7 @@ impl GalleryView {
             .text_color(tokens.muted)
             .when_some(cover, |card, image| {
                 let place = div()
+                    .flex()
                     .w_full()
                     .h(px(COVER_HEIGHT))
                     .mb(px(6.))
@@ -129,8 +130,13 @@ impl GalleryView {
                 card.child(match image {
                     Some(image) => place
                         .child(
+                            // With a width in percent an image takes its height from
+                            // its own aspect ratio and grows into the text below; as
+                            // a flex item it keeps the height given here.
                             img(image)
-                                .size_full()
+                                .flex_1()
+                                .min_w_0()
+                                .h(px(COVER_HEIGHT))
                                 .rounded(px(8.))
                                 .object_fit(ObjectFit::Cover),
                         )
@@ -390,7 +396,7 @@ impl GalleryView {
                     Some(image) => place
                         .child(
                             img(image)
-                                .size_full()
+                                .size(px(44.))
                                 .rounded(px(8.))
                                 .object_fit(ObjectFit::Cover),
                         )
