@@ -1,0 +1,25 @@
+---
+source: crates/sheaf/tests/cli.rs
+expression: "sandbox.json(&[\"mv\", \"Einkauf\", \"Archiv/2026\"], \"note\")"
+---
+{
+  "note": {
+    "conflict": false,
+    "created": "[time]",
+    "folder": "Archiv/2026",
+    "has_attachment": false,
+    "has_image": false,
+    "has_table": false,
+    "id": "[id1]",
+    "modified": "[time]",
+    "path": "[notes]/Archiv/2026/Einkauf.md",
+    "pinned": true,
+    "tags": [
+      "haushalt"
+    ],
+    "tasks_open": 2,
+    "tasks_total": 3,
+    "title": "Einkauf"
+  },
+  "schema": 1
+}

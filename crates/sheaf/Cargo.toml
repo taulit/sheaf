@@ -10,17 +10,20 @@ publish.workspace = true
 
 [dependencies]
 sheaf-core.workspace = true
+sheaf-searchd.workspace = true
 clap.workspace = true
 clap_complete.workspace = true
-log.workspace = true
 serde.workspace = true
+jiff.workspace = true
 serde_json.workspace = true
+thiserror.workspace = true
 zbus.workspace = true
 
 [dev-dependencies]
 assert_cmd.workspace = true
 insta.workspace = true
 tempfile.workspace = true
+regex.workspace = true
 
 [lints]
 workspace = true

@@ -1,0 +1,10 @@
+---
+source: crates/sheaf/tests/cli.rs
+expression: "sandbox.text(&[\"list\"])"
+---
+[id1]                       Reading list               /               [time]
+[id2]                       Ideen für die Reise        /               [time]
+[id3]                       Ideen für den Garten       /               [time]
+[id4]                       Project plan               Arbeit/Planung  [time]
+[id5]                       Besprechung Ausschreibung  Arbeit          [time]
+[id6]                       Einkauf                    /               [time]

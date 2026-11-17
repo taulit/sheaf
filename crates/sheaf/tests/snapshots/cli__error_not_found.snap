@@ -1,0 +1,11 @@
+---
+source: crates/sheaf/tests/cli.rs
+expression: "sandbox.document(&missing.stderr, \"error\")"
+---
+{
+  "error": {
+    "code": "not_found",
+    "message": "not found: No such note"
+  },
+  "schema": 1
+}

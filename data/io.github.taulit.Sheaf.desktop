@@ -1,0 +1,29 @@
+[Desktop Entry]
+Type=Application
+Name=Notes
+Name[de]=Notizen
+GenericName=Notes
+GenericName[de]=Notizen
+Comment=Fast, native notes in plain Markdown files
+Comment[de]=Schnelle, native Notizen als einfache Markdown-Dateien
+Keywords=notes;markdown;memo;todo;checklist;sheaf;
+Keywords[de]=notizen;markdown;memo;aufgaben;checkliste;sheaf;
+Exec=sheaf %U
+Icon=io.github.taulit.Sheaf
+Terminal=false
+Categories=Utility;TextEditor;
+StartupNotify=true
+StartupWMClass=io.github.taulit.Sheaf
+DBusActivatable=true
+MimeType=text/markdown;
+Actions=new-note;quick-note;
+
+[Desktop Action new-note]
+Name=New Note
+Name[de]=Neue Notiz
+Exec=sheaf --new
+
+[Desktop Action quick-note]
+Name=Quick Note
+Name[de]=Schnellnotiz
+Exec=sheaf --quick

@@ -1,0 +1,115 @@
+---
+source: crates/sheaf/tests/cli.rs
+expression: "sandbox.json(&[\"list\"], \"note-list\")"
+---
+{
+  "notes": [
+    {
+      "conflict": false,
+      "created": "[time]",
+      "folder": "",
+      "has_attachment": false,
+      "has_image": false,
+      "has_table": false,
+      "id": "[id1]",
+      "modified": "[time]",
+      "path": "[notes]/Reading list.md",
+      "pinned": false,
+      "tags": [
+        "books"
+      ],
+      "tasks_open": 0,
+      "tasks_total": 0,
+      "title": "Reading list"
+    },
+    {
+      "conflict": false,
+      "created": "[time]",
+      "folder": "",
+      "has_attachment": false,
+      "has_image": false,
+      "has_table": false,
+      "id": "[id2]",
+      "modified": "[time]",
+      "path": "[notes]/Ideen für die Reise.md",
+      "pinned": false,
+      "tags": [
+        "urlaub"
+      ],
+      "tasks_open": 0,
+      "tasks_total": 0,
+      "title": "Ideen für die Reise"
+    },
+    {
+      "conflict": false,
+      "created": "[time]",
+      "folder": "",
+      "has_attachment": false,
+      "has_image": false,
+      "has_table": false,
+      "id": "[id3]",
+      "modified": "[time]",
+      "path": "[notes]/Ideen für den Garten.md",
+      "pinned": false,
+      "tags": [],
+      "tasks_open": 0,
+      "tasks_total": 0,
+      "title": "Ideen für den Garten"
+    },
+    {
+      "conflict": false,
+      "created": "[time]",
+      "folder": "Arbeit/Planung",
+      "has_attachment": false,
+      "has_image": false,
+      "has_table": false,
+      "id": "[id4]",
+      "modified": "[time]",
+      "path": "[notes]/Arbeit/Planung/Project plan.md",
+      "pinned": false,
+      "tags": [
+        "projekt"
+      ],
+      "tasks_open": 1,
+      "tasks_total": 2,
+      "title": "Project plan"
+    },
+    {
+      "conflict": false,
+      "created": "[time]",
+      "folder": "Arbeit",
+      "has_attachment": false,
+      "has_image": false,
+      "has_table": true,
+      "id": "[id5]",
+      "modified": "[time]",
+      "path": "[notes]/Arbeit/Besprechung Ausschreibung.md",
+      "pinned": false,
+      "tags": [
+        "projekt"
+      ],
+      "tasks_open": 0,
+      "tasks_total": 0,
+      "title": "Besprechung Ausschreibung"
+    },
+    {
+      "conflict": false,
+      "created": "[time]",
+      "folder": "",
+      "has_attachment": false,
+      "has_image": false,
+      "has_table": false,
+      "id": "[id6]",
+      "modified": "[time]",
+      "path": "[notes]/Einkauf.md",
+      "pinned": true,
+      "tags": [
+        "haushalt"
+      ],
+      "tasks_open": 2,
+      "tasks_total": 3,
+      "title": "Einkauf"
+    }
+  ],
+  "schema": 1
+}

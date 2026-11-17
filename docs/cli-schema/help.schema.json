@@ -1,0 +1,222 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Command description",
+  "description": "Output of `help --json`: every command, argument and option, derived from the command line itself.",
+  "type": "object",
+  "required": [
+    "schema",
+    "name",
+    "version",
+    "about",
+    "global_options",
+    "exit_codes",
+    "error_schema",
+    "commands"
+  ],
+  "properties": {
+    "schema": {
+      "const": 1,
+      "description": "Version of the document format."
+    },
+    "name": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    },
+    "about": {
+      "type": "string"
+    },
+    "global_options": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "long",
+          "short",
+          "value_name",
+          "required",
+          "repeatable",
+          "default",
+          "possible_values",
+          "help"
+        ],
+        "properties": {
+          "long": {
+            "type": "string"
+          },
+          "short": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "value_name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Null for flags."
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "repeatable": {
+            "type": "boolean"
+          },
+          "default": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "possible_values": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "help": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "Accepted by every command."
+    },
+    "exit_codes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "code",
+          "meaning"
+        ],
+        "properties": {
+          "code": {
+            "type": "integer"
+          },
+          "meaning": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "error_schema": {
+      "type": "string",
+      "description": "File in this folder that describes errors."
+    },
+    "commands": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "about",
+          "usage",
+          "arguments",
+          "options",
+          "output_schema"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "about": {
+            "type": "string"
+          },
+          "usage": {
+            "type": "string"
+          },
+          "arguments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "name",
+                "required",
+                "multiple",
+                "help"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "required": {
+                  "type": "boolean"
+                },
+                "multiple": {
+                  "type": "boolean"
+                },
+                "help": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "long",
+                "short",
+                "value_name",
+                "required",
+                "repeatable",
+                "default",
+                "possible_values",
+                "help"
+              ],
+              "properties": {
+                "long": {
+                  "type": "string"
+                },
+                "short": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "value_name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Null for flags."
+                },
+                "required": {
+                  "type": "boolean"
+                },
+                "repeatable": {
+                  "type": "boolean"
+                },
+                "default": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "possible_values": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "help": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "output_schema": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "File in this folder that describes the output with `--json`; null if the command prints no JSON (`completions`)."
+          }
+        }
+      }
+    }
+  }
+}

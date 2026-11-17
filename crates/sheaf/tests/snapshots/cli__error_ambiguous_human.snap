@@ -1,0 +1,7 @@
+---
+source: crates/sheaf/tests/cli.rs
+expression: "sandbox.normalise(&ambiguous.stderr, true)"
+---
+sheaf: ambiguous reference: Ideen
+  [id1]                       Ideen für den Garten  /
+  [id2]                       Ideen für die Reise  /

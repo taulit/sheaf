@@ -1,0 +1,25 @@
+---
+source: crates/sheaf/tests/cli.rs
+expression: "sandbox.json(&[\"rm\", \"Project plan\"], \"note\")"
+---
+{
+  "note": {
+    "conflict": false,
+    "created": "[time]",
+    "folder": ".trash",
+    "has_attachment": false,
+    "has_image": false,
+    "has_table": false,
+    "id": "[id1]",
+    "modified": "[time]",
+    "path": "[notes]/.trash/Project plan.md",
+    "pinned": false,
+    "tags": [
+      "projekt"
+    ],
+    "tasks_open": 1,
+    "tasks_total": 2,
+    "title": "Project plan"
+  },
+  "schema": 1
+}

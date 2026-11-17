@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Note list",
+  "description": "Output of `list`.",
+  "type": "object",
+  "required": [
+    "schema",
+    "notes"
+  ],
+  "properties": {
+    "schema": {
+      "const": 1,
+      "description": "Version of the document format."
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "$ref": "note.schema.json#/$defs/note"
+      }
+    }
+  }
+}

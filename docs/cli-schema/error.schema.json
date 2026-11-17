@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Error",
+  "description": "What a failing command prints on stderr with `--json`. The exit code is 1 for most errors, 2 for `usage`, 3 for `not_found` and 4 for `ambiguous`.",
+  "type": "object",
+  "required": [
+    "schema",
+    "error"
+  ],
+  "properties": {
+    "schema": {
+      "const": 1,
+      "description": "Version of the document format."
+    },
+    "error": {
+      "type": "object",
+      "required": [
+        "code",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "Stable. One of `not_found`, `ambiguous`, `invalid`, `exists`, `conflict`, `config`, `index`, `io`, `app_unavailable`, `service_unavailable`, `usage`; new codes may appear."
+        },
+        "message": {
+          "type": "string",
+          "description": "For people, in English; do not parse."
+        },
+        "candidates": {
+          "type": "array",
+          "description": "Only for `ambiguous`: the notes the reference could mean.",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "title",
+              "folder"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "folder": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

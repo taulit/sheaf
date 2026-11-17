@@ -1,0 +1,25 @@
+---
+source: crates/sheaf/tests/cli.rs
+expression: "sandbox.json(&[\"folders\"], \"folders\")"
+---
+{
+  "folders": [
+    {
+      "notes": 4,
+      "path": ""
+    },
+    {
+      "notes": 1,
+      "path": "Arbeit"
+    },
+    {
+      "notes": 1,
+      "path": "Arbeit/Planung"
+    },
+    {
+      "notes": 0,
+      "path": "Archiv"
+    }
+  ],
+  "schema": 1
+}

@@ -10,10 +10,14 @@ publish.workspace = true
 
 [dependencies]
 sheaf-core.workspace = true
+jiff.workspace = true
 log.workspace = true
 zbus.workspace = true
+zruntime = { workspace = true, features = ["helper", "lock", "mpmc", "signal", "unblock"] }
+futures-core.workspace = true
 
 [dev-dependencies]
+sheaf-core = { workspace = true, features = ["testgen"] }
 tempfile.workspace = true
 
 [lints]
