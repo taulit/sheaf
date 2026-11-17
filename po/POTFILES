@@ -41,6 +41,7 @@ crates/sheaf/src/app/gallery/preview.rs
 crates/sheaf/src/app/gallery/render.rs
 crates/sheaf/src/app/instance.rs
 crates/sheaf/src/app/library.rs
+crates/sheaf/src/app/library/overlay.rs
 crates/sheaf/src/app/library/service.rs
 crates/sheaf/src/app/logger.rs
 crates/sheaf/src/app/mod.rs
