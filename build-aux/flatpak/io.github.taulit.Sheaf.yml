@@ -1,0 +1,53 @@
+# Flatpak manifest of Sheaf ("Notes"). Written against docs/verified.md section 3 and 4;
+# flatpak-builder was not available when this was written, so the build is untested.
+# How to build and submit it: docs/packaging.md.
+app-id: io.github.taulit.Sheaf
+runtime: org.freedesktop.Platform
+runtime-version: '26.08'
+sdk: org.freedesktop.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+command: sheaf
+
+finish-args:
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  - --device=dri
+  # The notes folder. Under review for Flathub (docs/verified.md section 3): a reviewer may
+  # ask for the FileChooser portal instead. Other folders: flatpak override --user
+  # --filesystem=<path> io.github.taulit.Sheaf.
+  - --filesystem=xdg-documents
+  # No --share=network, no --talk-name (portals are reachable without it) and no --own-name:
+  # Flatpak grants io.github.taulit.Sheaf and io.github.taulit.Sheaf.* by itself, which
+  # covers the search provider (and the Flathub linter rejects --own-name=<app id>).
+
+build-options:
+  append-path: /usr/lib/sdk/rust-stable/bin
+  env:
+    # Offline build: cargo-sources.json puts the vendored crates and a cargo config here.
+    CARGO_HOME: /run/build/sheaf/cargo
+    CARGO_NET_OFFLINE: 'true'
+
+modules:
+  - name: sheaf
+    buildsystem: simple
+    build-commands:
+      - cargo --offline fetch --manifest-path Cargo.toml --locked
+      - cargo --offline build --release --locked
+      # The layout lives in build-aux/install.sh. Flatpak exports the desktop file, the
+      # icons, the metainfo, both D-Bus service files and the search provider ini from here.
+      - SHEAF_LICENSE_NAME=io.github.taulit.Sheaf build-aux/install.sh /app
+    sources:
+      # Release day: set tag and commit to the release (docs/release-checklist.md).
+      # For a local build use a checkout instead:
+      #   - type: dir
+      #     path: ../..
+      - type: git
+        url: https://github.com/taulit/sheaf.git
+        tag: v0.1.0
+        commit: 0000000000000000000000000000000000000000
+      # scripts/update-cargo-sources.sh regenerates this from Cargo.lock. It includes the
+      # git dependency taulit/gpui-markdown-editor, which Flathub cannot fetch while that
+      # repository is private (docs/release-checklist.md, blockers).
+      - cargo-sources.json
