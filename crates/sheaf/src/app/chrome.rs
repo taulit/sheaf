@@ -171,6 +171,7 @@ pub struct FlatButton {
     icon: IconName,
     tooltip: Option<SharedString>,
     active: bool,
+    icon_color: Option<Hsla>,
     on_click: Option<ClickHandler>,
 }
 
@@ -181,8 +182,16 @@ impl FlatButton {
             icon,
             tooltip: None,
             active: false,
+            icon_color: None,
             on_click: None,
         }
+    }
+
+    /// Draws the icon in `color` instead of the text colour, such as the accent for a
+    /// pinned note.
+    pub fn icon_color(mut self, color: Hsla) -> Self {
+        self.icon_color = Some(color);
+        self
     }
 
     /// What the button does, shown on hover.
@@ -240,7 +249,7 @@ impl RenderOnce for FlatButton {
             .when_some(self.tooltip, |button, tooltip| {
                 button.tooltip(move |window, cx| Tooltip::new(tooltip.clone()).build(window, cx))
             })
-            .child(icon(self.icon, fg))
+            .child(icon(self.icon, self.icon_color.unwrap_or(fg)))
     }
 }
 
