@@ -112,6 +112,11 @@ pub struct NoteView {
     /// The search the note was opened from, to jump to once the text is there.
     query: String,
     editor: Entity<MarkdownEditor>,
+    /// Whether the text is there. Until then the editor is not drawn and this view's
+    /// own focus handle takes the keys, so that nothing typed is overwritten by the
+    /// text arriving.
+    loaded: bool,
+    focus_handle: FocusHandle,
     jobs: Sender<Queued>,
     /// The file as the worker knows it, for the last save.
     shared: Shared,
@@ -210,6 +215,8 @@ impl NoteView {
             meta: None,
             query,
             editor,
+            loaded: false,
+            focus_handle: cx.focus_handle(),
             jobs,
             shared,
             lookup,
@@ -592,7 +599,11 @@ impl NoteView {
                 self.saved(&body, cx);
             }
             Report::Conflict => self.ask(Banner::ChangedOnDisk),
-            Report::Deleted => self.ask(Banner::DeletedOnDisk),
+            Report::Deleted => {
+                // A note that cannot be read opens empty, to be written as a new one.
+                self.loaded = true;
+                self.ask(Banner::DeletedOnDisk);
+            }
             Report::Trashed(meta) => {
                 self.finish();
                 cx.emit(NoteEvent::Trashed(meta));
@@ -652,6 +663,7 @@ impl NoteView {
     /// the matches and scrolls to the first.
     fn loaded(&mut self, note: Note, cx: &mut Context<Self>) {
         self.show(&note, cx);
+        self.loaded = true;
         let query = self.query.clone();
         self.editor.update(cx, |editor, cx| {
             let matches = jump::matches(editor, &query);
@@ -789,12 +801,19 @@ fn table_to_meta(table: toml::Table) -> Option<DocMeta> {
 
 impl Focusable for NoteView {
     fn focus_handle(&self, cx: &App) -> FocusHandle {
-        self.editor.focus_handle(cx)
+        if self.loaded {
+            self.editor.focus_handle(cx)
+        } else {
+            self.focus_handle.clone()
+        }
     }
 }
 
 impl Render for NoteView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if self.loaded && self.focus_handle.is_focused(window) {
+            self.editor.focus_handle(cx).focus(window, cx);
+        }
         let tokens = cx.tokens().clone();
         let date = self.meta.as_ref().map(|meta| {
             let zone = self.library.read(cx).now().time_zone().clone();
@@ -817,6 +836,7 @@ impl Render for NoteView {
 
         pane(tokens.view, window, cx)
             .relative()
+            .track_focus(&self.focus_handle)
             .key_context(actions::NOTE)
             .on_action(cx.listener(|this, _: &Back, _, cx| {
                 // Esc closes a popover before it leaves the note.
@@ -839,7 +859,12 @@ impl Render for NoteView {
                     .text_color(tokens.faint)
                     .child(date.unwrap_or_default()),
             )
-            .child(div().flex_1().min_h_0().child(self.editor.clone()))
+            .child(
+                div()
+                    .flex_1()
+                    .min_h_0()
+                    .when(self.loaded, |area| area.child(self.editor.clone())),
+            )
             .children(saved)
             .when(self.popover.is_some(), |pane| {
                 pane.child(header::dismiss_layer(cx))

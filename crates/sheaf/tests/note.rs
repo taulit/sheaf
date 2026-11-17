@@ -918,3 +918,32 @@ async fn the_shortcuts_list_shows_every_binding(cx: &mut TestAppContext) {
     });
     assert_eq!(listed.await.unwrap().len(), 14);
 }
+
+#[gpui::test]
+async fn keys_typed_before_the_note_is_loaded_never_appear_and_are_never_lost(
+    cx: &mut TestAppContext,
+) {
+    let notes = Notes::seeded();
+    let mut app = open_app(&notes, cx);
+    let id = app.id_of("Notch-Ideen");
+    let main = app.main.clone();
+    // Opened and typed into before the worker has read the file.
+    app.cx.update(|window, cx| {
+        main.update(cx, |main, cx| {
+            main.open_note(id, String::new(), window, cx);
+        });
+        window.draw(cx).clear(cx);
+        for key in ["a", "b"] {
+            window.dispatch_keystroke(gpui::Keystroke::parse(key).unwrap(), cx);
+        }
+    });
+    let typed = app.editor_text();
+    assert_eq!(typed, "", "nothing appears before the text is there");
+
+    app.cx.run_until_parked();
+    let body = app.editor_text();
+    assert!(body.starts_with("Notch-Ideen\n"), "{body}");
+    // Once loaded, the editor has the keyboard.
+    app.cx.simulate_input("Neu ");
+    assert!(app.editor_text().starts_with("Neu Notch-Ideen"));
+}
