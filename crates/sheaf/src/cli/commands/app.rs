@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
 use sheaf_core::i18n::tr;
@@ -8,8 +7,6 @@ use crate::cli::context::Ctx;
 use crate::cli::dbus;
 use crate::cli::error::{CliError, Result};
 use crate::cli::output::Done;
-
-const SEARCHD: &str = "sheaf-searchd";
 
 pub fn open(ctx: &Ctx, reference: &str) -> Result {
     let meta = resolve(ctx, reference)?;
@@ -24,7 +21,7 @@ pub fn quick(ctx: &Ctx) -> Result {
 
 pub fn reindex(ctx: &Ctx) -> Result {
     if !dbus::reindex_service(&ctx.notes_dir) {
-        let searchd = find_searchd().ok_or_else(|| {
+        let searchd = crate::searchd::binary().ok_or_else(|| {
             CliError::ServiceUnavailable(tr("sheaf-searchd cannot be reached or found"))
         })?;
         // Its output must not end up in ours: with --json stdout is one document.
@@ -42,19 +39,4 @@ pub fn reindex(ctx: &Ctx) -> Result {
         }
     }
     ctx.emit(&Done { ok: true }, |_| String::new())
-}
-
-/// `sheaf-searchd` next to this executable, else in `PATH`.
-fn find_searchd() -> Option<PathBuf> {
-    let beside = std::env::current_exe()
-        .ok()
-        .and_then(|exe| Some(exe.parent()?.join(SEARCHD)));
-    let in_path = std::env::var_os("PATH")
-        .into_iter()
-        .flat_map(|path| std::env::split_paths(&path).collect::<Vec<_>>())
-        .map(|dir| dir.join(SEARCHD));
-    beside
-        .into_iter()
-        .chain(in_path)
-        .find(|path| path.is_file())
 }
