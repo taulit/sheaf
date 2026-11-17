@@ -73,12 +73,15 @@ impl NoteView {
             done,
             closing: self.closing.clone(),
         });
-        self._attach = cx.spawn_in(window, async move |this, cx| {
+        // Each attach waits for its own copy: a second one while the first still runs
+        // must not drop the first one's link.
+        cx.spawn_in(window, async move |this, cx| {
             let Ok(attached) = attached.recv().await else {
                 return;
             };
             let _ = this.update_in(cx, |this, window, cx| this.link(attached, window, cx));
-        });
+        })
+        .detach();
         cx.notify();
     }
 

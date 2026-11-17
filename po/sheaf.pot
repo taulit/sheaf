@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: sheaf\n"
 "Report-Msgid-Bugs-To: https://github.com/taulit/sheaf/issues\n"
-"POT-Creation-Date: 2026-11-17 23:22+0100\n"
+"POT-Creation-Date: 2026-11-17 23:38+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -622,12 +622,12 @@ msgstr ""
 msgid "Pasted Image"
 msgstr ""
 
-#: crates/sheaf/src/app/note/attach.rs:89
+#: crates/sheaf/src/app/note/attach.rs:92
 msgid "Attach File"
 msgstr ""
 
-#: crates/sheaf/src/app/note/attach.rs:95
-#: crates/sheaf/src/app/note/attach.rs:132 crates/sheaf/src/app/note/mod.rs:689
+#: crates/sheaf/src/app/note/attach.rs:98
+#: crates/sheaf/src/app/note/attach.rs:135 crates/sheaf/src/app/note/mod.rs:689
 #, rust-format
 msgid "Could not attach: {}"
 msgstr ""
@@ -774,15 +774,20 @@ msgstr ""
 msgid "Saved"
 msgstr ""
 
-#: crates/sheaf/src/app/note/worker.rs:442
+#: crates/sheaf/src/app/note/worker.rs:455
 msgid "the file changed elsewhere"
 msgstr ""
 
-#: crates/sheaf/src/app/note/worker.rs:447
+#: crates/sheaf/src/app/note/worker.rs:460
 msgid "the file was deleted elsewhere"
 msgstr ""
 
-#: crates/sheaf/src/app/note/worker.rs:503
+#: crates/sheaf/src/app/note/worker.rs:486
+#, rust-format
+msgid "not copied as the note was being left: {}"
+msgstr ""
+
+#: crates/sheaf/src/app/note/worker.rs:517
 msgid "not a file"
 msgstr ""
 

@@ -248,6 +248,38 @@ async fn a_dropped_file_is_copied_and_linked(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+async fn a_second_attach_while_the_first_runs_links_both(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let mut app = open_app(&notes, cx);
+    app.open("Notch-Ideen");
+    let report = notes.scratch("Bericht.pdf");
+    std::fs::write(&report, b"pdf").unwrap();
+
+    app.note_do(|note, window, cx| {
+        note.attach(vec![Upload::File(report)], window, cx);
+        note.attach(
+            vec![Upload::Bytes {
+                name: "Bild.png".to_owned(),
+                bytes: b"png".to_vec(),
+            }],
+            window,
+            cx,
+        );
+    });
+
+    let text = app.editor_text();
+    let id = "01JD3K8Z6Q4X7V9B2M5N8P0R03";
+    assert!(
+        text.contains(&format!("[Bericht.pdf](_attachments/{id}/Bericht.pdf)")),
+        "{text}"
+    );
+    assert!(
+        text.contains(&format!("![Bild.png](_attachments/{id}/Bild.png)")),
+        "{text}"
+    );
+}
+
+#[gpui::test]
 async fn attach_file_takes_the_chosen_files_and_gives_a_new_note_its_id(cx: &mut TestAppContext) {
     let notes = Notes::seeded();
     let mut app = open_app(&notes, cx);

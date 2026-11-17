@@ -95,6 +95,19 @@ pub enum Upload {
     Bytes { name: String, bytes: Vec<u8> },
 }
 
+impl Upload {
+    /// The file name the attachment is stored under, before it is made safe.
+    fn name(&self) -> String {
+        match self {
+            Upload::File(path) => path
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+            Upload::Bytes { name, .. } => name.clone(),
+        }
+    }
+}
+
 /// What came of [`Job::Attach`].
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Attached {
@@ -457,7 +470,7 @@ impl Worker {
 
 /// Copies `files` into `dir`, the attachment folder of the note `id`. Files that
 /// cannot be copied are noted with the reason and skipped; once `closing` is set, the
-/// rest is given up.
+/// rest is given up and noted as well, for when leaving is called off.
 fn copy_attachments(
     dir: &std::path::Path,
     id: &NoteId,
@@ -466,16 +479,17 @@ fn copy_attachments(
 ) -> Attached {
     let go_on = || !closing.load(Ordering::SeqCst);
     let mut attached = Attached::default();
-    for file in files {
+    for (at, file) in files.iter().enumerate() {
         if !go_on() {
+            let names: Vec<_> = files[at..].iter().map(Upload::name).collect();
+            attached.failed.push(
+                tr("not copied as the note was being left: {}").replace("{}", &names.join(", ")),
+            );
             break;
         }
         let stored = match file {
             Upload::File(path) => {
-                let name = path
-                    .file_name()
-                    .map(|name| name.to_string_lossy().into_owned())
-                    .unwrap_or_default();
+                let name = file.name();
                 open_regular(path).and_then(|mut source| {
                     store_attachment(dir, id, &name, &mut source, &go_on).map(|link| (name, link))
                 })
