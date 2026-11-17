@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: sheaf\n"
 "Report-Msgid-Bugs-To: https://github.com/taulit/sheaf/issues\n"
-"POT-Creation-Date: 2026-11-16 22:17+0100\n"
+"POT-Creation-Date: 2026-11-17 15:48+0100\n"
 "PO-Revision-Date: 2026-11-16 22:17+0100\n"
 "Last-Translator: Automatically generated\n"
 "Language-Team: German\n"
@@ -23,7 +23,10 @@ msgid "Quick Notes"
 msgstr "Schnellnotizen"
 
 #: crates/sheaf-core/src/i18n.rs:51 crates/sheaf-core/src/store/fsops.rs:132
-#: crates/sheaf-searchd/src/library.rs:190 crates/sheaf/src/cli/output.rs:183
+#: crates/sheaf-searchd/src/library.rs:190
+#: crates/sheaf/src/app/gallery/cards.rs:569
+#: crates/sheaf/src/app/overlays/palette.rs:164
+#: crates/sheaf/src/cli/output.rs:183
 msgid "Untitled"
 msgstr "Ohne Titel"
 
@@ -34,7 +37,11 @@ msgid_plural "{} notes"
 msgstr[0] "{} Notiz"
 msgstr[1] "{} Notizen"
 
-#: crates/sheaf-core/src/paths.rs:75
+#: crates/sheaf-core/src/paths.rs:75 crates/sheaf/src/app/gallery/dates.rs:55
+#: crates/sheaf/src/app/note/header.rs:95
+#: crates/sheaf/src/app/note/header.rs:241
+#: crates/sheaf/src/app/overlays/palette.rs:203
+#: crates/sheaf/src/app/window.rs:617
 msgid "Notes"
 msgstr "Notizen"
 
@@ -42,7 +49,588 @@ msgstr "Notizen"
 msgid "conflict"
 msgstr "Konflikt"
 
-#: crates/sheaf/src/cli/commands/app.rs:28
+#: crates/sheaf/src/app/actions.rs:111
+#: crates/sheaf/src/app/gallery/render.rs:116
+#: crates/sheaf/src/app/gallery/render.rs:320
+msgid "New Note"
+msgstr "Neue Notiz"
+
+#: crates/sheaf/src/app/actions.rs:112
+msgid "Quick Note"
+msgstr "Schnellnotiz"
+
+#: crates/sheaf/src/app/actions.rs:113 crates/sheaf/src/app/gallery/mod.rs:216
+msgid "Search"
+msgstr "Suchen"
+
+#: crates/sheaf/src/app/actions.rs:114
+msgid "Pin or Unpin"
+msgstr "Anheften oder lösen"
+
+#: crates/sheaf/src/app/actions.rs:115
+msgid "Move to Trash"
+msgstr "In den Papierkorb"
+
+#: crates/sheaf/src/app/actions.rs:116
+msgid "Toggle View"
+msgstr "Ansicht wechseln"
+
+#: crates/sheaf/src/app/actions.rs:117
+msgid "Sort Notes"
+msgstr "Notizen sortieren"
+
+#: crates/sheaf/src/app/actions.rs:118
+msgid "Show Folders"
+msgstr "Ordner zeigen"
+
+#: crates/sheaf/src/app/actions.rs:119
+msgid "Back to Notes"
+msgstr "Zurück zu den Notizen"
+
+#: crates/sheaf/src/app/actions.rs:120
+#: crates/sheaf/src/app/overlays/shortcuts.rs:133
+msgid "Keyboard Shortcuts"
+msgstr "Tastenkürzel"
+
+#: crates/sheaf/src/app/actions.rs:121
+msgid "Settings"
+msgstr "Einstellungen"
+
+#: crates/sheaf/src/app/actions.rs:122
+msgid "Close Window"
+msgstr "Fenster schließen"
+
+#: crates/sheaf/src/app/actions.rs:123
+msgid "Command Palette"
+msgstr "Befehlspalette"
+
+#: crates/sheaf/src/app/actions.rs:124
+msgid "Open Selected Note"
+msgstr "Ausgewählte Notiz öffnen"
+
+#: crates/sheaf/src/app/actions.rs:125
+msgid "Select Next Note"
+msgstr "Nächste Notiz auswählen"
+
+#: crates/sheaf/src/app/actions.rs:126
+msgid "Select Previous Note"
+msgstr "Vorige Notiz auswählen"
+
+#: crates/sheaf/src/app/actions.rs:127
+msgid "Select Note on the Left"
+msgstr "Linke Notiz auswählen"
+
+#: crates/sheaf/src/app/actions.rs:128
+msgid "Select Note on the Right"
+msgstr "Rechte Notiz auswählen"
+
+#: crates/sheaf/src/app/actions.rs:129
+msgid "Clear Search"
+msgstr "Suche leeren"
+
+#: crates/sheaf/src/app/chrome.rs:296
+msgid "Close"
+msgstr "Schließen"
+
+#: crates/sheaf/src/app/gallery/cards.rs:486
+#: crates/sheaf/src/app/note/header.rs:51
+msgid "Pin"
+msgstr "Anheften"
+
+#: crates/sheaf/src/app/gallery/cards.rs:486
+#: crates/sheaf/src/app/note/header.rs:51
+msgid "Unpin"
+msgstr "Nicht mehr anheften"
+
+#: crates/sheaf/src/app/gallery/cards.rs:489
+msgid "Move To"
+msgstr "Verschieben nach"
+
+#: crates/sheaf/src/app/gallery/cards.rs:492
+msgid "Top Level"
+msgstr "Oberste Ebene"
+
+#: crates/sheaf/src/app/gallery/cards.rs:503
+msgid "Duplicate"
+msgstr "Duplizieren"
+
+#: crates/sheaf/src/app/gallery/cards.rs:508
+#: crates/sheaf/src/app/note/header.rs:181
+msgid "Delete"
+msgstr "Löschen"
+
+#: crates/sheaf/src/app/gallery/chips.rs:59
+msgid "Checklist"
+msgstr "Checkliste"
+
+#: crates/sheaf/src/app/gallery/chips.rs:60
+msgid "Image"
+msgstr "Bild"
+
+#: crates/sheaf/src/app/gallery/chips.rs:61
+msgid "Table"
+msgstr "Tabelle"
+
+#: crates/sheaf/src/app/gallery/chips.rs:62
+msgid "Attachment"
+msgstr "Anhang"
+
+#: crates/sheaf/src/app/gallery/chips.rs:63
+msgid "Open Tasks"
+msgstr "Offene Aufgaben"
+
+#: crates/sheaf/src/app/gallery/chips.rs:64
+#: crates/sheaf/src/app/gallery/dates.rs:45
+msgid "Today"
+msgstr "Heute"
+
+#: crates/sheaf/src/app/gallery/chips.rs:65
+msgid "This Week"
+msgstr "Diese Woche"
+
+#: crates/sheaf/src/app/gallery/chips.rs:66
+msgid "This Month"
+msgstr "Dieser Monat"
+
+#: crates/sheaf/src/app/gallery/chips.rs:67
+#: crates/sheaf/src/app/gallery/dates.rs:44
+msgid "Pinned"
+msgstr "Angeheftet"
+
+#: crates/sheaf/src/app/gallery/dates.rs:46
+#: crates/sheaf/src/app/gallery/dates.rs:94
+msgid "Yesterday"
+msgstr "Gestern"
+
+#: crates/sheaf/src/app/gallery/dates.rs:47
+msgid "Previous 7 Days"
+msgstr "Letzte 7 Tage"
+
+#: crates/sheaf/src/app/gallery/dates.rs:48
+msgid "Previous 30 Days"
+msgstr "Letzte 30 Tage"
+
+#. TRANSLATORS: a heading of the gallery, such as "October 2026".
+#: crates/sheaf/src/app/gallery/dates.rs:51
+#, rust-format
+msgid "{month} {year}"
+msgstr "{month} {year}"
+
+#. TRANSLATORS: strftime format of a time of day today, as on a card.
+#: crates/sheaf/src/app/gallery/dates.rs:93
+msgid "%H:%M"
+msgstr "%H:%M"
+
+#. TRANSLATORS: strftime format of a date in this year, as on a card.
+#. Use numbers only (%m, %d) if month names would stay English.
+#: crates/sheaf/src/app/gallery/dates.rs:102
+msgid "%b %-d"
+msgstr "%-d.%-m."
+
+#. TRANSLATORS: strftime format of a date in another year, as on a card.
+#: crates/sheaf/src/app/gallery/dates.rs:109
+msgid "%b %-d, %Y"
+msgstr "%-d.%-m.%Y"
+
+#: crates/sheaf/src/app/gallery/dates.rs:122
+#: crates/sheaf/src/app/note/date.rs:20
+msgid "January"
+msgstr "Januar"
+
+#: crates/sheaf/src/app/gallery/dates.rs:123
+#: crates/sheaf/src/app/note/date.rs:21
+msgid "February"
+msgstr "Februar"
+
+#: crates/sheaf/src/app/gallery/dates.rs:124
+#: crates/sheaf/src/app/note/date.rs:22
+msgid "March"
+msgstr "März"
+
+#: crates/sheaf/src/app/gallery/dates.rs:125
+#: crates/sheaf/src/app/note/date.rs:23
+msgid "April"
+msgstr "April"
+
+#: crates/sheaf/src/app/gallery/dates.rs:126
+#: crates/sheaf/src/app/note/date.rs:24
+msgid "May"
+msgstr "Mai"
+
+#: crates/sheaf/src/app/gallery/dates.rs:127
+#: crates/sheaf/src/app/note/date.rs:25
+msgid "June"
+msgstr "Juni"
+
+#: crates/sheaf/src/app/gallery/dates.rs:128
+#: crates/sheaf/src/app/note/date.rs:26
+msgid "July"
+msgstr "Juli"
+
+#: crates/sheaf/src/app/gallery/dates.rs:129
+#: crates/sheaf/src/app/note/date.rs:27
+msgid "August"
+msgstr "August"
+
+#: crates/sheaf/src/app/gallery/dates.rs:130
+#: crates/sheaf/src/app/note/date.rs:28
+msgid "September"
+msgstr "September"
+
+#: crates/sheaf/src/app/gallery/dates.rs:131
+#: crates/sheaf/src/app/note/date.rs:29
+msgid "October"
+msgstr "Oktober"
+
+#: crates/sheaf/src/app/gallery/dates.rs:132
+#: crates/sheaf/src/app/note/date.rs:30
+msgid "November"
+msgstr "November"
+
+#: crates/sheaf/src/app/gallery/dates.rs:133
+#: crates/sheaf/src/app/note/date.rs:31
+msgid "December"
+msgstr "Dezember"
+
+#: crates/sheaf/src/app/gallery/dates.rs:140
+msgid "Monday"
+msgstr "Montag"
+
+#: crates/sheaf/src/app/gallery/dates.rs:141
+msgid "Tuesday"
+msgstr "Dienstag"
+
+#: crates/sheaf/src/app/gallery/dates.rs:142
+msgid "Wednesday"
+msgstr "Mittwoch"
+
+#: crates/sheaf/src/app/gallery/dates.rs:143
+msgid "Thursday"
+msgstr "Donnerstag"
+
+#: crates/sheaf/src/app/gallery/dates.rs:144
+msgid "Friday"
+msgstr "Freitag"
+
+#: crates/sheaf/src/app/gallery/dates.rs:145
+msgid "Saturday"
+msgstr "Samstag"
+
+#: crates/sheaf/src/app/gallery/dates.rs:146
+msgid "Sunday"
+msgstr "Sonntag"
+
+#: crates/sheaf/src/app/gallery/mod.rs:113
+#: crates/sheaf/src/app/gallery/render.rs:386
+msgid "All Notes"
+msgstr "Alle Notizen"
+
+#: crates/sheaf/src/app/gallery/preview.rs:106
+msgid "No additional text"
+msgstr "Kein weiterer Text"
+
+#: crates/sheaf/src/app/gallery/render.rs:91
+msgid "Folders"
+msgstr "Ordner"
+
+#: crates/sheaf/src/app/gallery/render.rs:98
+msgid "Sort"
+msgstr "Sortieren"
+
+#: crates/sheaf/src/app/gallery/render.rs:104
+#: crates/sheaf/src/app/overlays/shortcuts.rs:29
+msgid "Gallery"
+msgstr "Galerie"
+
+#: crates/sheaf/src/app/gallery/render.rs:110
+msgid "List"
+msgstr "Liste"
+
+#: crates/sheaf/src/app/gallery/render.rs:199
+msgid "All"
+msgstr "Alle"
+
+#: crates/sheaf/src/app/gallery/render.rs:298
+msgid "No results"
+msgstr "Keine Treffer"
+
+#: crates/sheaf/src/app/gallery/render.rs:300
+#, rust-format
+msgid "No results for “{}”"
+msgstr "Keine Treffer für „{}“"
+
+#: crates/sheaf/src/app/gallery/render.rs:303
+msgid "No notes yet"
+msgstr "Noch keine Notizen"
+
+#: crates/sheaf/src/app/gallery/render.rs:304
+msgid "No notes in this folder"
+msgstr "Keine Notizen in diesem Ordner"
+
+#: crates/sheaf/src/app/gallery/render.rs:305
+msgid "No notes with this tag"
+msgstr "Keine Notizen mit diesem Schlagwort"
+
+#: crates/sheaf/src/app/gallery/render.rs:312
+msgid "Search Without Filters"
+msgstr "Ohne Filter suchen"
+
+#: crates/sheaf/src/app/gallery/render.rs:433
+msgid "Recently Deleted"
+msgstr "Zuletzt gelöscht"
+
+#: crates/sheaf/src/app/gallery/render.rs:453
+msgid "New Folder"
+msgstr "Neuer Ordner"
+
+#: crates/sheaf/src/app/gallery/render.rs:471
+msgid "Folder Name"
+msgstr "Ordnername"
+
+#: crates/sheaf/src/app/gallery/render.rs:491
+msgid "Date Edited"
+msgstr "Bearbeitet"
+
+#: crates/sheaf/src/app/gallery/render.rs:492
+msgid "Date Created"
+msgstr "Erstellt"
+
+#: crates/sheaf/src/app/gallery/render.rs:493
+msgid "Title"
+msgstr "Titel"
+
+#: crates/sheaf/src/app/gallery/render.rs:506
+msgid "Sort By"
+msgstr "Sortieren nach"
+
+#: crates/sheaf/src/app/mod.rs:65
+msgid "the running app does not answer"
+msgstr "die laufende App antwortet nicht"
+
+#: crates/sheaf/src/app/mod.rs:69
+msgid "cannot open a window: neither WAYLAND_DISPLAY nor DISPLAY is set"
+msgstr "kein Fenster möglich: weder WAYLAND_DISPLAY noch DISPLAY ist gesetzt"
+
+#. TRANSLATORS: a date with its time, such as "16 November 2026, 10:12". Keep the
+#. words in braces; German: "{day}. {month} {year} um {time}".
+#: crates/sheaf/src/app/note/date.rs:11
+#, rust-format
+msgid "{day} {month} {year}, {time}"
+msgstr "{day}. {month} {year} um {time}"
+
+#: crates/sheaf/src/app/note/header.rs:58
+msgid "Share"
+msgstr "Teilen"
+
+#: crates/sheaf/src/app/note/header.rs:65
+msgid "More"
+msgstr "Mehr"
+
+#: crates/sheaf/src/app/note/header.rs:142
+msgid "Copy as Markdown"
+msgstr "Als Markdown kopieren"
+
+#: crates/sheaf/src/app/note/header.rs:147
+msgid "Export as PDF…"
+msgstr "Als PDF exportieren …"
+
+#: crates/sheaf/src/app/note/header.rs:152
+msgid "Print…"
+msgstr "Drucken …"
+
+#: crates/sheaf/src/app/note/header.rs:165
+#: crates/sheaf/src/app/note/header.rs:225
+msgid "Info"
+msgstr "Informationen"
+
+#: crates/sheaf/src/app/note/header.rs:170
+msgid "Show in Files"
+msgstr "In Dateien zeigen"
+
+#: crates/sheaf/src/app/note/header.rs:175
+#: crates/sheaf/src/app/note/header.rs:258
+msgid "Move to…"
+msgstr "Verschieben nach …"
+
+#: crates/sheaf/src/app/note/header.rs:222
+#, rust-format
+msgid "{} word"
+msgid_plural "{} words"
+msgstr[0] "{} Wort"
+msgstr[1] "{} Wörter"
+
+#: crates/sheaf/src/app/note/header.rs:227
+msgid "Words"
+msgstr "Wörter"
+
+#: crates/sheaf/src/app/note/header.rs:228
+msgid "Created"
+msgstr "Erstellt"
+
+#: crates/sheaf/src/app/note/header.rs:229
+msgid "Modified"
+msgstr "Geändert"
+
+#: crates/sheaf/src/app/note/header.rs:230
+msgid "Path"
+msgstr "Pfad"
+
+#: crates/sheaf/src/app/note/header.rs:277
+msgid "File changed on disk"
+msgstr "Datei wurde extern geändert"
+
+#: crates/sheaf/src/app/note/header.rs:279
+msgid "Reload"
+msgstr "Neu laden"
+
+#: crates/sheaf/src/app/note/header.rs:282
+msgid "Keep Mine"
+msgstr "Meine behalten"
+
+#: crates/sheaf/src/app/note/header.rs:288
+msgid "The note was deleted elsewhere"
+msgstr "Die Notiz wurde extern gelöscht"
+
+#: crates/sheaf/src/app/note/header.rs:290
+msgid "Save as New Note"
+msgstr "Als neue Notiz speichern"
+
+#: crates/sheaf/src/app/note/header.rs:296
+#, rust-format
+msgid "Could not save: {}"
+msgstr "Speichern fehlgeschlagen: {}"
+
+#: crates/sheaf/src/app/note/header.rs:298
+msgid "Try Again"
+msgstr "Erneut versuchen"
+
+#: crates/sheaf/src/app/note/mod.rs:437
+msgid "Copied as Markdown"
+msgstr "Als Markdown kopiert"
+
+#: crates/sheaf/src/app/note/mod.rs:613
+#, rust-format
+msgid "Could not move to trash: {}"
+msgstr "Verschieben in den Papierkorb fehlgeschlagen: {}"
+
+#: crates/sheaf/src/app/note/mod.rs:640
+#, rust-format
+msgid "Could not pin the note: {}"
+msgstr "Anheften fehlgeschlagen: {}"
+
+#: crates/sheaf/src/app/note/mod.rs:642
+#, rust-format
+msgid "Could not unpin the note: {}"
+msgstr "Anheften aufheben fehlgeschlagen: {}"
+
+#: crates/sheaf/src/app/note/mod.rs:645
+#, rust-format
+msgid "Could not move the note: {}"
+msgstr "Verschieben fehlgeschlagen: {}"
+
+#: crates/sheaf/src/app/note/mod.rs:850
+msgid "Saved"
+msgstr "Gespeichert"
+
+#: crates/sheaf/src/app/note/worker.rs:386
+msgid "the file changed elsewhere"
+msgstr "die Datei wurde extern geändert"
+
+#: crates/sheaf/src/app/note/worker.rs:391
+msgid "the file was deleted elsewhere"
+msgstr "die Datei wurde extern gelöscht"
+
+#: crates/sheaf/src/app/overlays/mod.rs:187
+msgid "Ctrl"
+msgstr "Strg"
+
+#: crates/sheaf/src/app/overlays/mod.rs:190
+msgid "Alt"
+msgstr "Alt"
+
+#: crates/sheaf/src/app/overlays/mod.rs:193
+msgid "Shift"
+msgstr "Umschalt"
+
+#: crates/sheaf/src/app/overlays/mod.rs:196
+msgid "Super"
+msgstr "Super"
+
+#: crates/sheaf/src/app/overlays/mod.rs:207
+msgid "Esc"
+msgstr "Esc"
+
+#: crates/sheaf/src/app/overlays/mod.rs:208
+msgid "Del"
+msgstr "Entf"
+
+#: crates/sheaf/src/app/overlays/mod.rs:209
+msgid "Backspace"
+msgstr "Rücktaste"
+
+#: crates/sheaf/src/app/overlays/mod.rs:210
+msgid "Enter"
+msgstr "Eingabe"
+
+#: crates/sheaf/src/app/overlays/mod.rs:211
+msgid "Space"
+msgstr "Leertaste"
+
+#: crates/sheaf/src/app/overlays/mod.rs:212
+msgid "Tab"
+msgstr "Tab"
+
+#. TRANSLATORS: an entry of the command palette that opens the note with this title.
+#: crates/sheaf/src/app/overlays/palette.rs:169
+#, rust-format
+msgid "Open note: {title}"
+msgstr "Notiz öffnen: {title}"
+
+#: crates/sheaf/src/app/overlays/palette.rs:202
+msgid "Commands"
+msgstr "Befehle"
+
+#: crates/sheaf/src/app/overlays/palette.rs:204
+msgid "Search commands and notes"
+msgstr "Befehle und Notizen suchen"
+
+#: crates/sheaf/src/app/overlays/shortcuts.rs:28
+msgid "General"
+msgstr "Allgemein"
+
+#: crates/sheaf/src/app/overlays/shortcuts.rs:30
+msgid "Note"
+msgstr "Notiz"
+
+#: crates/sheaf/src/app/window.rs:130
+msgid "Recovered unsaved notes"
+msgstr "Ungespeicherte Notizen wiederhergestellt"
+
+#: crates/sheaf/src/app/window.rs:131
+msgid "Open Folder"
+msgstr "Ordner öffnen"
+
+#: crates/sheaf/src/app/window.rs:290
+#, rust-format
+msgid "Could not create a note: {}"
+msgstr "Erstellen fehlgeschlagen: {}"
+
+#: crates/sheaf/src/app/window.rs:326
+msgid "Quick Note is not available yet"
+msgstr "Die Schnellnotiz gibt es noch nicht"
+
+#: crates/sheaf/src/app/window.rs:348
+#, rust-format
+msgid "Note moved to trash"
+msgid_plural "{} notes moved to trash"
+msgstr[0] "Notiz in den Papierkorb verschoben"
+msgstr[1] "{} Notizen in den Papierkorb verschoben"
+
+#: crates/sheaf/src/app/window.rs:351
+msgid "Undo"
+msgstr "Rückgängig"
+
+#: crates/sheaf/src/cli/commands/app.rs:25
 msgid "sheaf-searchd cannot be reached or found"
 msgstr "sheaf-searchd ist nicht erreichbar und wurde nicht gefunden"
 
@@ -62,6 +650,10 @@ msgstr "Die Notiz wäre leer"
 msgid "neither $VISUAL nor $EDITOR is set"
 msgstr "Weder $VISUAL noch $EDITOR ist gesetzt"
 
-#: crates/sheaf/src/cli/mod.rs:41
-msgid "the app is not part of this build; run `sheaf help` for the commands"
-msgstr "Die App ist in diesem Build nicht enthalten; `sheaf help` zeigt die Befehle"
+#: crates/sheaf/src/cli/mod.rs:61
+msgid "--new and --quick start the app and take no command"
+msgstr "--new und --quick starten die App und nehmen keinen Befehl"
+
+#: crates/sheaf/src/cli/mod.rs:66
+msgid "--json needs a command; run `sheaf help` for the commands"
+msgstr "--json braucht einen Befehl; `sheaf help` zeigt die Befehle"

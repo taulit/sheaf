@@ -28,18 +28,33 @@ fn parse(text: &str) -> Value {
 // ---- without a subcommand, help, completions --------------------------------------
 
 #[test]
-fn without_a_subcommand_it_says_the_app_is_missing_and_exits_2() {
+fn without_a_subcommand_it_is_the_app_which_needs_a_display() {
+    // The sandbox has no session bus and no display: the launch is the only instance
+    // and has nowhere to put a window. With a display it would open one.
     let sandbox = Sandbox::empty();
-    let run = sandbox.run(&[]);
-    assert_eq!(run.code, 2);
-    assert_eq!(run.stdout, "");
-    assert_eq!(
-        run.stderr,
-        "sheaf: the app is not part of this build; run `sheaf help` for the commands\n"
-    );
+    for args in [&[][..], &["--new"], &["--quick"]] {
+        let run = sandbox.run(args);
+        assert_eq!(run.code, 1, "{args:?}");
+        assert_eq!(run.stdout, "");
+        assert_eq!(
+            run.stderr,
+            "sheaf: cannot open a window: neither WAYLAND_DISPLAY nor DISPLAY is set\n"
+        );
+    }
+    assert!(!sandbox.notes.join(".sheaf").exists());
+
+    // JSON is what commands print; the app has none.
     let run = sandbox.run(&["--json"]);
     assert_eq!(run.code, 2);
     assert_snapshot!("no_subcommand_json", sandbox.document(&run.stderr, "error"));
+
+    let run = sandbox.run(&["--new", "list"]);
+    assert_eq!(run.code, 2);
+    assert_eq!(
+        run.stderr,
+        "sheaf: --new and --quick start the app and take no command\n"
+    );
+    assert_eq!(sandbox.run(&["--new", "--quick"]).code, 2);
 }
 
 #[test]

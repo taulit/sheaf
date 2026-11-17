@@ -20,8 +20,33 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub json: bool,
 
+    #[command(flatten)]
+    pub app: AppArgs,
+
     #[command(subcommand)]
     pub command: Option<Command>,
+}
+
+/// How to start the app; only without a command.
+#[derive(Clone, Copy, Debug, Default, Args)]
+pub struct AppArgs {
+    /// Start the app with a new note
+    #[arg(long)]
+    pub new: bool,
+
+    /// Start the app with the Quick Note window
+    #[arg(long, conflicts_with = "new")]
+    pub quick: bool,
+
+    /// Start the app without a window; it shows one when asked to over D-Bus
+    #[arg(long, hide = true)]
+    pub dbus_service: bool,
+}
+
+impl AppArgs {
+    pub fn any(self) -> bool {
+        self.new || self.quick || self.dbus_service
+    }
 }
 
 #[derive(Debug, Subcommand)]

@@ -18,8 +18,24 @@ jiff.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 zbus.workspace = true
+log.workspace = true
+toml.workspace = true
+gpui.workspace = true
+gpui_platform.workspace = true
+gpui-component.workspace = true
+gpui-kit-assets.workspace = true
+gpui-markdown-editor.workspace = true
+anyhow.workspace = true
+ashpd.workspace = true
+async-channel.workspace = true
+async-io.workspace = true
+async-signal.workspace = true
+futures-util.workspace = true
+image.workspace = true
 
 [dev-dependencies]
+gpui = { workspace = true, features = ["test-support"] }
+gpui_platform = { workspace = true, features = ["test-support"] }
 assert_cmd.workspace = true
 insta.workspace = true
 tempfile.workspace = true

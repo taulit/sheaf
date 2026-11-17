@@ -4,14 +4,12 @@
 use std::path::Path;
 use std::time::Duration;
 
-use sheaf_searchd::api::{
-    ACTION_OPEN_NOTE, ACTION_QUICK_NOTE, ApplicationProxy, Sheaf1Proxy, action_parameter,
-};
+use sheaf_searchd::api::{ACTION_OPEN_NOTE, ACTION_QUICK_NOTE, ApplicationProxy, action_parameter};
 use zbus::connection::Builder;
-use zbus::proxy::CacheProperties;
 use zbus::{Connection, Variant};
 
 use super::error::{CliError, Result};
+use crate::searchd::service_for;
 
 /// Long enough for the service to start and index a large folder, short enough that a
 /// service that hangs does not stall the command.
@@ -19,24 +17,6 @@ const TIMEOUT: Duration = Duration::from_secs(5);
 
 async fn connect() -> zbus::Result<Connection> {
     Builder::session().method_timeout(TIMEOUT).build().await
-}
-
-/// The proxy of `sheaf-searchd` if it answers and serves `notes_dir`.
-async fn service_for<'c>(
-    conn: &'c Connection,
-    notes_dir: &Path,
-) -> zbus::Result<Option<Sheaf1Proxy<'c>>> {
-    let proxy = Sheaf1Proxy::builder(conn)
-        .cache_properties(CacheProperties::No)
-        .build()
-        .await?;
-    let served = proxy.notes_dir().await?;
-    Ok(same_dir(Path::new(&served), notes_dir).then_some(proxy))
-}
-
-fn same_dir(a: &Path, b: &Path) -> bool {
-    let canonical = |path: &Path| path.canonicalize().unwrap_or_else(|_| path.to_owned());
-    canonical(a) == canonical(b)
 }
 
 /// Waits until the service's index reflects the notes folder. `false` if there is no
