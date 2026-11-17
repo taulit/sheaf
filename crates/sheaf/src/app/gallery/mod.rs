@@ -725,6 +725,15 @@ impl GalleryView {
         cx.notify();
     }
 
+    /// Cards become the list and the list becomes cards.
+    pub fn toggle_view(&mut self, cx: &mut Context<Self>) {
+        let other = match self.view() {
+            View::Gallery => View::List,
+            View::List => View::Gallery,
+        };
+        self.set_view(other, cx);
+    }
+
     pub fn set_sort(&mut self, sort: SortOrder, cx: &mut Context<Self>) {
         self.popover = None;
         if self.sort() != sort {

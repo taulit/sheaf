@@ -13,7 +13,7 @@ use sheaf_core::config::{Sort as SortOrder, View};
 use sheaf_core::i18n::tr;
 
 use super::{GalleryView, Popover, Scope, chips};
-use crate::app::actions::{self, NewNote};
+use crate::app::actions::{self, NewNote, ShowFolders, ShowSortOptions, ToggleView};
 use crate::app::assets::{IconName, icon};
 use crate::app::chrome::{FlatButton, HeaderBar, pane};
 use crate::app::theme::{ActiveTokens as _, Tokens, size};
@@ -50,6 +50,13 @@ impl Render for GalleryView {
             .on_action(cx.listener(Self::select_right))
             .on_action(cx.listener(Self::trash))
             .on_action(cx.listener(Self::focus_search))
+            .on_action(cx.listener(|this, _: &ToggleView, _, cx| this.toggle_view(cx)))
+            .on_action(cx.listener(|this, _: &ShowSortOptions, _, cx| {
+                this.set_popover(Some(Popover::Sort), cx)
+            }))
+            .on_action(cx.listener(|this, _: &ShowFolders, _, cx| {
+                this.set_popover(Some(Popover::Folders), cx)
+            }))
             .on_action(cx.listener(|this, action, window, cx| {
                 if this.popover.is_some() {
                     this.set_popover(None, cx);

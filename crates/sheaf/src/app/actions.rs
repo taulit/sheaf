@@ -41,6 +41,12 @@ actions!(
         SelectRight,
         /// Empty the search field of the gallery.
         ClearSearch,
+        /// Switch the gallery between cards and the compact list.
+        ToggleView,
+        /// Open the sort popover of the gallery.
+        ShowSortOptions,
+        /// Open the folder popover of the gallery.
+        ShowFolders,
         OpenCommandPalette,
         OpenSettings,
         ShowShortcuts,
@@ -107,6 +113,9 @@ pub fn commands() -> Vec<CommandInfo> {
         command(Box::new(Search), tr("Search")),
         command(Box::new(TogglePin), tr("Pin or Unpin")),
         command(Box::new(Trash), tr("Move to Trash")),
+        command(Box::new(ToggleView), tr("Toggle View")),
+        command(Box::new(ShowSortOptions), tr("Sort Notes")),
+        command(Box::new(ShowFolders), tr("Show Folders")),
         command(Box::new(Back), tr("Back to Notes")),
         command(Box::new(ShowShortcuts), tr("Keyboard Shortcuts")),
         command(Box::new(OpenSettings), tr("Settings")),
@@ -115,5 +124,8 @@ pub fn commands() -> Vec<CommandInfo> {
         hidden(Box::new(OpenSelected), tr("Open Selected Note")),
         hidden(Box::new(SelectNext), tr("Select Next Note")),
         hidden(Box::new(SelectPrevious), tr("Select Previous Note")),
+        hidden(Box::new(SelectLeft), tr("Select Note on the Left")),
+        hidden(Box::new(SelectRight), tr("Select Note on the Right")),
+        hidden(Box::new(ClearSearch), tr("Clear Search")),
     ]
 }
