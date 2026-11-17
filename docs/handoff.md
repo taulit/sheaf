@@ -63,14 +63,15 @@ Confirmed by the second review, except the cover cache (finding 3 above).
 
 ## Waiting for the user
 
-- **`gh` is logged out on this machine** (token invalid since 2026-11-17 evening), and
-  `git push` over https fails with it. Run `gh auth login -h github.com`, then push
-  `phase/s3-features` and the `t3/*` branches that are ahead of origin.
-- The user approved the CI deploy key (2026-11-17). Not created yet because of the login:
-  `ssh-keygen -t ed25519 -N "" -f <tmp>/key`, `gh repo deploy-key add <tmp>/key.pub --repo
-  taulit/gpui-markdown-editor --title "sheaf CI (read-only)"` (no `--allow-write`),
-  `gh secret set EDITOR_DEPLOY_KEY --repo taulit/sheaf < <tmp>/key`, delete the files,
-  `gh run rerun --failed` on PR #4.
+- **CI cannot fetch the private editor repository.** The user approved a read-only deploy
+  key (2026-11-17), but the organisation `taulit` has deploy keys disabled
+  (`gh api orgs/taulit --jq .deploy_keys_enabled_for_repositories` is `false`), so
+  `gh repo deploy-key add` fails. No key and no secret exist. Ways out, the user decides:
+  enable deploy keys in the organisation settings (then: `ssh-keygen`, `gh repo deploy-key
+  add <pub> --repo taulit/gpui-markdown-editor`, `gh secret set EDITOR_DEPLOY_KEY --repo
+  taulit/sheaf < <key>`, delete the files, `gh run rerun --failed`); or a fine-grained
+  token with read access to that repository as a secret (the workflow then needs an
+  https `insteadOf` rewrite instead of ssh); or making the editor repository public.
 - PR screenshots are embedded
   from the repository instead.
 
