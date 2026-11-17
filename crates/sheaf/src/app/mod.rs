@@ -86,6 +86,12 @@ pub fn run(launch: Launch, dir: Option<PathBuf>) -> ExitCode {
     };
     let index_dir = env.index_dir(&notes_dir).ok();
     let settings = env.app_config_path().ok().map(settings::Settings::load);
+    // PDFs a viewer was given last time are not needed any more.
+    let viewer_files = note::ViewerFiles::from_process();
+    if let Some(files) = &viewer_files {
+        files.clear();
+    }
+    let for_the_app = viewer_files.clone();
 
     let mut application = gpui_platform::application().with_assets(assets::Assets);
     if launch.service {
@@ -115,6 +121,9 @@ pub fn run(launch: Launch, dir: Option<PathBuf>) -> ExitCode {
         if let Some(recovery) = Recovery::from_process() {
             cx.set_global(recovery);
         }
+        if let Some(files) = for_the_app {
+            cx.set_global(files);
+        }
         cx.set_global(Session {
             library,
             state_file: StateFile::from_process(),
@@ -133,6 +142,9 @@ pub fn run(launch: Launch, dir: Option<PathBuf>) -> ExitCode {
         })
         .detach();
     });
+    if let Some(files) = &viewer_files {
+        files.clear();
+    }
     ExitCode::SUCCESS
 }
 
