@@ -29,12 +29,18 @@ test('loading, then the list; a change makes it stale again', () => {
   equal(screen(state), 'list', 'the old list stays until the new one is there');
 });
 
-test('an empty result is "empty", a failure is "failed" and retried', () => {
+test('an empty result is "empty"', () => {
   const ready = play({type: 'installed', value: true}, {type: 'load'}, {type: 'loaded', notes: []});
   equal(screen(ready), 'empty');
+});
+
+test('a failure is "failed" and is retried only when the view is shown again', () => {
   const failed = play({type: 'installed', value: true}, {type: 'load'}, {type: 'failed'});
   equal(screen(failed), 'failed');
-  equal(shouldLoad(failed, true), true);
+  equal(shouldLoad(failed, true), false, 'no retry loop');
+  equal(shouldLoad(reduce(failed, {type: 'shown'}), true), true);
+  const ready = play({type: 'installed', value: true}, {type: 'load'}, {type: 'loaded', notes: []});
+  equal(reduce(ready, {type: 'shown'}) === ready, true, 'showing a good view changes nothing');
 });
 
 test('a failure keeps the notes that were shown', () => {

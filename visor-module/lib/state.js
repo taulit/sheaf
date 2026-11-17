@@ -10,6 +10,7 @@ export function initialState() {
 /**
  * status: 'idle' (nothing asked yet), 'loading', 'ready' or 'failed'.
  * stale: the notes may have changed, load them the next time the view is on screen.
+ * A failed load is not tried again at once but when the view is shown again ('shown').
  */
 export function reduce(state, action) {
   switch (action.type) {
@@ -25,7 +26,9 @@ export function reduce(state, action) {
   case 'loaded':
     return {...state, status: 'ready', notes: action.notes};
   case 'failed':
-    return {...state, status: 'failed', stale: true};
+    return {...state, status: 'failed', stale: false};
+  case 'shown':
+    return state.status === 'failed' ? {...state, stale: true} : state;
   default:
     return state;
   }

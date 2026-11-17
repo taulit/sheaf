@@ -120,7 +120,7 @@ class NotesModule {
     // Times such as "5 min" grow old while the view is away.
     this._render();
     this._view.entry.grab_key_focus();
-    this._loadIfNeeded();
+    this._dispatch({type: 'shown'});
   }
 
   _loadIfNeeded() {
@@ -200,15 +200,16 @@ class NotesModule {
     view.saving = true;
     view.error?.destroy();
     view.error = null;
+    view.entry.text = '';
     try {
       const id = await client.create(text, '');
-      view.entry.text = '';
-      if (openAfterwards) await this._openNote(id);
+      if (openAfterwards && this._view === view) await this._openNote(id);
     } catch (e) {
       if (isCancelled(e)) return;
       console.warn(`Visor: Notes: cannot create the note: ${e.message}`);
-      // The view may be gone when the module was switched off meanwhile.
+      // The view is gone when the module was switched off meanwhile.
       if (this._view !== view) return;
+      if (view.entry.text === '') view.entry.text = text;
       view.error = kit.empty(t('Could not save the note'));
       view.root.insert_child_at_index(view.error, 1);
     } finally {

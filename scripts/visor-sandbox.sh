@@ -7,8 +7,9 @@
 # session, so nothing here can reach the settings, the notes or the shell of the
 # session you are logged in to.
 #
-# Usage: scripts/visor-sandbox.sh --visor DIR --module ZIP [options] -- command [args...]
-#   --visor DIR         a built Visor extension (the build/ directory of taulit/visor)
+# Usage: scripts/visor-sandbox.sh --module ZIP [options] -- command [args...]
+#   --visor DIR         a built Visor extension (the build/ directory of taulit/visor);
+#                       without it Visor is not installed
 #   --module ZIP        the zip of scripts/pack-visor-module.sh
 #   --size WxH          virtual monitor size (default 1280x800)
 #   --scheme dark|light colour scheme (default dark)
@@ -38,7 +39,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 [[ $# -gt 0 ]] || { echo "visor-sandbox.sh: missing command after --" >&2; exit 2; }
-[[ -f "$visor/metadata.json" ]] || { echo "visor-sandbox.sh: --visor must be a built Visor directory" >&2; exit 2; }
+[[ -z "$visor" || -f "$visor/metadata.json" ]] || { echo "visor-sandbox.sh: --visor must be a built Visor directory" >&2; exit 2; }
 [[ -f "$module" ]] || { echo "visor-sandbox.sh: --module must be the zip of the module" >&2; exit 2; }
 [[ -x "$bindir/sheaf-searchd" ]] || { echo "visor-sandbox.sh: $bindir/sheaf-searchd missing, run 'cargo build -p sheaf-searchd'" >&2; exit 1; }
 
@@ -75,7 +76,11 @@ mkdir -p "$home" "$sandbox/run" "$sandbox/notes" "$sandbox/bin" \
 chmod 700 "$sandbox/run"
 
 cp -r "$repo/tests/shell-helper" "$extensions/sheaf-test-helper@taulit.github.io"
-cp -r "$visor" "$extensions/visor@taulit.github.io"
+enabled="'sheaf-test-helper@taulit.github.io', '$module_uuid'"
+if [[ -n "$visor" ]]; then
+    cp -r "$visor" "$extensions/visor@taulit.github.io"
+    enabled="'sheaf-test-helper@taulit.github.io', 'visor@taulit.github.io', '$module_uuid'"
+fi
 unzip -q "$module" -d "$extensions/$module_uuid"
 # GLib ignores a desktop file whose Exec program it cannot find. The real app is never started here.
 printf '#!/bin/sh\nexit 0\n' >"$sandbox/bin/sheaf"
@@ -99,7 +104,7 @@ env -i \
     SHEAF_REPO="$repo" SHEAF_SANDBOX="$sandbox" SHEAF_NOTES_DIR="$sandbox/notes" \
     SHEAF_FAKE_APP_LOG="$sandbox/app.log" SHEAF_SANDBOX_DATA="$data" \
     SHEAF_SIZE="$size" SHEAF_SCHEME="$scheme" \
-    SHEAF_ENABLED="['sheaf-test-helper@taulit.github.io', 'visor@taulit.github.io', '$module_uuid']" \
+    SHEAF_ENABLED="[$enabled]" \
     dbus-run-session -- bash "$repo/scripts/lib/shell-session.sh" "$@" || status=$?
 
 if [[ -n "$log" ]]; then

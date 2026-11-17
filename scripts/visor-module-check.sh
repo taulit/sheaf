@@ -7,6 +7,9 @@
 # installed" state shows when the desktop file goes, and enable/disable cycles are clean.
 #
 # Usage: scripts/visor-module-check.sh [--scheme dark|light] [--lang en|de] [--visor DIR] [--size WxH]
+#                                      [--scenario main|absent|old]
+# The scenarios `absent` (no Visor installed) and `old` (a Visor without module API) check that the
+# module does nothing and says so in one line of the log.
 # Needs target/debug/sheaf-searchd (cargo build -p sheaf-searchd), gnome-shell 50,
 # dbus-run-session, gdbus, jq, unzip, and a built Visor: --visor, or a local checkout of
 # taulit/visor with the tag api-v1 (scripts/build-visor-api-v1.sh). Screenshots of the
@@ -21,7 +24,7 @@ desktop_id=io.github.taulit.Sheaf.desktop
 
 if [[ "${1:-}" == --inside ]]; then
     source "$repo/scripts/lib/shell.sh"
-    scheme="$2" lang="$3" shot="$4" log="$5"
+    scheme="$2" lang="$3" shot="$4" log="$5" scenario="$6"
     helpers="$(<"$repo/visor-module/tests/shell-helpers.js")"
     failures=0
 
@@ -78,15 +81,32 @@ if [[ "${1:-}" == --inside ]]; then
             grep -v -E 'Extension .* already installed|search provider .* (missing DesktopId|ServiceUnknown)|Received error from D-Bus search provider' || true
     }
 
+    if [[ "$scenario" != main ]]; then
+        if [[ "$scenario" == absent ]]; then expected='Visor is not installed, doing nothing'; else expected='this Visor has no module API 1, doing nothing'; fi
+        gsettings set org.gnome.shell enabled-extensions "$SHEAF_ENABLED"
+        check_wait "the module is active" "Main.extensionManager.lookup('$uuid')?.state === 1" 15
+        sleep 1
+        check "the module has no error" "Main.extensionManager.lookup('$uuid').error" '""'
+        lines="$(grep -F -- "$uuid: " "$HOME/shell.log" || true)"
+        if [[ "$(wc -l <<<"$lines")" == 1 && "$lines" == *"$uuid: $expected" ]]; then pass "it logs one line: $expected"; else fail "expected one log line \"$expected\", got: $lines"; fi
+        shell_eval "Main.extensionManager.disableExtension('$uuid')" >/dev/null
+        check_wait "disabling it works" "Main.extensionManager.lookup('$uuid').state !== 1"
+        [[ -z "$(shell_errors | grep -v -F -- "$uuid: $expected")" ]] && pass "the shell log has no error" || fail "the shell log: $(shell_errors)"
+        ((failures == 0))
+        exit
+    fi
+
     # Strings of the UI in the language under test.
     if [[ "$lang" == de ]]; then
         s_new='Neue Notiz …' s_recent=Zuletzt s_open='In Notizen öffnen' s_quick=Schnellnotiz
         s_saved='In Schnellnotizen gespeichert' s_missing='Notizen ist nicht installiert' s_name=Notizen
-        s_flathub='Auf Flathub ansehen'
+        s_flathub='Auf Flathub ansehen' s_failed='Die Notizen konnten nicht geladen werden'
+        s_unsaved='Die Notiz konnte nicht gespeichert werden'
     else
         s_new='New note …' s_recent=Recent s_open='Open in Notes' s_quick='Quick note'
         s_saved='Saved to Quick Notes' s_missing='Notes is not installed' s_name=Notes
-        s_flathub='Get it on Flathub'
+        s_flathub='Get it on Flathub' s_failed='Could not load the notes'
+        s_unsaved='Could not save the note'
     fi
     # The sandbox has no translations of Sheaf itself, so the service names its folder in English.
     s_folder='Quick Notes'
@@ -216,35 +236,62 @@ if [[ "${1:-}" == --inside ]]; then
 
     noise="$(shell_errors)"
     if [[ -z "$noise" ]]; then pass "the shell log has no error about the module"; else fail "the shell log:"$'\n'"$noise"; fi
+
+    # --- the service is gone ---
+    pid="$(busctl --user status io.github.taulit.Sheaf.SearchProvider 2>/dev/null | sed -n 's/^PID=//p')"
+    rm "$SHEAF_SANDBOX_DATA/dbus-1/services/io.github.taulit.Sheaf.SearchProvider.service"
+    kill "$pid"
+    for _ in $(seq 1 50); do busctl --user status io.github.taulit.Sheaf.SearchProvider >/dev/null 2>&1 || break; sleep 0.1; done
+    shell_eval "Main.extensionManager.disableExtension('$uuid')" >/dev/null
+    shell_eval "Main.extensionManager.enableExtension('$uuid')" >/dev/null
+    check_wait "the module registers again" "sheafTest.modules().includes('notes')"
+    shell_eval "sheafTest.showNotes()" >/dev/null
+    check_wait "the view says the notes cannot be loaded" "sheafTest.quiet().includes('$s_failed')"
+    shell_eval "sheafTest.type('Lost note')" >/dev/null
+    shell_eval "sheafTest.key(Clutter.KEY_Return, 500)" >/dev/null
+    check_wait "a note that cannot be saved is reported in the view" "sheafTest.quiet().includes('$s_unsaved')"
+    check "and stays in the entry" "sheafTest.entryText()" '"Lost note"'
+    shell_eval "sheafTest.ask('note lost too')" >/dev/null
+    shell_eval "sheafTest.key(Clutter.KEY_Return, 300)" >/dev/null
+    check_wait "a note that cannot be saved is reported in the notch" "sheafTest.chips().some(t => t.includes('$s_unsaved'))" 5
+
     echo "shell log: $log"
     ((failures == 0))
     exit
 fi
 
-scheme=dark lang=en size=1280x800 visor=
+scheme=dark lang=en size=1280x800 visor= scenario=main
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --scheme) scheme="$2"; shift 2 ;;
         --lang) lang="$2"; shift 2 ;;
         --size) size="$2"; shift 2 ;;
         --visor) visor="$2"; shift 2 ;;
+        --scenario) scenario="$2"; shift 2 ;;
         *) echo "visor-module-check.sh: unknown option $1" >&2; exit 2 ;;
     esac
 done
-[[ -n "$visor" ]] || visor="$("$repo/scripts/build-visor-api-v1.sh")"
+case "$scenario" in
+    main) [[ -n "$visor" ]] || visor="$("$repo/scripts/build-visor-api-v1.sh")" ;;
+    absent) visor= ;;
+    old) visor="$repo/visor-module/tests/old-visor" ;;
+    *) echo "visor-module-check.sh: unknown scenario $scenario" >&2; exit 2 ;;
+esac
 zip="$("$repo/scripts/pack-visor-module.sh")"
 shot=
-[[ "$lang" == en ]] && shot="$repo/docs/screenshots/visor-notes-$scheme.png"
-log="$repo/.shell-test/visor-module-$scheme-$lang.log"
+[[ "$lang" == en && "$scenario" == main ]] && shot="$repo/docs/screenshots/visor-notes-$scheme.png"
+log="$repo/.shell-test/visor-module-$scenario-$scheme-$lang.log"
 if [[ "$lang" == de ]]; then export SHEAF_TEST_LOCALE=de_DE.UTF-8; fi
 
 start=$SECONDS
 status=0
-"$repo/scripts/visor-sandbox.sh" --visor "$visor" --module "$zip" --scheme "$scheme" --size "$size" --log "$log" -- \
-    "$repo/scripts/visor-module-check.sh" --inside "$scheme" "$lang" "$shot" "$log" || status=$?
+visor_option=()
+[[ -z "$visor" ]] || visor_option=(--visor "$visor")
+"$repo/scripts/visor-sandbox.sh" "${visor_option[@]}" --module "$zip" --scheme "$scheme" --size "$size" --log "$log" -- \
+    "$repo/scripts/visor-module-check.sh" --inside "$scheme" "$lang" "$shot" "$log" "$scenario" || status=$?
 if ((status == 0)); then
-    echo "PASS ($scheme, $lang, $((SECONDS - start)) s)"
+    echo "PASS ($scenario, $scheme, $lang, $((SECONDS - start)) s)"
 else
-    echo "FAIL ($scheme, $lang): shell log $log" >&2
+    echo "FAIL ($scenario, $scheme, $lang): shell log $log" >&2
 fi
 exit "$status"
