@@ -391,7 +391,11 @@ impl Library {
     }
 
     fn lists(&self) -> Lists {
-        Lists::new(self.reader.clone(), self.backend.overlay())
+        Lists::new(
+            self.reader.clone(),
+            self.backend.overlay(),
+            self.store.clone(),
+        )
     }
 
     /// The `limit` best hits for `query`, in the search language of
@@ -1014,6 +1018,61 @@ mod tests {
         cx.run_until_parked();
         assert!(!pending(), "the confirmed write left the overlay");
         assert_eq!(titles(&library, cx), [(id, "Eins".to_owned())]);
+    }
+
+    #[gpui::test]
+    async fn a_file_changed_elsewhere_leaves_the_overlay(cx: &mut TestAppContext) {
+        let dir = tempfile::tempdir().expect("a temporary directory");
+        let (library, _confirm) = with_slow_service(dir.path(), cx);
+        let service = SearchIndex::in_memory().expect("an index");
+        library.update(cx, |library, _| library.reader = service.reader());
+        let created = library.update(cx, |library, cx| {
+            library.create("Eins", CreateOptions::default(), cx)
+        });
+        let meta = done(created, cx);
+        assert_eq!(titles(&library, cx), [(meta.id.clone(), "Eins".to_owned())]);
+
+        // Another program changes the note; the service indexes that, but never
+        // confirms the app's own write.
+        let path = dir.path().join(&meta.rel_path);
+        let text = std::fs::read_to_string(&path).expect("read");
+        std::fs::write(&path, text.replace("Eins", "Zwei, von woanders")).expect("written");
+        let mut writer = service.writer().expect("a writer");
+        for doc in NoteStore::new(dir.path()).all_docs().expect("docs") {
+            writer.upsert(&doc).expect("indexed");
+        }
+        writer.finish().expect("committed");
+        service.reader().reload().expect("reloaded");
+
+        assert_eq!(
+            titles(&library, cx),
+            [(meta.id, "Zwei, von woanders".to_owned())]
+        );
+        let overlay = library.read_with(cx, |library, _| library.backend.overlay());
+        let overlay = overlay.expect("service mode");
+        assert!(
+            overlay
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn a_sync_that_is_not_confirmed_is_tried_again() {
+        let (confirm, confirmed) = async_channel::unbounded();
+        let tries = Arc::new(AtomicUsize::new(0));
+        let syncer = Syncer::with_retry(
+            {
+                let tries = tries.clone();
+                move || tries.fetch_add(1, Ordering::SeqCst) >= 2
+            },
+            confirm,
+            std::time::Duration::from_millis(1),
+        );
+        syncer.request(1);
+        assert_eq!(confirmed.recv_blocking(), Ok(1));
+        assert_eq!(tries.load(Ordering::SeqCst), 3);
     }
 
     #[test]

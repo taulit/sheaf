@@ -25,6 +25,10 @@ const START_POLL: Duration = Duration::from_millis(50);
 /// How long the service may take to confirm that it looked at the folder after a
 /// write; it sees the change through its watcher anyway.
 const SYNC_TIMEOUT: Duration = Duration::from_secs(2);
+/// The first pause before a sync the service did not confirm is asked again; it
+/// doubles with every try, up to [`RETRY_MAX`].
+const RETRY_FIRST: Duration = Duration::from_secs(1);
+const RETRY_MAX: Duration = Duration::from_secs(60);
 
 #[derive(Debug)]
 pub(super) struct ServiceLink {
@@ -147,7 +151,8 @@ impl ServiceLink {
 /// Runs `sync` on a thread of its own whenever the app wrote a note: a write never
 /// waits for the service, and requests made while one waits become one. Writes are
 /// numbered; after each sync the service confirmed, the number of the last write it
-/// covers goes to `confirmed`.
+/// covers goes to `confirmed`. A sync that is not confirmed is tried again after a
+/// pause that grows, until one is.
 #[derive(Debug)]
 pub(super) struct Syncer {
     requests: Sender<()>,
@@ -157,6 +162,15 @@ pub(super) struct Syncer {
 
 impl Syncer {
     pub fn new(sync: impl Fn() -> bool + Send + 'static, confirmed: Sender<u64>) -> Syncer {
+        Self::with_retry(sync, confirmed, RETRY_FIRST)
+    }
+
+    /// [`new`](Self::new) with `first` as the first pause before a try again.
+    pub(super) fn with_retry(
+        sync: impl Fn() -> bool + Send + 'static,
+        confirmed: Sender<u64>,
+        first: Duration,
+    ) -> Syncer {
         // Room for one request: one waiting while a sync runs covers all writes since.
         let (requests, pending) = async_channel::bounded(1);
         let latest = Arc::new(AtomicU64::new(0));
@@ -166,12 +180,22 @@ impl Syncer {
                 let latest = latest.clone();
                 move || {
                     while pending.recv_blocking().is_ok() {
-                        // Every write up to here is on disk before the sync starts.
-                        let upto = latest.load(Ordering::SeqCst);
-                        if sync() {
-                            let _ = confirmed.send_blocking(upto);
-                        } else {
-                            log::warn!("sheaf-searchd did not confirm the change");
+                        let mut pause = first;
+                        loop {
+                            // Every write up to here is on disk before the sync starts.
+                            let upto = latest.load(Ordering::SeqCst);
+                            if sync() {
+                                let _ = confirmed.send_blocking(upto);
+                                break;
+                            }
+                            log::warn!(
+                                "sheaf-searchd did not confirm the change, trying again in {pause:?}"
+                            );
+                            std::thread::sleep(pause);
+                            if pending.is_closed() {
+                                return;
+                            }
+                            pause = (pause * 2).min(RETRY_MAX);
                         }
                     }
                 }

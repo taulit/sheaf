@@ -7,22 +7,26 @@
 //! newly saved note shows as it is at once, without waiting for the service.
 //!
 //! Folder and tag counts come from the service's index alone and follow it.
+//!
+//! A path also leaves the overlay when its file is no longer what the app wrote, so
+//! that a later change by another program shows as the service indexed it.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use jiff::ZonedDateTime;
 use sheaf_core::{
-    Filter, NoteId, NoteMeta, NoteStore, ParsedQuery, Reader, Result, SearchIndex, SearchResults,
-    Sort,
+    Filter, Fingerprint, NoteId, NoteMeta, NoteStore, ParsedQuery, Reader, Result, SearchIndex,
+    SearchResults, Sort,
 };
 
 pub(super) struct Overlay {
     /// The notes now at the paths in `paths` that are note files.
     index: SearchIndex,
     reader: Reader,
-    /// Every path the app wrote or removed, with the number of the last write to it.
-    paths: HashMap<String, u64>,
+    /// Every path the app wrote or removed, with the number of the last write to it
+    /// and the state its file was left in (`None`: no file).
+    paths: HashMap<String, (u64, Option<Fingerprint>)>,
     /// Numbers the writes.
     writes: u64,
 }
@@ -52,7 +56,8 @@ impl Overlay {
     pub fn reflect(&mut self, store: &NoteStore, paths: &[String]) -> Result<()> {
         self.writes += 1;
         for rel_path in paths {
-            self.paths.insert(rel_path.clone(), self.writes);
+            let left = store.fingerprint_at(rel_path);
+            self.paths.insert(rel_path.clone(), (self.writes, left));
         }
         super::index_paths(&self.index, store, paths)?;
         self.reader.reload()
@@ -63,14 +68,30 @@ impl Overlay {
         let done: Vec<String> = self
             .paths
             .iter()
-            .filter(|(_, write)| **write <= upto)
+            .filter(|(_, (write, _))| *write <= upto)
             .map(|(rel_path, _)| rel_path.clone())
             .collect();
-        if done.is_empty() {
+        self.forget(&done)
+    }
+
+    /// Forgets the paths whose file changed since the app wrote it: another program
+    /// wrote it, and the service's index follows that.
+    pub fn expire(&mut self, store: &NoteStore) -> Result<()> {
+        let changed: Vec<String> = self
+            .paths
+            .iter()
+            .filter(|(rel_path, (_, left))| store.fingerprint_at(rel_path) != *left)
+            .map(|(rel_path, _)| rel_path.clone())
+            .collect();
+        self.forget(&changed)
+    }
+
+    fn forget(&mut self, paths: &[String]) -> Result<()> {
+        if paths.is_empty() {
             return Ok(());
         }
         let mut writer = self.index.writer()?;
-        for rel_path in &done {
+        for rel_path in paths {
             writer.remove_path(rel_path);
             self.paths.remove(rel_path);
         }
@@ -91,16 +112,24 @@ struct Own {
 pub(super) struct Lists {
     disk: Reader,
     overlay: Option<Arc<Mutex<Overlay>>>,
+    store: Arc<NoteStore>,
 }
 
 impl Lists {
-    pub fn new(disk: Reader, overlay: Option<Arc<Mutex<Overlay>>>) -> Lists {
-        Lists { disk, overlay }
+    pub fn new(disk: Reader, overlay: Option<Arc<Mutex<Overlay>>>, store: Arc<NoteStore>) -> Lists {
+        Lists {
+            disk,
+            overlay,
+            store,
+        }
     }
 
     fn own(&self) -> Option<Own> {
         let overlay = self.overlay.as_ref()?;
-        let overlay = overlay.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut overlay = overlay.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Err(err) = overlay.expire(&self.store) {
+            log::warn!("cannot drop changed files from the overlay: {err}");
+        }
         (!overlay.paths.is_empty()).then(|| Own {
             reader: overlay.reader.clone(),
             paths: overlay.paths.keys().cloned().collect(),

@@ -228,6 +228,15 @@ impl NoteStore {
         })
     }
 
+    /// The state of the file at `rel_path` now; `None` if there is none.
+    pub fn fingerprint_at(&self, rel_path: &str) -> Option<Fingerprint> {
+        let metadata = fs::metadata(self.abs(rel_path)).ok()?;
+        Some(Fingerprint {
+            modified: timestamp(metadata.modified()).unwrap_or_default(),
+            size: metadata.len(),
+        })
+    }
+
     /// Every note without its text. A file that cannot be read is logged and skipped.
     pub fn all_meta(&self) -> Result<Vec<NoteMeta>> {
         Ok(self.load_all()?.map(|note| note.meta).collect())
