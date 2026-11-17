@@ -1004,7 +1004,8 @@ impl GalleryView {
 
     fn open_selected(&mut self, _: &OpenSelected, _: &mut Window, cx: &mut Context<Self>) {
         if self.confirming().is_some() {
-            self.confirm(cx);
+            // Deleting for good takes a click on its button, never Enter.
+            self.cancel_confirm(cx);
             return;
         }
         if let Some(index) = self.selected {

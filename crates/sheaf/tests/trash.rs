@@ -70,6 +70,12 @@ impl TestApp {
         self.cx.run_until_parked();
     }
 
+    fn click_button(&mut self, id: &'static str) {
+        let bounds = self.cx.debug_bounds(id).expect("the button is drawn");
+        self.cx.simulate_click(bounds.center(), Modifiers::none());
+        self.update(|_, _| {});
+    }
+
     fn titles(&mut self) -> Vec<String> {
         self.read(|gallery| {
             gallery
@@ -174,8 +180,14 @@ async fn empty_trash_deletes_everything_after_asking(cx: &mut TestAppContext) {
         Some(Confirm::Empty)
     );
     assert_eq!(in_trash(&notes).len(), 3);
+    // Enter says no as well: deleting for good takes a click.
     app.cx.simulate_keystrokes("enter");
     app.update(|_, _| {});
+    assert_eq!(app.read(|gallery| gallery.confirming().cloned()), None);
+    assert_eq!(in_trash(&notes).len(), 3);
+
+    app.update(|gallery, cx| gallery.ask_empty_trash(cx));
+    app.click_button("confirm-delete");
     assert!(in_trash(&notes).is_empty());
     assert!(app.titles().is_empty());
     assert_eq!(notes.files().len(), before, "the other notes stay");
