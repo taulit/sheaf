@@ -19,14 +19,19 @@
 //!   the returned one.
 //!   [`create_folder`](Library::create_folder) and
 //!   [`save_folder_config`](Library::save_folder_config) change no note.
+//! - **Several steps on the store** in one go, such as a save with its fallbacks:
+//!   [`run`](Library::run), which says what it touched in a [`Touched`]. The open
+//!   note's last save when the window closes or the app quits uses
+//!   [`run_now`](Library::run_now), the one call that blocks.
 //! - **Per-note view state** (column widths, folded headings) with
 //!   [`note_state`](Library::note_state) and [`set_note_state`](Library::set_note_state);
 //!   it lives in the folder's `.sheaf/config.toml`, not in the note.
 //! - **Follow** changes by subscribing to [`LibraryEvent`]; when a change task
 //!   resolves, the lists already contain it.
 //!
-//! Every method returns a [`Task`]: file and index work runs on the background
-//! executor, never on the UI thread. Dropping the task of a change does not cancel it.
+//! Every method but [`run_now`](Library::run_now) returns a [`Task`]: file and index
+//! work runs on the background executor, never on the UI thread. Dropping the task of
+//! a change does not cancel it.
 //!
 //! # Modes
 //!
@@ -101,15 +106,9 @@ enum Backend {
 }
 
 impl Backend {
-    /// Brings the index in line after a write: `gone` left the notes, `kept` was
-    /// written. Blocks.
-    fn reflect(
-        &self,
-        store: &NoteStore,
-        reader: &Reader,
-        gone: Option<&str>,
-        kept: Option<&str>,
-    ) -> Result<()> {
+    /// Brings the index in line after a write: each of `paths` is indexed if it is a
+    /// note file now and dropped from the index otherwise. Blocks.
+    fn reflect(&self, store: &NoteStore, reader: &Reader, paths: &[String]) -> Result<()> {
         match self {
             Backend::Opening => Ok(()),
             Backend::Service(service) => {
@@ -121,11 +120,12 @@ impl Backend {
             Backend::Local(index) => {
                 let index = index.lock().unwrap_or_else(PoisonError::into_inner);
                 let mut writer = index.writer()?;
-                if let Some(rel_path) = gone {
-                    writer.remove_path(rel_path);
-                }
-                if let Some(rel_path) = kept {
-                    writer.upsert(&store.load_doc(rel_path)?)?;
+                for rel_path in paths {
+                    if store.root().join(rel_path).is_file() {
+                        writer.upsert(&store.load_doc(rel_path)?)?;
+                    } else {
+                        writer.remove_path(rel_path);
+                    }
                 }
                 writer.finish()?;
                 reader.reload()
@@ -141,6 +141,45 @@ enum Effect {
     Keep,
     /// The note is no longer among the notes.
     Remove,
+}
+
+/// What a [`Library::run`] did to the notes: the paths the index has to look at again
+/// and the notes to tell the listeners about.
+#[derive(Debug, Default)]
+pub struct Touched {
+    ids: Vec<NoteId>,
+    paths: Vec<String>,
+}
+
+impl Touched {
+    /// `meta` was written. `before` is the note it replaced with its path then, `None`
+    /// for a new note.
+    pub fn wrote(&mut self, before: Option<(NoteId, String)>, meta: &NoteMeta) {
+        if let Some((id, rel_path)) = before {
+            self.removed(id, rel_path);
+        }
+        self.note(meta.id.clone(), meta.rel_path.clone());
+    }
+
+    /// The note `id`, which was at `rel_path`, is no longer among the notes.
+    pub fn removed(&mut self, id: NoteId, rel_path: String) {
+        self.note(id, rel_path);
+    }
+
+    fn note(&mut self, id: NoteId, rel_path: String) {
+        self.tell(id);
+        if !self.paths.contains(&rel_path) {
+            self.paths.push(rel_path);
+        }
+    }
+
+    /// Tells the listeners about `id` without indexing anything for it, such as the
+    /// id a note has in the trash.
+    pub fn tell(&mut self, id: NoteId) {
+        if !self.ids.contains(&id) {
+            self.ids.push(id);
+        }
+    }
 }
 
 pub struct Library {
@@ -554,31 +593,53 @@ impl Library {
         cx: &mut Context<Self>,
         change: impl FnOnce(&NoteStore) -> Result<NoteMeta> + Send + 'static,
     ) -> Task<Result<NoteMeta>> {
+        self.run(cx, move |store, touched| {
+            let before = id.and_then(|id| {
+                let rel_path = store.path_of(&id).ok()?;
+                Some((id, rel_path))
+            });
+            let meta = change(store)?;
+            match effect {
+                Effect::Keep => touched.wrote(before, &meta),
+                Effect::Remove => {
+                    if let Some((id, rel_path)) = before {
+                        touched.removed(id, rel_path);
+                    }
+                    touched.tell(meta.id.clone());
+                }
+            }
+            Ok(meta)
+        })
+    }
+
+    /// Runs `change` on the background executor, then brings the index in line with
+    /// what it reports in [`Touched`] and tells the listeners, also if it fails half
+    /// way. For writes of several steps, such as a save with its fallbacks.
+    pub fn run<T: Send + 'static>(
+        &mut self,
+        cx: &mut Context<Self>,
+        change: impl FnOnce(&NoteStore, &mut Touched) -> Result<T> + Send + 'static,
+    ) -> Task<Result<T>> {
         let store = self.store.clone();
         let reader = self.reader.clone();
         let backend = self.backend.clone();
         let written = cx.background_spawn(async move {
-            let before = id.as_ref().and_then(|id| store.path_of(id).ok());
-            let meta = change(&store)?;
-            let kept = (effect == Effect::Keep).then_some(meta.rel_path.as_str());
-            let gone = before.as_deref().filter(|path| Some(*path) != kept);
-            backend.reflect(&store, &reader, gone, kept)?;
-            let mut ids = Vec::from_iter(id);
-            if !ids.contains(&meta.id) {
-                ids.push(meta.id.clone());
+            let mut touched = Touched::default();
+            let outcome = change(&store, &mut touched);
+            if let Err(err) = backend.reflect(&store, &reader, &touched.paths) {
+                log::warn!("cannot bring the index in line: {err}");
             }
-            Ok((meta, ids))
+            (outcome, touched.ids)
         });
         let (done, result) = async_channel::bounded(1);
         // Detached, so that the change and its announcement happen even if the caller
         // drops the task it gets.
         cx.spawn(async move |this, cx| {
-            let outcome = written.await;
-            if let Ok((_, ids)) = &outcome {
-                let ids = ids.clone();
+            let (outcome, ids) = written.await;
+            if !ids.is_empty() {
                 let _ = this.update(cx, |_, cx| cx.emit(LibraryEvent::Changed { ids }));
             }
-            let _ = done.send(outcome.map(|(meta, _)| meta)).await;
+            let _ = done.send(outcome).await;
         })
         .detach();
         cx.background_spawn(async move {
@@ -587,6 +648,30 @@ impl Library {
                 .await
                 .unwrap_or_else(|_| Err(sheaf_core::Error::Invalid("the app is closing".into())))
         })
+    }
+
+    /// [`run`](Self::run) at once, on this thread. Only for the last save when the
+    /// window closes or the app quits: GPUI runs no task after that.
+    pub fn run_now<T>(
+        &mut self,
+        cx: &mut Context<Self>,
+        change: impl FnOnce(&NoteStore, &mut Touched) -> Result<T>,
+    ) -> Result<T> {
+        let mut touched = Touched::default();
+        let outcome = change(&self.store, &mut touched);
+        // The service sees the files change through its watcher; waiting for it to
+        // confirm could hold up the closing window by the length of a D-Bus timeout.
+        if !matches!(self.backend, Backend::Service(_))
+            && let Err(err) = self
+                .backend
+                .reflect(&self.store, &self.reader, &touched.paths)
+        {
+            log::warn!("cannot bring the index in line: {err}");
+        }
+        if !touched.ids.is_empty() {
+            cx.emit(LibraryEvent::Changed { ids: touched.ids });
+        }
+        outcome
     }
 }
 
