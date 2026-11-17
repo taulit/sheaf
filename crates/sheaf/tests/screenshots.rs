@@ -7,8 +7,9 @@
 //! # Adding a scene
 //!
 //! Write a function that brings the window into the state to show and add it to
-//! [`SCENES`]. A scene gets the main window's view and the offscreen app; it runs for
-//! the dark and the light theme and ends up as `docs/screenshots/app-<name>-<theme>.png`.
+//! [`SCENES`] with the notes folder it starts from. A scene gets the main window's view
+//! and the offscreen app; it runs for the dark and the light theme and ends up as
+//! `docs/screenshots/app-<name>-<theme>.png`.
 //!
 //! An offscreen window reports server-side decorations (GPUI 0.3.12 has no way to ask
 //! for others), so gpui-component draws no frame. The harness puts the window on a
@@ -29,9 +30,11 @@ use gpui::{
 use gpui_component::{ActiveTheme as _, Root, Theme};
 use sheaf::app::assets::Assets;
 use sheaf::app::chrome::AssumeClientDecorations;
+use sheaf::app::gallery::Popover;
 use sheaf::app::theme::size::WINDOW_RADIUS;
 use sheaf::app::window::{self, MainWindow};
 use sheaf_core::Sort;
+use sheaf_core::config::View;
 
 /// The default size of the main window.
 const WIDTH: f32 = 1100.;
@@ -106,10 +109,50 @@ impl Stage {
 
 type Scene = fn(&mut Stage);
 
-const SCENES: &[(&str, Scene)] = &[("gallery", gallery), ("note", note)];
+/// The notes folder a scene starts from.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Folder {
+    Seeded,
+    Empty,
+}
 
-/// The start view with the seeded notes.
+const SCENES: &[(&str, Folder, Scene)] = &[
+    ("gallery", Folder::Seeded, gallery),
+    ("gallery-search", Folder::Seeded, gallery_search),
+    ("gallery-list", Folder::Seeded, gallery_list),
+    ("gallery-folders", Folder::Seeded, gallery_folders),
+    ("gallery-empty", Folder::Empty, gallery),
+    ("note", Folder::Seeded, note),
+];
+
+/// The start view as it opens.
 fn gallery(_: &mut Stage) {}
+
+/// A search with a filter chip and highlighted hits.
+fn gallery_search(stage: &mut Stage) {
+    stage.update(|main, _, cx| {
+        main.gallery().update(cx, |gallery, cx| {
+            gallery.set_query("hat:checkliste für", cx)
+        });
+    });
+}
+
+/// The compact list instead of the cards.
+fn gallery_list(stage: &mut Stage) {
+    stage.update(|main, _, cx| {
+        main.gallery()
+            .update(cx, |gallery, cx| gallery.set_view(View::List, cx));
+    });
+}
+
+/// The folder popover of the header bar.
+fn gallery_folders(stage: &mut Stage) {
+    stage.update(|main, _, cx| {
+        main.gallery().update(cx, |gallery, cx| {
+            gallery.set_popover(Some(Popover::Folders), cx)
+        });
+    });
+}
 
 /// A note with a checklist and a table, opened from the gallery.
 fn note(stage: &mut Stage) {
@@ -128,24 +171,26 @@ fn note(stage: &mut Stage) {
 #[test]
 #[ignore = "needs a GPU and writes docs/screenshots, run scripts/screenshot.sh"]
 fn app_scenes() {
-    for (name, scene) in SCENES {
+    for (name, folder, scene) in SCENES {
         for (theme, dark) in [("dark", true), ("light", false)] {
-            capture(&format!("app-{name}-{theme}"), dark, *scene);
+            capture(&format!("app-{name}-{theme}"), dark, *folder, *scene);
         }
     }
 }
 
-/// Renders `scene` on the seeded notes folder and writes
-/// `docs/screenshots/<name>.png`. The image is twice the window size because the
-/// offscreen window has a scale factor of 2.
-fn capture(name: &str, dark: bool, scene: Scene) {
+/// Renders `scene` on `folder` and writes `docs/screenshots/<name>.png`. The image is
+/// twice the window size because the offscreen window has a scale factor of 2.
+fn capture(name: &str, dark: bool, folder: Folder, scene: Scene) {
     // Every platform instance starts its own worker threads, so the text system is
     // taken from one platform and shared by all screenshots.
     static TEXT_SYSTEM: OnceLock<Arc<dyn PlatformTextSystem>> = OnceLock::new();
     let text_system =
         TEXT_SYSTEM.get_or_init(|| gpui_platform::current_platform(true).text_system());
 
-    let notes = Notes::seeded();
+    let notes = match folder {
+        Folder::Seeded => Notes::seeded(),
+        Folder::Empty => Notes::empty(),
+    };
     let mut cx = HeadlessAppContext::with_platform(
         text_system.clone(),
         Arc::new(Assets),
@@ -186,14 +231,20 @@ fn capture(name: &str, dark: bool, scene: Scene) {
     let listed = stage
         .cx
         .update(|cx| library.read(cx).notes(Vec::new(), Sort::Modified, cx));
-    assert_eq!(
-        pollster(&stage.cx, listed).len(),
-        14,
-        "the fixture has 14 notes"
-    );
+    let expected = if folder == Folder::Seeded { 14 } else { 0 };
+    assert_eq!(pollster(&stage.cx, listed).len(), expected);
 
     scene(&mut stage);
     stage.cx.run_until_parked();
+    // Miniatures and covers load in the background; the first frame asks for them.
+    for _ in 0..3 {
+        stage
+            .cx
+            .update_window(stage.window, |_, window, cx| window.draw(cx).clear(cx))
+            .expect("failed to draw");
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        stage.cx.run_until_parked();
+    }
     stage
         .cx
         .update_window(stage.window, |_, window, cx| window.draw(cx).clear(cx))
