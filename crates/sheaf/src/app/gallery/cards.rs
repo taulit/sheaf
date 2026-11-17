@@ -8,9 +8,10 @@ use std::sync::Arc;
 
 use gpui::{
     AnimationExt as _, AnyElement, ClickEvent, Context, Div, FontWeight, HighlightStyle,
-    InteractiveElement as _, IntoElement, MouseButton, ObjectFit, ParentElement as _, SharedString,
-    StatefulInteractiveElement as _, Styled as _, StyledImage as _, StyledText, WeakEntity, Window,
-    div, img, linear_color_stop, linear_gradient, prelude::FluentBuilder as _, px, relative,
+    InteractiveElement as _, IntoElement, MouseButton, ObjectFit, ParentElement as _, RenderImage,
+    SharedString, StatefulInteractiveElement as _, Styled as _, StyledImage as _, StyledText,
+    WeakEntity, Window, div, img, linear_color_stop, linear_gradient, prelude::FluentBuilder as _,
+    px, relative,
 };
 use gpui_component::menu::{ContextMenuExt as _, PopupMenu, PopupMenuItem};
 use jiff::ZonedDateTime;
@@ -100,10 +101,7 @@ impl GalleryView {
         let selected = self.is_selected(index);
         let marks = self.marks.get(&note.id).cloned();
         let preview = self.preview(&note, cx);
-        let cover = preview
-            .as_ref()
-            .and_then(|preview| preview.cover.as_deref())
-            .and_then(|source| self.cover_path(&note, source, cx));
+        let cover = self.cover_of(&note, preview.as_deref(), cx);
 
         let mut card = div()
             .relative()
@@ -122,27 +120,23 @@ impl GalleryView {
             .text_size(tokens.text(11.5))
             .line_height(relative(1.5))
             .text_color(tokens.muted)
-            .when_some(cover, |card, path| {
-                card.child(
-                    img(path)
-                        .w_full()
-                        .h(px(COVER_HEIGHT))
-                        .mb(px(6.))
-                        .rounded(px(8.))
-                        .object_fit(ObjectFit::Cover)
-                        .with_fallback({
-                            let hover = tokens.hover;
-                            move || {
-                                div()
-                                    .w_full()
-                                    .h(px(COVER_HEIGHT))
-                                    .mb(px(6.))
-                                    .rounded(px(8.))
-                                    .bg(hover)
-                                    .into_any_element()
-                            }
-                        }),
-                )
+            .when_some(cover, |card, image| {
+                let place = div()
+                    .w_full()
+                    .h(px(COVER_HEIGHT))
+                    .mb(px(6.))
+                    .rounded(px(8.));
+                card.child(match image {
+                    Some(image) => place
+                        .child(
+                            img(image)
+                                .size_full()
+                                .rounded(px(8.))
+                                .object_fit(ObjectFit::Cover),
+                        )
+                        .into_any_element(),
+                    None => place.bg(tokens.hover).into_any_element(),
+                })
             });
         card = match (&marks, &preview) {
             (Some(marks), _) => card.child(highlighted(
@@ -285,10 +279,7 @@ impl GalleryView {
             Some(marks) => highlighted(&title_of(&note), &marks.title, tokens).into_any_element(),
             None => title_of(&note).into_any_element(),
         };
-        let cover = preview
-            .as_ref()
-            .and_then(|preview| preview.cover.as_deref())
-            .and_then(|source| self.cover_path(&note, source, cx));
+        let cover = self.cover_of(&note, preview.as_deref(), cx);
         let folder = (self.scope == Scope::All && !note.folder.is_empty()).then(|| {
             note.folder
                 .rsplit('/')
@@ -381,15 +372,23 @@ impl GalleryView {
                         )
                     }),
             )
-            .when_some(cover, |row, path| {
-                row.child(
-                    img(path)
-                        .flex_none()
-                        .size(px(44.))
-                        .self_center()
-                        .rounded(px(8.))
-                        .object_fit(ObjectFit::Cover),
-                )
+            .when_some(cover, |row, image| {
+                let place = div()
+                    .flex_none()
+                    .size(px(44.))
+                    .self_center()
+                    .rounded(px(8.));
+                row.child(match image {
+                    Some(image) => place
+                        .child(
+                            img(image)
+                                .size_full()
+                                .rounded(px(8.))
+                                .object_fit(ObjectFit::Cover),
+                        )
+                        .into_any_element(),
+                    None => place.bg(tokens.hover).into_any_element(),
+                })
             });
         self.with_menu(row, cx)
     }
@@ -420,6 +419,19 @@ impl GalleryView {
             SortOrder::Created => note.created,
             SortOrder::Modified | SortOrder::Title => note.modified,
         }
+    }
+
+    /// The cover of a note: `None` without one, `Some(None)` while it is decoded or if
+    /// it cannot be.
+    fn cover_of(
+        &mut self,
+        note: &NoteMeta,
+        preview: Option<&Preview>,
+        cx: &mut Context<Self>,
+    ) -> Option<Option<Arc<RenderImage>>> {
+        let source = preview?.cover.as_deref()?;
+        let path = self.cover_path(note, source, cx)?;
+        Some(self.cover(&path, cx))
     }
 
     /// Where the image a note links to is on disk; `None` for a remote image.

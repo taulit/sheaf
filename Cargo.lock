@@ -6713,6 +6713,7 @@ dependencies = [
  "gpui-markdown-editor",
  "gpui-pre",
  "gpui-pre-platform",
+ "image",
  "insta",
  "jiff",
  "log",

@@ -32,6 +32,7 @@
 
 mod cards;
 pub mod chips;
+mod covers;
 pub mod dates;
 pub mod layout;
 pub mod preview;
@@ -39,12 +40,13 @@ mod render;
 
 use std::collections::{BTreeSet, HashMap};
 use std::ops::Range;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
 use gpui::{
     App, AppContext as _, Context, Entity, EventEmitter, FocusHandle, Focusable, KeyDownEvent,
-    ListAlignment, ListOffset, ListState, Modifiers, Subscription, Task, Window, px,
+    ListAlignment, ListOffset, ListState, Modifiers, RenderImage, Subscription, Task, Window, px,
 };
 use gpui_component::input::{InputEvent, InputState};
 use jiff::Timestamp;
@@ -57,6 +59,7 @@ use super::actions::{
     ClearSearch, OpenSelected, Search, SelectLeft, SelectNext, SelectPrevious, SelectRight, Trash,
 };
 use super::library::{Folder, Library, LibraryEvent};
+use covers::{Covers, Wanted};
 use layout::{Layout, Row, Section};
 use preview::Preview;
 
@@ -180,6 +183,7 @@ pub struct GalleryView {
     /// Notes picked with Ctrl or Shift; when empty, the selection is the cursor.
     marked: BTreeSet<NoteId>,
     previews: HashMap<NoteId, CachedPreview>,
+    covers: Covers,
     hover: Hover,
     popover: Option<Popover>,
     /// The name field of "New Folder" in the folder popover, while it is open.
@@ -236,6 +240,7 @@ impl GalleryView {
             anchor: None,
             marked: BTreeSet::new(),
             previews: HashMap::new(),
+            covers: Covers::default(),
             hover: Hover::default(),
             popover: None,
             new_folder: None,
@@ -662,6 +667,50 @@ impl GalleryView {
             })
             .unwrap_or_default();
         self.list_state.scroll_to(offset);
+    }
+
+    /// The cover image at `path`, or `None` while it is decoded in the background.
+    fn cover(&mut self, path: &Path, cx: &mut Context<Self>) -> Option<Arc<RenderImage>> {
+        let now = cx.background_executor().now();
+        let (image, wanted) = self.covers.get(path, now);
+        match wanted {
+            Wanted::Nothing => {}
+            Wanted::Load => self.load_cover(path.to_owned(), cx),
+            Wanted::Check => {
+                let path = path.to_owned();
+                let modified = cx.background_spawn({
+                    let path = path.clone();
+                    async move { covers::modified(&path) }
+                });
+                cx.spawn(async move |this, cx| {
+                    let modified = modified.await;
+                    let _ = this.update(cx, |this, cx| {
+                        if this.covers.checked(&path, modified) {
+                            this.load_cover(path, cx);
+                        }
+                    });
+                })
+                .detach();
+            }
+        }
+        image
+    }
+
+    fn load_cover(&mut self, path: PathBuf, cx: &mut Context<Self>) {
+        let decoded = cx.background_spawn({
+            let path = path.clone();
+            async move { covers::decode(&path) }
+        });
+        cx.spawn(async move |this, cx| {
+            let (modified, image) = decoded.await;
+            let _ = this.update(cx, |this, cx| {
+                for dropped in this.covers.loaded(&path, modified, image) {
+                    cx.drop_image(dropped, None);
+                }
+                cx.notify();
+            });
+        })
+        .detach();
     }
 
     /// The miniature of `note`, or `None` while it is read in the background.

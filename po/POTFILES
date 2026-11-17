@@ -33,6 +33,7 @@ crates/sheaf/src/app/assets.rs
 crates/sheaf/src/app/chrome.rs
 crates/sheaf/src/app/gallery/cards.rs
 crates/sheaf/src/app/gallery/chips.rs
+crates/sheaf/src/app/gallery/covers.rs
 crates/sheaf/src/app/gallery/dates.rs
 crates/sheaf/src/app/gallery/layout.rs
 crates/sheaf/src/app/gallery/mod.rs
