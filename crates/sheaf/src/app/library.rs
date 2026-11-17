@@ -16,6 +16,9 @@
 //!   resolves to the note as it is afterwards. Its id can differ from the one passed
 //!   in: a file Sheaf never wrote gets its real id on the first write, so keep using
 //!   the returned one.
+//! - **Per-note view state** (column widths, folded headings) with
+//!   [`note_state`](Library::note_state) and [`set_note_state`](Library::set_note_state);
+//!   it lives in the folder's `.sheaf/config.toml`, not in the note.
 //! - **Follow** changes by subscribing to [`LibraryEvent`]; when a change task
 //!   resolves, the lists already contain it.
 //!
@@ -41,8 +44,8 @@ use gpui::{App, AppContext as _, Context, Entity, EventEmitter, Task};
 use jiff::tz::TimeZone;
 use jiff::{Timestamp, ZonedDateTime};
 use sheaf_core::{
-    CreateOptions, Filter, Fingerprint, Note, NoteId, NoteMeta, NoteStore, Reader, Result,
-    SearchIndex, SearchResults, Sort, WriteOptions, query,
+    CreateOptions, Filter, Fingerprint, FolderConfig, Note, NoteId, NoteMeta, NoteStore, Reader,
+    Result, SearchIndex, SearchResults, Sort, WriteOptions, query,
 };
 use zbus::Connection;
 
@@ -142,6 +145,9 @@ pub struct Library {
     reader: Reader,
     backend: Backend,
     clock: Clock,
+    /// Keeps the writers of `.sheaf/config.toml` apart: each reads, changes and writes
+    /// the whole file.
+    config: Arc<Mutex<()>>,
     _starting: Task<()>,
     _following: Option<Task<()>>,
 }
@@ -187,6 +193,7 @@ impl Library {
             reader,
             backend: Backend::Opening,
             clock: Arc::new(|| Timestamp::now().to_zoned_datetime(TimeZone::system())),
+            config: Arc::new(Mutex::new(())),
             _following: None,
         }))
     }
@@ -328,6 +335,41 @@ impl Library {
         cx.background_spawn(async move { store.get(&id) })
     }
 
+    /// The state of the note's file now, to tell a change by another program from one's
+    /// own write.
+    pub fn fingerprint(&self, id: &NoteId, cx: &App) -> Task<Result<Fingerprint>> {
+        let store = self.store.clone();
+        let id = id.clone();
+        cx.background_spawn(async move { store.fingerprint(&id) })
+    }
+
+    /// What a view remembered about a note, such as column widths; empty if nothing.
+    pub fn note_state(&self, id: &NoteId, cx: &App) -> Task<Result<toml::Table>> {
+        let root = self.store.root().to_owned();
+        let id = id.clone();
+        cx.background_spawn(async move {
+            let mut config = FolderConfig::load(&root)?;
+            Ok(config.notes.remove(&id).unwrap_or_default())
+        })
+    }
+
+    /// Remembers `state` for a note; an empty table forgets it.
+    pub fn set_note_state(&self, id: &NoteId, state: toml::Table, cx: &App) -> Task<Result<()>> {
+        let root = self.store.root().to_owned();
+        let lock = self.config.clone();
+        let id = id.clone();
+        cx.background_spawn(async move {
+            let _writing = lock.lock().unwrap_or_else(PoisonError::into_inner);
+            let mut config = FolderConfig::load(&root)?;
+            if state.is_empty() {
+                config.notes.remove(&id);
+            } else {
+                config.notes.insert(id, state);
+            }
+            config.save(&root)
+        })
+    }
+
     /// The note a `file://` URI or a path points to, if it is in the notes folder.
     pub fn note_at(&self, uri: &str, cx: &App) -> Task<Option<NoteMeta>> {
         let store = self.store.clone();
@@ -423,6 +465,18 @@ impl Library {
         let now = self.now().timestamp();
         self.write(Some(id.clone()), Effect::Remove, cx, move |store| {
             store.trash(&target, now)
+        })
+    }
+
+    /// Deletes a note for good, without a stop in the trash: for a new note that was
+    /// left empty.
+    pub fn discard(&mut self, id: &NoteId, cx: &mut Context<Self>) -> Task<Result<NoteMeta>> {
+        let target = id.clone();
+        let now = self.now().timestamp();
+        self.write(Some(id.clone()), Effect::Remove, cx, move |store| {
+            let trashed = store.trash(&target, now)?;
+            store.purge(&trashed.id)?;
+            Ok(trashed)
         })
     }
 
