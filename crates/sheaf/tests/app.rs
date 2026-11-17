@@ -14,12 +14,14 @@ use gpui::{
     Background, Entity, Hsla, ListOffset, TestAppContext, VisualTestContext, WindowHandle, px, size,
 };
 use gpui_component::{Root, Theme, WindowExt as _};
+use gpui_markdown_editor::EditorEvent;
 use sheaf::app::actions::{self, CloseWindow};
 use sheaf::app::instance::Request;
 use sheaf::app::library::{Library, LibraryEvent, LibraryMode};
 use sheaf::app::state::{StateFile, WindowState};
 use sheaf::app::theme::{self, ActiveTokens as _, Appearance, Overrides};
 use sheaf::app::window::{self, MainWindow, Route};
+use sheaf_core::config::View;
 use sheaf_core::{CreateOptions, Error, Filter, NoteId, NoteMeta, Sort};
 
 /// The app with its main window on `notes`.
@@ -536,6 +538,121 @@ async fn the_pin_button_of_a_note_goes_through_its_worker(cx: &mut TestAppContex
     let text = notes.read("Arbeit/Vorab- Notch-Ideen.md");
     assert!(text.contains("pinned: true") && text.contains("Vorab: Notch-Ideen"));
     assert_eq!(notes.files().len(), 14);
+}
+
+// ---- Gallery, note and overlays together --------------------------------------------
+
+impl TestApp {
+    /// Runs the palette's entry for `typed`, as Ctrl+K, typing and Enter do.
+    fn palette(&mut self, typed: &str) {
+        self.cx.simulate_keystrokes("ctrl-k");
+        self.cx.simulate_input(typed);
+        self.cx.simulate_keystrokes("enter");
+        self.cx.run_until_parked();
+    }
+
+    fn view(&mut self) -> View {
+        self.main
+            .read_with(self.cx, |main, cx| main.gallery().read(cx).view())
+    }
+}
+
+#[gpui::test]
+async fn delete_in_the_gallery_shows_the_window_toast_and_undo_restores(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let mut app = open_app(&notes, None, cx);
+    app.cx.simulate_keystrokes("down down delete");
+    app.cx.run_until_parked();
+    assert_eq!(app.titles().len(), 13);
+
+    let toasts = app.main.read_with(app.cx, |main, _| main.toasts().clone());
+    let shown = toasts.read_with(app.cx, |toasts, _| {
+        toasts.shown().map(|toast| {
+            let action = toast.action_label().map(ToString::to_string);
+            (toast.message.to_string(), action)
+        })
+    });
+    assert_eq!(
+        shown,
+        Some(("Note moved to trash".to_owned(), Some("Undo".to_owned())))
+    );
+    let notifications = app.cx.update(|window, cx| window.notifications(cx).len());
+    assert_eq!(notifications, 0, "one toast, the window's");
+
+    app.cx.update(|window, cx| {
+        toasts.update(cx, |toasts, cx| toasts.run_action(window, cx));
+    });
+    app.cx.run_until_parked();
+    assert_eq!(app.titles().len(), 14);
+    assert!(notes.files().contains(&"Arbeit/Notch-Ideen.md".to_owned()));
+}
+
+#[gpui::test]
+async fn the_palette_acts_on_the_gallery(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let mut app = open_app(&notes, None, cx);
+    assert_eq!(app.view(), View::Gallery);
+    app.palette("toggle view");
+    assert_eq!(app.view(), View::List);
+    assert!(
+        app.main
+            .read_with(app.cx, |main, _| main.palette().is_none())
+    );
+    app.palette("toggle view");
+    assert_eq!(app.view(), View::Gallery);
+
+    app.cx.simulate_keystrokes("down down");
+    assert_eq!(app.selected().as_deref(), Some("Notch-Ideen"));
+    app.palette("pin or unpin");
+    assert!(notes.read("Arbeit/Notch-Ideen.md").contains("pinned: true"));
+    app.palette("move to trash");
+    assert!(notes.dir.join(".trash/Notch-Ideen.md").exists());
+
+    app.palette("new note");
+    assert_eq!(app.editor_text(), "");
+    assert_eq!(notes.files().len(), 14);
+}
+
+#[gpui::test]
+async fn a_tag_or_search_in_a_note_ends_in_the_gallery_search_field(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let mut app = open_app(&notes, None, cx);
+    let search = |app: &mut TestApp| {
+        app.main.read_with(app.cx, |main, cx| {
+            let gallery = main.gallery().read(cx);
+            (
+                gallery.chips().to_vec(),
+                gallery.search_text().to_owned(),
+                gallery.search_focused(),
+            )
+        })
+    };
+
+    app.cx.simulate_keystrokes("down down enter");
+    assert!(app.editor_text().starts_with("Notch-Ideen"));
+    let note = app
+        .main
+        .read_with(app.cx, |main, _| main.note().unwrap().clone());
+    let editor = note.read_with(app.cx, |note, _| note.editor().clone());
+    editor.update(app.cx, |_, cx| {
+        cx.emit(EditorEvent::TagClicked("rezepte".into()))
+    });
+    app.cx.run_until_parked();
+    assert_eq!(app.route(), Route::Gallery);
+    assert_eq!(
+        search(&mut app),
+        (vec![Filter::Tag("rezepte".to_owned())], String::new(), true)
+    );
+    assert_eq!(app.titles(), ["Shakshuka"]);
+
+    // Search from a note keeps the search and puts the cursor into the field.
+    app.cx.simulate_keystrokes("enter");
+    assert!(matches!(app.route(), Route::Note { .. }));
+    app.palette("search");
+    assert_eq!(app.route(), Route::Gallery);
+    let (chips, _, focused) = search(&mut app);
+    assert_eq!(chips, [Filter::Tag("rezepte".to_owned())]);
+    assert!(focused);
 }
 
 // ---- Requests from other launches ---------------------------------------------------
