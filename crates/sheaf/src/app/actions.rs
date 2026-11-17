@@ -51,6 +51,14 @@ actions!(
         OpenSettings,
         ShowShortcuts,
         CloseWindow,
+        /// Store the quick note and close its window.
+        QuickNoteDone,
+        /// Store the quick note, close its window and show the note in the main window.
+        QuickNoteOpen,
+        /// Save the gallery's search as a smart folder.
+        SaveSearchAsSmartFolder,
+        /// Open the `+ ▾` menu of the gallery: new notes from templates.
+        ShowTemplates,
     ]
 );
 
@@ -62,6 +70,10 @@ pub const GALLERY: &str = "Gallery";
 pub const NOTE: &str = "Note";
 /// Key context of the editor itself, inside [`NOTE`].
 const EDITOR: &str = "MarkdownEditor";
+/// Key context of the Quick Note window.
+pub const QUICK_NOTE: &str = "QuickNote";
+/// The editor inside the Quick Note window, where Ctrl+Enter is not the editor's.
+const QUICK_NOTE_EDITOR: &str = "QuickNote > MarkdownEditor";
 
 pub fn bind_keys(cx: &mut App) {
     // The editor's keys first, so that ours win where both bind the same key.
@@ -87,6 +99,10 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("escape", ClearSearch, Some(GALLERY)),
         KeyBinding::new("ctrl-w", Back, Some(NOTE)),
         KeyBinding::new("escape", Back, Some(NOTE)),
+        KeyBinding::new("escape", QuickNoteDone, Some(QUICK_NOTE)),
+        KeyBinding::new("ctrl-w", QuickNoteDone, Some(QUICK_NOTE)),
+        KeyBinding::new("ctrl-enter", QuickNoteOpen, Some(QUICK_NOTE)),
+        KeyBinding::new("ctrl-enter", QuickNoteOpen, Some(QUICK_NOTE_EDITOR)),
     ]);
 }
 
@@ -116,12 +132,17 @@ pub fn commands() -> Vec<CommandInfo> {
     vec![
         command(Box::new(NewNote), tr("New Note")),
         command(Box::new(QuickNote), tr("Quick Note")),
+        command(Box::new(ShowTemplates), tr("New Note from Template…")),
         command(Box::new(Search), tr("Search")),
         command(Box::new(TogglePin), tr("Pin or Unpin")),
         command(Box::new(Trash), tr("Move to Trash")),
         command(Box::new(ToggleView), tr("Toggle View")),
         command(Box::new(ShowSortOptions), tr("Sort Notes")),
         command(Box::new(ShowFolders), tr("Show Folders")),
+        command(
+            Box::new(SaveSearchAsSmartFolder),
+            tr("Save Search as Smart Folder"),
+        ),
         command(Box::new(Back), tr("Back to Notes")),
         command(Box::new(ShowShortcuts), tr("Keyboard Shortcuts")),
         command(Box::new(OpenSettings), tr("Settings")),
@@ -133,5 +154,7 @@ pub fn commands() -> Vec<CommandInfo> {
         hidden(Box::new(SelectLeft), tr("Select Note on the Left")),
         hidden(Box::new(SelectRight), tr("Select Note on the Right")),
         hidden(Box::new(ClearSearch), tr("Clear Search")),
+        hidden(Box::new(QuickNoteDone), tr("Close Quick Note")),
+        hidden(Box::new(QuickNoteOpen), tr("Open Quick Note in Notes")),
     ]
 }

@@ -12,6 +12,7 @@ mod fixture;
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -24,6 +25,7 @@ use sheaf::app::actions::CloseWindow;
 use sheaf::app::assets::Assets;
 use sheaf::app::instance::Request;
 use sheaf::app::library::Library;
+use sheaf::app::quick;
 use sheaf::app::window::{self, MainWindow};
 
 const SCENARIO: &str = "SHEAF_TEST_SCENARIO";
@@ -258,4 +260,59 @@ async fn wait_for<T>(cx: &mut AsyncApp, found: impl Fn(&App) -> Option<T>) -> T 
         let timer = cx.update(|cx| cx.background_executor().timer(Duration::from_millis(10)));
         timer.await;
     }
+}
+
+#[test]
+fn sigterm_right_after_typing_a_quick_note_saves() {
+    const NAME: &str = "sigterm_right_after_typing_a_quick_note_saves";
+    if std::env::var(SCENARIO).as_deref() == Ok(NAME) {
+        let notes = PathBuf::from(std::env::var_os(NOTES).expect("the notes folder"));
+        return run_quick_note(notes);
+    }
+    let notes = Notes::seeded();
+    let status = child(NAME, &notes, Command::new(std::env::current_exe().unwrap()));
+    assert!(status.success(), "the app failed: {status}");
+    assert!(
+        notes
+            .read("Quick Notes/Schnell notiert.md")
+            .ends_with("Schnell notiert\n"),
+        "{:?}",
+        notes.files()
+    );
+}
+
+/// The child: only the Quick Note window, whose note view is never drawn; typing and
+/// SIGTERM in the same turn.
+fn run_quick_note(notes: PathBuf) {
+    watchdog();
+    gpui_platform::application()
+        .with_assets(Assets)
+        .with_windowing(WindowingRequest::Headless)
+        .run(move |cx| {
+            fixture::init_app(Look::default(), cx);
+            sheaf::app::quit_on_signals(cx);
+            let library = Library::local(&notes, cx).unwrap();
+            let (window, view) = quick::open(library, Rc::new(|_, _| {}), cx).unwrap();
+            cx.spawn(async move |cx| {
+                let note = wait_for(cx, |cx| {
+                    let note = view.read(cx).note()?;
+                    note.read(cx).is_loaded().then(|| note.clone())
+                })
+                .await;
+                let any: AnyWindowHandle = window.into();
+                cx.update(|cx| any.update(cx, |_, window, cx| window.draw(cx).clear(cx)))
+                    .unwrap();
+                window
+                    .update(cx, |_, window, cx| {
+                        let editor = note.read(cx).editor().clone();
+                        editor.update(cx, |editor, cx| {
+                            let text = EditorCommand::InsertText("Schnell notiert".into());
+                            editor.command(text, window, cx);
+                        });
+                        kill("-TERM");
+                    })
+                    .unwrap();
+            })
+            .detach();
+        });
 }

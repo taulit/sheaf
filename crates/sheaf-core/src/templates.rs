@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use jiff::ZonedDateTime;
 
 use crate::error::{Error, Result};
+use crate::i18n::tr;
 use crate::store::NOTE_EXT;
 
 const TEMPLATES_DIR: &str = ".sheaf/templates";
@@ -50,8 +51,31 @@ pub fn render(root: &Path, name: &str, title: &str, now: &ZonedDateTime) -> Resu
     }
 }
 
-/// Replaces `{{date}}` (ISO date), `{{time}}` (`HH:MM`) and `{{title}}`. Other
-/// placeholders stay as they are.
+/// The text of a new note made from the template `name` and the text `given` for it,
+/// as the CLI and the app create it: the first line of `given` is the title, the rest
+/// goes after the template.
+pub fn note_text(root: &Path, name: &str, given: &str, now: &ZonedDateTime) -> Result<String> {
+    let (title, rest) = given.split_once('\n').unwrap_or((given, ""));
+    let mut text = render(root, name, title.trim(), now)?;
+    if !rest.is_empty() {
+        if !text.ends_with('\n') {
+            text.push('\n');
+        }
+        text.push_str(rest);
+    }
+    Ok(text)
+}
+
+/// Creates the templates folder of the notes folder `root` if it is missing and
+/// returns it, for a file manager to show.
+pub fn ensure_dir(root: &Path) -> Result<PathBuf> {
+    let dir = dir(root);
+    fs::create_dir_all(&dir)?;
+    Ok(dir)
+}
+
+/// Replaces `{{date}}` (the date in the order of the language, ISO in English),
+/// `{{time}}` (`HH:MM`) and `{{title}}`. Other placeholders stay as they are.
 pub fn expand(template: &str, title: &str, now: &ZonedDateTime) -> String {
     let mut out = String::with_capacity(template.len() + title.len());
     let mut rest = template;
@@ -62,7 +86,7 @@ pub fn expand(template: &str, title: &str, now: &ZonedDateTime) -> String {
         let placeholder = &rest[open..open + len + 2];
         out.push_str(&rest[..open]);
         match placeholder[2..placeholder.len() - 2].trim() {
-            "date" => out.push_str(&now.strftime("%Y-%m-%d").to_string()),
+            "date" => out.push_str(&date(now)),
             "time" => out.push_str(&now.strftime("%H:%M").to_string()),
             "title" => out.push_str(title),
             _ => out.push_str(placeholder),
@@ -71,6 +95,16 @@ pub fn expand(template: &str, title: &str, now: &ZonedDateTime) -> String {
     }
     out.push_str(rest);
     out
+}
+
+/// The date of `now` with two-digit day and month, in the order the translation gives.
+fn date(now: &ZonedDateTime) -> String {
+    // TRANSLATORS: the date that replaces {{date}} in a note template. Keep the words
+    // in braces; German: "{day}.{month}.{year}".
+    tr("{year}-{month}-{day}")
+        .replace("{year}", &now.year().to_string())
+        .replace("{month}", &format!("{:02}", now.month()))
+        .replace("{day}", &format!("{:02}", now.day()))
 }
 
 #[cfg(test)]
@@ -109,6 +143,31 @@ mod tests {
         }
         // A title is text, not a template.
         assert_eq!(expand("{{title}}", "{{date}}", &now()), "{{date}}");
+    }
+
+    #[test]
+    fn the_given_text_gives_the_title_and_follows_the_template() {
+        let root = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dir(root.path())).unwrap();
+        fs::write(
+            dir(root.path()).join("Protokoll.md"),
+            "# {{title}}\n\nAm {{date}}",
+        )
+        .unwrap();
+        let text = |given: &str| note_text(root.path(), "Protokoll", given, &now()).unwrap();
+        assert_eq!(text(""), "# \n\nAm 2026-11-16");
+        assert_eq!(text(" Jour fixe "), "# Jour fixe\n\nAm 2026-11-16");
+        assert_eq!(
+            text("Jour fixe\n- Punkt eins\n"),
+            "# Jour fixe\n\nAm 2026-11-16\n- Punkt eins\n"
+        );
+        assert!(matches!(
+            note_text(root.path(), "Fehlt", "x", &now()),
+            Err(Error::NotFound(_))
+        ));
+        assert_eq!(ensure_dir(root.path()).unwrap(), dir(root.path()));
+        let fresh = tempfile::tempdir().unwrap();
+        assert!(ensure_dir(fresh.path()).unwrap().is_dir());
     }
 
     #[test]

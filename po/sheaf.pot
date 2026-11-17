@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: sheaf\n"
 "Report-Msgid-Bugs-To: https://github.com/taulit/sheaf/issues\n"
-"POT-Creation-Date: 2026-11-17 16:21+0100\n"
+"POT-Creation-Date: 2026-11-17 16:57+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -24,7 +24,8 @@ msgstr ""
 
 #: crates/sheaf-core/src/i18n.rs:51 crates/sheaf-core/src/store/fsops.rs:132
 #: crates/sheaf-searchd/src/library.rs:190
-#: crates/sheaf/src/app/gallery/cards.rs:569
+#: crates/sheaf/src/app/gallery/cards.rs:591
+#: crates/sheaf/src/app/gallery/trash.rs:357
 #: crates/sheaf/src/app/overlays/palette.rs:164
 #: crates/sheaf/src/cli/output.rs:183
 msgid "Untitled"
@@ -41,7 +42,7 @@ msgstr[1] ""
 #: crates/sheaf/src/app/note/header.rs:95
 #: crates/sheaf/src/app/note/header.rs:241
 #: crates/sheaf/src/app/overlays/palette.rs:203
-#: crates/sheaf/src/app/window.rs:618
+#: crates/sheaf/src/app/quick.rs:463 crates/sheaf/src/app/window.rs:644
 msgid "Notes"
 msgstr ""
 
@@ -49,112 +50,140 @@ msgstr ""
 msgid "conflict"
 msgstr ""
 
-#: crates/sheaf/src/app/actions.rs:117
-#: crates/sheaf/src/app/gallery/render.rs:116
-#: crates/sheaf/src/app/gallery/render.rs:320
-msgid "New Note"
-msgstr ""
-
-#: crates/sheaf/src/app/actions.rs:118
-msgid "Quick Note"
-msgstr ""
-
-#: crates/sheaf/src/app/actions.rs:119 crates/sheaf/src/app/gallery/mod.rs:219
-msgid "Search"
-msgstr ""
-
-#: crates/sheaf/src/app/actions.rs:120
-msgid "Pin or Unpin"
-msgstr ""
-
-#: crates/sheaf/src/app/actions.rs:121
-msgid "Move to Trash"
-msgstr ""
-
-#: crates/sheaf/src/app/actions.rs:122
-msgid "Toggle View"
-msgstr ""
-
-#: crates/sheaf/src/app/actions.rs:123
-msgid "Sort Notes"
-msgstr ""
-
-#: crates/sheaf/src/app/actions.rs:124
-msgid "Show Folders"
-msgstr ""
-
-#: crates/sheaf/src/app/actions.rs:125
-msgid "Back to Notes"
-msgstr ""
-
-#: crates/sheaf/src/app/actions.rs:126
-#: crates/sheaf/src/app/overlays/shortcuts.rs:133
-msgid "Keyboard Shortcuts"
-msgstr ""
-
-#: crates/sheaf/src/app/actions.rs:127
-msgid "Settings"
-msgstr ""
-
-#: crates/sheaf/src/app/actions.rs:128
-msgid "Close Window"
-msgstr ""
-
-#: crates/sheaf/src/app/actions.rs:129
-msgid "Command Palette"
-msgstr ""
-
-#: crates/sheaf/src/app/actions.rs:130
-msgid "Open Selected Note"
-msgstr ""
-
-#: crates/sheaf/src/app/actions.rs:131
-msgid "Select Next Note"
-msgstr ""
-
-#: crates/sheaf/src/app/actions.rs:132
-msgid "Select Previous Note"
+#. TRANSLATORS: the date that replaces {{date}} in a note template. Keep the words
+#. in braces; German: "{day}.{month}.{year}".
+#: crates/sheaf-core/src/templates.rs:104
+#, rust-format
+msgid "{year}-{month}-{day}"
 msgstr ""
 
 #: crates/sheaf/src/app/actions.rs:133
-msgid "Select Note on the Left"
+#: crates/sheaf/src/app/gallery/render.rs:146
+#: crates/sheaf/src/app/gallery/render.rs:361
+#: crates/sheaf/src/app/gallery/templates.rs:92
+msgid "New Note"
 msgstr ""
 
 #: crates/sheaf/src/app/actions.rs:134
-msgid "Select Note on the Right"
+#: crates/sheaf/src/app/overlays/shortcuts.rs:31
+#: crates/sheaf/src/app/quick.rs:106 crates/sheaf/src/app/quick.rs:437
+#: crates/sheaf/src/app/shortcut.rs:37
+msgid "Quick Note"
 msgstr ""
 
 #: crates/sheaf/src/app/actions.rs:135
+msgid "New Note from Template…"
+msgstr ""
+
+#: crates/sheaf/src/app/actions.rs:136 crates/sheaf/src/app/gallery/mod.rs:241
+msgid "Search"
+msgstr ""
+
+#: crates/sheaf/src/app/actions.rs:137
+msgid "Pin or Unpin"
+msgstr ""
+
+#: crates/sheaf/src/app/actions.rs:138
+msgid "Move to Trash"
+msgstr ""
+
+#: crates/sheaf/src/app/actions.rs:139
+msgid "Toggle View"
+msgstr ""
+
+#: crates/sheaf/src/app/actions.rs:140
+msgid "Sort Notes"
+msgstr ""
+
+#: crates/sheaf/src/app/actions.rs:141
+msgid "Show Folders"
+msgstr ""
+
+#: crates/sheaf/src/app/actions.rs:144
+msgid "Save Search as Smart Folder"
+msgstr ""
+
+#: crates/sheaf/src/app/actions.rs:146
+msgid "Back to Notes"
+msgstr ""
+
+#: crates/sheaf/src/app/actions.rs:147
+#: crates/sheaf/src/app/overlays/shortcuts.rs:134
+msgid "Keyboard Shortcuts"
+msgstr ""
+
+#: crates/sheaf/src/app/actions.rs:148
+msgid "Settings"
+msgstr ""
+
+#: crates/sheaf/src/app/actions.rs:149
+msgid "Close Window"
+msgstr ""
+
+#: crates/sheaf/src/app/actions.rs:150
+msgid "Command Palette"
+msgstr ""
+
+#: crates/sheaf/src/app/actions.rs:151
+msgid "Open Selected Note"
+msgstr ""
+
+#: crates/sheaf/src/app/actions.rs:152
+msgid "Select Next Note"
+msgstr ""
+
+#: crates/sheaf/src/app/actions.rs:153
+msgid "Select Previous Note"
+msgstr ""
+
+#: crates/sheaf/src/app/actions.rs:154
+msgid "Select Note on the Left"
+msgstr ""
+
+#: crates/sheaf/src/app/actions.rs:155
+msgid "Select Note on the Right"
+msgstr ""
+
+#: crates/sheaf/src/app/actions.rs:156
 msgid "Clear Search"
+msgstr ""
+
+#: crates/sheaf/src/app/actions.rs:157
+msgid "Close Quick Note"
+msgstr ""
+
+#: crates/sheaf/src/app/actions.rs:158
+msgid "Open Quick Note in Notes"
 msgstr ""
 
 #: crates/sheaf/src/app/chrome.rs:296
 msgid "Close"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/cards.rs:486
+#: crates/sheaf/src/app/gallery/cards.rs:508
 #: crates/sheaf/src/app/note/header.rs:51
 msgid "Pin"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/cards.rs:486
+#: crates/sheaf/src/app/gallery/cards.rs:508
 #: crates/sheaf/src/app/note/header.rs:51
 msgid "Unpin"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/cards.rs:489
+#: crates/sheaf/src/app/gallery/cards.rs:511
 msgid "Move To"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/cards.rs:492
+#: crates/sheaf/src/app/gallery/cards.rs:514 crates/sheaf/src/app/quick.rs:525
 msgid "Top Level"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/cards.rs:503
+#: crates/sheaf/src/app/gallery/cards.rs:525
 msgid "Duplicate"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/cards.rs:508
+#: crates/sheaf/src/app/gallery/cards.rs:530
+#: crates/sheaf/src/app/gallery/smart.rs:232
 #: crates/sheaf/src/app/note/header.rs:181
 msgid "Delete"
 msgstr ""
@@ -320,34 +349,41 @@ msgstr ""
 msgid "Sunday"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/mod.rs:116
-#: crates/sheaf/src/app/gallery/render.rs:386
+#: crates/sheaf/src/app/gallery/mod.rs:131
+#: crates/sheaf/src/app/gallery/render.rs:430
 msgid "All Notes"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/mod.rs:985 crates/sheaf/src/app/note/mod.rs:640
+#: crates/sheaf/src/app/gallery/mod.rs:134
+#: crates/sheaf/src/app/gallery/render.rs:470
+msgid "Recently Deleted"
+msgstr ""
+
+#: crates/sheaf/src/app/gallery/mod.rs:1038
+#: crates/sheaf/src/app/note/mod.rs:645
 #, rust-format
 msgid "Could not pin the note: {}"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/mod.rs:987 crates/sheaf/src/app/note/mod.rs:642
+#: crates/sheaf/src/app/gallery/mod.rs:1040
+#: crates/sheaf/src/app/note/mod.rs:647
 #, rust-format
 msgid "Could not unpin the note: {}"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/mod.rs:1001
-#: crates/sheaf/src/app/note/mod.rs:645
+#: crates/sheaf/src/app/gallery/mod.rs:1054
+#: crates/sheaf/src/app/note/mod.rs:650
 #, rust-format
 msgid "Could not move the note: {}"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/mod.rs:1013
+#: crates/sheaf/src/app/gallery/mod.rs:1066
 #, rust-format
 msgid "Could not duplicate the note: {}"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/mod.rs:1065
-#: crates/sheaf/src/app/note/mod.rs:613
+#: crates/sheaf/src/app/gallery/mod.rs:1118
+#: crates/sheaf/src/app/note/mod.rs:618
 #, rust-format
 msgid "Could not move to trash: {}"
 msgstr ""
@@ -356,85 +392,190 @@ msgstr ""
 msgid "No additional text"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/render.rs:91
+#: crates/sheaf/src/app/gallery/render.rs:105
 msgid "Folders"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/render.rs:98
+#: crates/sheaf/src/app/gallery/render.rs:117
+#: crates/sheaf/src/app/gallery/trash.rs:457
+msgid "Empty Trash"
+msgstr ""
+
+#: crates/sheaf/src/app/gallery/render.rs:128
 msgid "Sort"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/render.rs:104
+#: crates/sheaf/src/app/gallery/render.rs:134
 #: crates/sheaf/src/app/overlays/shortcuts.rs:29
 msgid "Gallery"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/render.rs:110
+#: crates/sheaf/src/app/gallery/render.rs:140
 msgid "List"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/render.rs:199
+#: crates/sheaf/src/app/gallery/render.rs:151
+msgid "New Note from Template"
+msgstr ""
+
+#: crates/sheaf/src/app/gallery/render.rs:235
 msgid "All"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/render.rs:298
+#: crates/sheaf/src/app/gallery/render.rs:335
 msgid "No results"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/render.rs:300
+#: crates/sheaf/src/app/gallery/render.rs:337
 #, rust-format
 msgid "No results for “{}”"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/render.rs:303
+#: crates/sheaf/src/app/gallery/render.rs:340
 msgid "No notes yet"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/render.rs:304
+#: crates/sheaf/src/app/gallery/render.rs:341
 msgid "No notes in this folder"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/render.rs:305
+#: crates/sheaf/src/app/gallery/render.rs:342
 msgid "No notes with this tag"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/render.rs:312
+#: crates/sheaf/src/app/gallery/render.rs:343
+msgid "No recently deleted notes"
+msgstr ""
+
+#: crates/sheaf/src/app/gallery/render.rs:344
+msgid "No notes in this smart folder"
+msgstr ""
+
+#: crates/sheaf/src/app/gallery/render.rs:351
 msgid "Search Without Filters"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/render.rs:433
-msgid "Recently Deleted"
-msgstr ""
-
-#: crates/sheaf/src/app/gallery/render.rs:453
+#: crates/sheaf/src/app/gallery/render.rs:497
 msgid "New Folder"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/render.rs:471
+#: crates/sheaf/src/app/gallery/render.rs:521
 msgid "Folder Name"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/render.rs:491
+#: crates/sheaf/src/app/gallery/render.rs:541
 msgid "Date Edited"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/render.rs:492
+#: crates/sheaf/src/app/gallery/render.rs:542
 msgid "Date Created"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/render.rs:493
+#: crates/sheaf/src/app/gallery/render.rs:543
 msgid "Title"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/render.rs:506
+#: crates/sheaf/src/app/gallery/render.rs:556
 msgid "Sort By"
 msgstr ""
 
-#: crates/sheaf/src/app/mod.rs:65
-msgid "the running app does not answer"
+#: crates/sheaf/src/app/gallery/smart.rs:166
+msgid "Smart Folder Name"
+msgstr ""
+
+#: crates/sheaf/src/app/gallery/smart.rs:224
+msgid "Rename…"
+msgstr ""
+
+#: crates/sheaf/src/app/gallery/smart.rs:272
+#: crates/sheaf/src/app/gallery/smart.rs:279
+msgid "New Smart Folder"
+msgstr ""
+
+#: crates/sheaf/src/app/gallery/templates.rs:63
+#, rust-format
+msgid "Could not open the templates: {}"
+msgstr ""
+
+#: crates/sheaf/src/app/gallery/templates.rs:105
+msgid "Edit Templates…"
+msgstr ""
+
+#: crates/sheaf/src/app/gallery/trash.rs:74
+#, rust-format
+msgid "{} day left"
+msgid_plural "{} days left"
+msgstr[0] ""
+msgstr[1] ""
+
+#: crates/sheaf/src/app/gallery/trash.rs:206
+#, rust-format
+msgid "Could not open the note: {}"
+msgstr ""
+
+#: crates/sheaf/src/app/gallery/trash.rs:257
+#, rust-format
+msgid "Could not restore the note: {}"
+msgstr ""
+
+#: crates/sheaf/src/app/gallery/trash.rs:261
+#, rust-format
+msgid "Note restored"
+msgid_plural "{} notes restored"
+msgstr[0] ""
+msgstr[1] ""
+
+#: crates/sheaf/src/app/gallery/trash.rs:331
+#, rust-format
+msgid "Could not delete the note: {}"
+msgstr ""
+
+#: crates/sheaf/src/app/gallery/trash.rs:351
+#, rust-format
+msgid "Deleted for good in {} day"
+msgid_plural "Deleted for good in {} days"
+msgstr[0] ""
+msgstr[1] ""
+
+#: crates/sheaf/src/app/gallery/trash.rs:386
+#: crates/sheaf/src/app/gallery/trash.rs:452
+#: crates/sheaf/src/app/gallery/trash.rs:569
+msgid "Delete Permanently"
+msgstr ""
+
+#: crates/sheaf/src/app/gallery/trash.rs:393
+#: crates/sheaf/src/app/gallery/trash.rs:564
+msgid "Restore"
+msgstr ""
+
+#: crates/sheaf/src/app/gallery/trash.rs:418
+msgid "Back"
+msgstr ""
+
+#: crates/sheaf/src/app/gallery/trash.rs:447
+#, rust-format
+msgid "Delete this note permanently?"
+msgid_plural "Delete {} notes permanently?"
+msgstr[0] ""
+msgstr[1] ""
+
+#: crates/sheaf/src/app/gallery/trash.rs:456
+msgid "Delete all notes in the trash permanently?"
+msgstr ""
+
+#: crates/sheaf/src/app/gallery/trash.rs:475
+msgid "This cannot be undone."
+msgstr ""
+
+#: crates/sheaf/src/app/gallery/trash.rs:484
+msgid "Cancel"
 msgstr ""
 
 #: crates/sheaf/src/app/mod.rs:69
+msgid "the running app does not answer"
+msgstr ""
+
+#: crates/sheaf/src/app/mod.rs:73
 msgid "cannot open a window: neither WAYLAND_DISPLAY nor DISPLAY is set"
 msgstr ""
 
@@ -531,11 +672,11 @@ msgstr ""
 msgid "Try Again"
 msgstr ""
 
-#: crates/sheaf/src/app/note/mod.rs:437
+#: crates/sheaf/src/app/note/mod.rs:442
 msgid "Copied as Markdown"
 msgstr ""
 
-#: crates/sheaf/src/app/note/mod.rs:857
+#: crates/sheaf/src/app/note/mod.rs:862
 msgid "Saved"
 msgstr ""
 
@@ -609,31 +750,61 @@ msgstr ""
 msgid "Note"
 msgstr ""
 
-#: crates/sheaf/src/app/window.rs:131
-msgid "Recovered unsaved notes"
-msgstr ""
-
-#: crates/sheaf/src/app/window.rs:132
-msgid "Open Folder"
-msgstr ""
-
-#: crates/sheaf/src/app/window.rs:291
+#: crates/sheaf/src/app/quick.rs:251 crates/sheaf/src/app/window.rs:308
 #, rust-format
 msgid "Could not create a note: {}"
 msgstr ""
 
-#: crates/sheaf/src/app/window.rs:327
-msgid "Quick Note is not available yet"
+#: crates/sheaf/src/app/quick.rs:340
+msgid "Could not save the note"
 msgstr ""
 
-#: crates/sheaf/src/app/window.rs:349
+#: crates/sheaf/src/app/quick.rs:466
+#, rust-format
+msgid "Not saved: {}"
+msgstr ""
+
+#: crates/sheaf/src/app/quick.rs:467
+msgid "Changed elsewhere"
+msgstr ""
+
+#: crates/sheaf/src/app/quick.rs:468
+msgid "Deleted elsewhere"
+msgstr ""
+
+#: crates/sheaf/src/app/quick.rs:469
+msgid "Saved automatically"
+msgstr ""
+
+#: crates/sheaf/src/app/quick.rs:508
+msgid "Open"
+msgstr ""
+
+#: crates/sheaf/src/app/quick.rs:513
+msgid "Done"
+msgstr ""
+
+#: crates/sheaf/src/app/window.rs:137
+msgid "Recovered unsaved notes"
+msgstr ""
+
+#: crates/sheaf/src/app/window.rs:138
+msgid "Open Folder"
+msgstr ""
+
+#: crates/sheaf/src/app/window.rs:353
+#, rust-format
+msgid "Could not open Quick Note: {}"
+msgstr ""
+
+#: crates/sheaf/src/app/window.rs:375
 #, rust-format
 msgid "Note moved to trash"
 msgid_plural "{} notes moved to trash"
 msgstr[0] ""
 msgstr[1] ""
 
-#: crates/sheaf/src/app/window.rs:352
+#: crates/sheaf/src/app/window.rs:378
 msgid "Undo"
 msgstr ""
 
@@ -649,11 +820,11 @@ msgstr ""
 msgid "not a date, use YYYY-MM-DD or RFC 3339:"
 msgstr ""
 
-#: crates/sheaf/src/cli/commands/write.rs:36
+#: crates/sheaf/src/cli/commands/write.rs:28
 msgid "the note would be empty"
 msgstr ""
 
-#: crates/sheaf/src/cli/commands/write.rs:72
+#: crates/sheaf/src/cli/commands/write.rs:64
 msgid "neither $VISUAL nor $EDITOR is set"
 msgstr ""
 

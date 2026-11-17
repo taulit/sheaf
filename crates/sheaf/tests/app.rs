@@ -18,6 +18,7 @@ use gpui_markdown_editor::EditorEvent;
 use sheaf::app::actions::{self, CloseWindow};
 use sheaf::app::instance::Request;
 use sheaf::app::library::{Library, LibraryEvent, LibraryMode};
+use sheaf::app::quick;
 use sheaf::app::state::{StateFile, WindowState};
 use sheaf::app::theme::{self, ActiveTokens as _, Appearance, Overrides};
 use sheaf::app::window::{self, MainWindow, Route};
@@ -727,10 +728,9 @@ async fn requests_of_other_launches_reach_the_window(cx: &mut TestAppContext) {
     assert_eq!(app.editor_text(), "");
     assert_eq!(notes.files().len(), 15);
 
-    let toasts = |app: &mut TestApp| app.cx.update(|window, cx| window.notifications(cx).len());
-    assert_eq!(toasts(&mut app), 0);
+    assert!(app.cx.update(|_, cx| quick::current(cx).is_none()));
     app.request(Request::QuickNote);
-    assert_eq!(toasts(&mut app), 1);
+    assert!(app.cx.update(|_, cx| quick::current(cx).is_some()));
 }
 
 // ---- Theme --------------------------------------------------------------------------

@@ -17,8 +17,9 @@ use gpui::{
     Subscription, Task, TitlebarOptions, Window, WindowBounds, WindowDecorations, WindowHandle,
     WindowOptions, div, prelude::FluentBuilder as _, px, relative, size as size_of,
 };
-use gpui_component::notification::Notification;
-use gpui_component::{Root, WindowExt as _};
+use std::rc::Rc;
+
+use gpui_component::Root;
 use sheaf_core::CreateOptions;
 use sheaf_core::NoteId;
 use sheaf_core::i18n::{ntr, tr};
@@ -35,6 +36,7 @@ use super::note::{NoteEvent, NoteView};
 use super::overlays::palette::{CommandPalette, PaletteEvent};
 use super::overlays::shortcuts::ShortcutsSheet;
 use super::overlays::{Toast, ToastHost};
+use super::quick;
 use super::state::{Recovery, StateFile, WindowState};
 use super::theme::{ActiveTokens as _, motion, size};
 
@@ -103,6 +105,10 @@ impl MainWindow {
                 }
                 GalleryEvent::Trashed(ids) => this.offer_undo(ids.clone(), cx),
                 GalleryEvent::Failed(message) => this.toast(Toast::new(message.clone()), cx),
+                GalleryEvent::Notice(message) => this.toast(Toast::new(message.clone()), cx),
+                GalleryEvent::NewFromTemplate(name) => {
+                    this.create_note(Some(name.clone()), window, cx);
+                }
             });
         gallery.focus_handle(cx).focus(window, cx);
         let mut main = MainWindow {
@@ -268,7 +274,17 @@ impl MainWindow {
     /// Creates an empty note in the folder the gallery shows and opens it, once the
     /// open note is left.
     pub fn new_note(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.leave_note(window, cx, |this, _, window, cx| {
+        self.create_note(None, window, cx);
+    }
+
+    /// [`new_note`](Self::new_note), from the template of that name if there is one.
+    fn create_note(
+        &mut self,
+        template: Option<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.leave_note(window, cx, move |this, _, window, cx| {
             if this.creating.is_some() {
                 return;
             }
@@ -276,9 +292,10 @@ impl MainWindow {
                 folder: this.gallery.read(cx).current_folder(),
                 ..CreateOptions::default()
             };
-            let created = this
-                .library
-                .update(cx, |library, cx| library.create("", options, cx));
+            let created = this.library.update(cx, |library, cx| match &template {
+                Some(name) => library.create_from_template(name, options, cx),
+                None => library.create("", options, cx),
+            });
             this.creating = Some(cx.spawn_in(window, async move |this, cx| {
                 let created = created.await;
                 let _ = this.update_in(cx, |this, window, cx| {
@@ -321,12 +338,21 @@ impl MainWindow {
         }
     }
 
-    /// The Quick Note window (plan 03 §8) is not built yet.
+    /// Opens the Quick Note window (plan 03 §8), or brings it to the front. What it
+    /// asks for, such as showing the note, comes back to this window.
     fn quick_note(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        window.push_notification(
-            Notification::info(tr("Quick Note is not available yet")),
-            cx,
-        );
+        let (handle, main) = (window.window_handle(), cx.entity().downgrade());
+        let on_request: quick::RequestHandler = Rc::new(move |request, cx| {
+            let _ = handle.update(cx, |_, window, cx| {
+                window.activate_window();
+                let _ = main.update(cx, |main, cx| main.handle(request, window, cx));
+            });
+        });
+        if let Err(err) = quick::open(self.library.clone(), on_request, cx) {
+            log::error!("cannot open the Quick Note window: {err:#}");
+            let message = tr("Could not open Quick Note: {}").replace("{}", &err.to_string());
+            self.toast(Toast::new(message), cx);
+        }
     }
 
     fn toggle_pin(&mut self, cx: &mut Context<Self>) {

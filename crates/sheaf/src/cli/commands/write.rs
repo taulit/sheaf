@@ -20,15 +20,7 @@ pub fn new(ctx: &Ctx, args: NewArgs) -> Result {
     let text = match &args.template {
         Some(name) => {
             let given = super::input_text(args.text.as_deref())?.unwrap_or_default();
-            let (title, rest) = given.split_once('\n').unwrap_or((&given, ""));
-            let mut text = templates::render(&ctx.notes_dir, name, title.trim(), &now())?;
-            if !rest.is_empty() {
-                if !text.ends_with('\n') {
-                    text.push('\n');
-                }
-                text.push_str(rest);
-            }
-            text
+            templates::note_text(&ctx.notes_dir, name, &given, &now())?
         }
         None => required_text(args.text.as_deref())?,
     };

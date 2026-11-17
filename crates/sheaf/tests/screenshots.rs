@@ -19,6 +19,7 @@
 mod fixture;
 
 use std::path::Path;
+use std::rc::Rc;
 use std::sync::{Arc, OnceLock};
 
 use fixture::{Look, Notes};
@@ -32,9 +33,10 @@ use gpui_markdown_editor::Command;
 use sheaf::app::actions::{OpenCommandPalette, ShowShortcuts};
 use sheaf::app::assets::Assets;
 use sheaf::app::chrome::AssumeClientDecorations;
-use sheaf::app::gallery::Popover as GalleryPopover;
+use sheaf::app::gallery::{Popover as GalleryPopover, Scope};
 use sheaf::app::library::{Library, LibraryEvent};
 use sheaf::app::note::Popover as NotePopover;
+use sheaf::app::quick;
 use sheaf::app::theme::size::WINDOW_RADIUS;
 use sheaf::app::window::{self, MainWindow};
 use sheaf_core::Sort;
@@ -133,6 +135,8 @@ const SCENES: &[(&str, Folder, Scene)] = &[
     ("note-save-error", Folder::Seeded, note_save_error),
     ("palette", Folder::Seeded, palette),
     ("shortcuts", Folder::Seeded, shortcuts),
+    ("trash", Folder::Seeded, trash),
+    ("templates-menu", Folder::Seeded, templates_menu),
 ];
 
 /// The start view as it opens.
@@ -155,11 +159,74 @@ fn gallery_list(stage: &mut Stage) {
     });
 }
 
-/// The folder popover of the header bar.
+/// The folder popover of the header bar, with two smart folders.
 fn gallery_folders(stage: &mut Stage) {
     stage.update(|main, _, cx| {
         main.gallery().update(cx, |gallery, cx| {
+            gallery.set_query("offen:", cx);
+            gallery.save_smart_folder("Offene Aufgaben", cx);
+            gallery.set_query("geändert:woche", cx);
+            gallery.save_smart_folder("Diese Woche", cx);
+            gallery.set_scope(Scope::All, cx);
+        });
+    });
+    stage.update(|main, _, cx| {
+        main.gallery().update(cx, |gallery, cx| {
             gallery.set_popover(Some(GalleryPopover::Folders), cx)
+        });
+    });
+}
+
+/// "Recently Deleted" with three notes deleted on different days.
+fn trash(stage: &mut Stage) {
+    let library = stage.library.clone();
+    let titles = [
+        ("Sprint Review 12.11.", 2),
+        ("Lesestoff", 9),
+        ("Reading list", 23),
+    ];
+    for (title, days_ago) in titles {
+        let id = stage.cx.update(|cx| {
+            let gallery = stage.main.read(cx).gallery().read(cx);
+            let note = gallery.notes().iter().find(|note| note.title == title);
+            note.expect("the fixture has the note").id.clone()
+        });
+        let trashed = stage.cx.update(|cx| {
+            library.update(cx, |library, cx| {
+                library.set_clock(Arc::new(move || {
+                    let ago = std::time::Duration::from_secs(days_ago * 24 * 60 * 60);
+                    fixture::now().checked_sub(ago).expect("a date")
+                }));
+                library.trash(&id, cx)
+            })
+        });
+        stage.cx.run_until_parked();
+        pollster(&stage.cx, trashed);
+    }
+    stage.cx.update(|cx| {
+        library.update(cx, |library, _| library.set_clock(Arc::new(fixture::now)));
+    });
+    stage.update(|main, _, cx| {
+        main.gallery()
+            .update(cx, |gallery, cx| gallery.set_scope(Scope::Trash, cx));
+    });
+}
+
+/// The `+ ▾` menu with two templates.
+fn templates_menu(stage: &mut Stage) {
+    let dir = stage
+        .cx
+        .update(|cx| sheaf_core::templates::dir(stage.library.read(cx).notes_dir()));
+    std::fs::create_dir_all(&dir).expect("a folder");
+    for (name, text) in [
+        ("Besprechung", "# {{title}}\n\n{{date}}, {{time}}\n"),
+        ("Tagebuch", "{{date}}\n\n"),
+    ] {
+        std::fs::write(dir.join(format!("{name}.md")), text).expect("a template");
+    }
+    stage.update(|main, _, cx| {
+        main.gallery().update(cx, |gallery, cx| {
+            gallery.set_popover(Some(GalleryPopover::Templates), cx)
         });
     });
 }
@@ -356,4 +423,75 @@ fn pollster<T: 'static>(cx: &HeadlessAppContext, task: gpui::Task<sheaf_core::Re
     cx.foreground_executor()
         .block_test(task)
         .expect("the library answers")
+}
+
+#[test]
+#[ignore = "needs a GPU and writes docs/screenshots, run scripts/screenshot.sh"]
+fn quick_scene() {
+    for (theme, dark) in [("dark", true), ("light", false)] {
+        capture_quick(&format!("app-quick-{theme}"), dark);
+    }
+}
+
+/// The Quick Note window with a line typed, on the wallpaper, like [`capture`].
+fn capture_quick(name: &str, dark: bool) {
+    static TEXT_SYSTEM: OnceLock<Arc<dyn PlatformTextSystem>> = OnceLock::new();
+    let text_system =
+        TEXT_SYSTEM.get_or_init(|| gpui_platform::current_platform(true).text_system());
+    let notes = Notes::seeded();
+    let mut cx = HeadlessAppContext::with_platform(
+        text_system.clone(),
+        Arc::new(Assets),
+        gpui_platform::current_headless_renderer,
+    );
+    let library = cx.update(|cx| {
+        fixture::init_app(
+            Look {
+                dark,
+                ..Look::default()
+            },
+            cx,
+        );
+        cx.set_global(AssumeClientDecorations);
+        Theme::update(cx, |theme| theme.background = gpui::transparent_black());
+        fixture::open_library(&notes, cx)
+    });
+    cx.run_until_parked();
+    let mut view = None;
+    let window = cx
+        .open_window(
+            size(
+                px(quick::WIDTH + 2. * MARGIN),
+                px(quick::HEIGHT + 2. * MARGIN),
+            ),
+            |window, cx| {
+                let (root, quick) = quick::build(library.clone(), Rc::new(|_, _| {}), window, cx);
+                view = Some(quick);
+                cx.new(|_| Desktop { root, dark })
+            },
+        )
+        .expect("failed to open the offscreen window");
+    let view = view.expect("the window was built");
+    cx.run_until_parked();
+    let window: AnyWindowHandle = window.into();
+    cx.update_window(window, |_, window, cx| {
+        let note = view.read(cx).note().expect("the note is there").clone();
+        let editor = note.read(cx).editor().clone();
+        editor.update(cx, |editor, cx| {
+            let text = "Idee: Hover-Vorschau zeigt auch die letzte Notiz?";
+            editor.command(Command::InsertText(text.into()), window, cx);
+        });
+    })
+    .expect("the window is open");
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| window.draw(cx).clear(cx))
+        .expect("failed to draw");
+    let image = cx
+        .capture_screenshot(window)
+        .expect("offscreen rendering failed");
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../docs/screenshots")
+        .join(format!("{name}.png"));
+    image.save(&path).expect("failed to write the PNG");
+    println!("wrote {}", path.display());
 }

@@ -75,13 +75,21 @@ impl Setting {
 }
 
 /// Starts following the settings portal over `connection`. Until the portal answers,
-/// and if it never does, the appearance stays what it is.
+/// and if it never does, the appearance stays what it is. The global Quick Note
+/// shortcut is bound on the same connection ([`shortcut`](super::shortcut)).
 pub fn follow(connection: Connection, cx: &mut App) {
     let (sender, settings) = async_channel::unbounded::<Vec<Setting>>();
+    let (pressed, presses) = async_channel::unbounded::<Option<String>>();
+    cx.spawn(async move |cx| {
+        while let Ok(token) = presses.recv().await {
+            super::show(super::instance::Request::QuickNote, token, cx).await;
+        }
+    })
+    .detach();
     let spawned = std::thread::Builder::new()
         .name("sheaf-portal".to_owned())
         .spawn(move || {
-            if let Err(err) = zbus::block_on(read_and_watch(connection, sender)) {
+            if let Err(err) = zbus::block_on(read_and_watch(connection, sender, pressed)) {
                 log::info!("no settings portal, keeping the built-in appearance: {err}");
             }
         });
@@ -106,11 +114,24 @@ pub fn follow(connection: Connection, cx: &mut App) {
 async fn read_and_watch(
     connection: Connection,
     sender: async_channel::Sender<Vec<Setting>>,
+    pressed: async_channel::Sender<Option<String>>,
 ) -> ashpd::Result<()> {
     // Portals take the app id of a host app from this call, which must be the first
     // one on the connection (`docs/verified.md` §1). Sandboxed, it does nothing.
     if let Err(err) = register_host_app(connection.clone()).await {
         log::info!("the portal registry did not take the app id: {err}");
+    }
+    // Its own thread: binding waits for the user to answer GNOME's dialog.
+    let shortcuts = connection.clone();
+    let spawned = std::thread::Builder::new()
+        .name("sheaf-shortcut".to_owned())
+        .spawn(move || {
+            if let Err(err) = zbus::block_on(super::shortcut::listen(shortcuts, pressed)) {
+                log::info!("no global Quick Note shortcut: {err}");
+            }
+        });
+    if let Err(err) = spawned {
+        log::warn!("cannot start the shortcut thread: {err}");
     }
     let portal = Settings::with_connection(connection).await?;
     let mut changes = portal.receive_setting_changed().await?;

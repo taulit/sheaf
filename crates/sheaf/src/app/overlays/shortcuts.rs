@@ -28,6 +28,7 @@ pub fn groups(cx: &App) -> Vec<ShortcutGroup> {
         (actions::WINDOW, tr("General")),
         (actions::GALLERY, tr("Gallery")),
         (actions::NOTE, tr("Note")),
+        (actions::QUICK_NOTE, tr("Quick Note")),
     ];
     let commands = actions::commands();
     let bound: Vec<(String, String, String)> = commands

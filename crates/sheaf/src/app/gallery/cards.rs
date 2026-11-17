@@ -175,14 +175,17 @@ impl GalleryView {
             None => title_of(&note).into_any_element(),
         };
         let date = DateLabel::of(self.date_of(&note), now).format();
-        let meta = match note
-            .folder
-            .rsplit('/')
-            .next()
-            .filter(|name| !name.is_empty())
-        {
-            Some(folder) => format!("{date} · {folder}"),
-            None => date,
+        let meta = match self.trash_label(&note, now) {
+            Some(label) => label,
+            None => match note
+                .folder
+                .rsplit('/')
+                .next()
+                .filter(|name| !name.is_empty())
+            {
+                Some(folder) => format!("{date} · {folder}"),
+                None => date,
+            },
         };
         let element = div()
             .id(SharedString::from(format!("card-{}", note.id)))
@@ -290,6 +293,7 @@ impl GalleryView {
             None => title_of(&note).into_any_element(),
         };
         let cover = self.cover_of(&note, preview.as_deref(), cx);
+        let days_left = self.trash_days_left(&note, now.timestamp());
         let folder = (self.scope == Scope::All && !note.folder.is_empty()).then(|| {
             note.folder
                 .rsplit('/')
@@ -297,6 +301,10 @@ impl GalleryView {
                 .unwrap_or_default()
                 .to_owned()
         });
+        let (folder, folder_icon) = match days_left {
+            Some(left) => (Some(left), IconName::Trash),
+            None => (folder, IconName::Folder),
+        };
 
         let row = div()
             .id(SharedString::from(format!("row-{}", note.id)))
@@ -381,7 +389,7 @@ impl GalleryView {
                                 .mt(px(3.))
                                 .text_size(tokens.text(11.5))
                                 .text_color(tokens.faint)
-                                .child(icon(IconName::Folder, tokens.faint).size(px(11.)))
+                                .child(icon(folder_icon, tokens.faint).size(px(11.)))
                                 .child(folder),
                         )
                     }),
@@ -418,6 +426,11 @@ impl GalleryView {
 
     fn with_menu(&self, element: gpui::Stateful<Div>, cx: &mut Context<Self>) -> AnyElement {
         let gallery = cx.entity().downgrade();
+        if self.scope == Scope::Trash {
+            return element
+                .context_menu(move |menu, _, _| super::trash::menu(menu, &gallery))
+                .into_any_element();
+        }
         let folders: Rc<Vec<String>> = Rc::new(
             self.folders
                 .iter()
@@ -431,6 +444,9 @@ impl GalleryView {
 
     /// The date the groups go by, also shown on the card.
     fn date_of(&self, note: &NoteMeta) -> jiff::Timestamp {
+        if let Some(deleted) = self.trashed_date(note) {
+            return deleted;
+        }
         match self.sort() {
             SortOrder::Created => note.created,
             SortOrder::Modified | SortOrder::Title => note.modified,

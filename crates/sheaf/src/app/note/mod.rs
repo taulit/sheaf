@@ -33,10 +33,10 @@
 //! Again" and on leaving; leaving that fails keeps the view open.
 
 mod date;
-mod files;
+pub(crate) mod files;
 mod header;
 mod jump;
-mod setup;
+pub(crate) mod setup;
 mod worker;
 
 use std::path::PathBuf;
@@ -260,6 +260,11 @@ impl NoteView {
 
     pub fn popover(&self) -> Option<&Popover> {
         self.popover.as_ref()
+    }
+
+    /// Whether the text is there and the editor takes the keys.
+    pub fn is_loaded(&self) -> bool {
+        self.loaded
     }
 
     /// Whether "Saved" is shown at the bottom.

@@ -954,7 +954,7 @@ async fn the_shortcuts_list_shows_every_binding(cx: &mut TestAppContext) {
         );
     }
     let titles: Vec<&str> = groups.iter().map(|group| group.title.as_str()).collect();
-    assert_eq!(titles, ["General", "Gallery", "Note"]);
+    assert_eq!(titles, ["General", "Gallery", "Note", "Quick Note"]);
     let note = &groups[2].lines;
     assert_eq!(
         note,

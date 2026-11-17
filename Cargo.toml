@@ -39,7 +39,7 @@ gpui_platform = { package = "gpui-pre-platform", version = "=0.3.12", features =
 gpui-component = "=0.10.0"
 gpui-kit-assets = "=0.10.0"
 gpui-markdown-editor = { git = "https://github.com/taulit/gpui-markdown-editor", tag = "v0.0.3", features = ["serde"] }
-ashpd = { version = "0.14", default-features = false, features = ["async-io", "settings"] }
+ashpd = { version = "0.14", default-features = false, features = ["async-io", "settings", "global_shortcuts"] }
 anyhow = "1"
 async-channel = "2.5"
 async-io = "2.6"
