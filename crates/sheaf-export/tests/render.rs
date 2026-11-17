@@ -232,3 +232,17 @@ fn an_image_that_is_a_device_shows_its_placeholder() {
     };
     assert!(text.contains("Endlos") && text.contains("Auch"), "{text}");
 }
+
+#[test]
+fn five_thousand_levels_of_quotes_and_lists_render() {
+    let deep = format!(
+        "Tief\n\n{} Zitat\n\n{}Punkt\n",
+        ">".repeat(5000),
+        "- ".repeat(5000)
+    );
+    let pdf = render(&deep, &fonts(), &Options::default()).expect("rendered");
+    let Some(text) = text_of(&pdf.bytes) else {
+        return;
+    };
+    assert!(text.contains("Zitat") && text.contains("Punkt"), "{text}");
+}

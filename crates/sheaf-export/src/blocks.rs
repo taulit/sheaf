@@ -63,6 +63,10 @@ pub struct Item {
     pub blocks: Vec<Block>,
 }
 
+/// The deepest nesting of quotes and lists that is kept: deeper ones go on at this
+/// level. Keeps the layout's recursion short and leaves the text room on the page.
+pub const MAX_DEPTH: usize = 16;
+
 pub fn parse(markdown: &str) -> Vec<Block> {
     let mut options = Options::empty();
     options.insert(Options::ENABLE_TABLES);
@@ -113,6 +117,11 @@ struct Builder {
     links: Vec<(Option<String>, bool)>,
     /// Alt text of the image being read, with its source.
     image: Option<(String, String)>,
+    /// Quotes and lists open in `open`.
+    depth: usize,
+    /// Quotes, lists and items open beyond [`MAX_DEPTH`], which are not in `open`:
+    /// their content goes to the block open at that depth.
+    flattened: usize,
 }
 
 impl Builder {
@@ -132,7 +141,9 @@ impl Builder {
                 self.push(Block::Rule);
             }
             Event::TaskListMarker(checked) => {
-                if let Some(Open::Item(item)) = self.open.last_mut() {
+                if self.flattened == 0
+                    && let Some(Open::Item(item)) = self.open.last_mut()
+                {
                     item.task = Some(checked);
                 }
             }
@@ -140,6 +151,16 @@ impl Builder {
     }
 
     fn start(&mut self, tag: Tag<'_>) {
+        if matches!(tag, Tag::BlockQuote(_) | Tag::List(_) | Tag::Item)
+            && (self.flattened > 0 || (self.depth >= MAX_DEPTH && !matches!(tag, Tag::Item)))
+        {
+            self.close_inline();
+            self.flattened += 1;
+            return;
+        }
+        if matches!(tag, Tag::BlockQuote(_) | Tag::List(_)) {
+            self.depth += 1;
+        }
         match tag {
             Tag::Paragraph => self.begin(Inline::Paragraph),
             Tag::Heading { level, .. } => self.begin(Inline::Heading(level as u8)),
@@ -200,6 +221,15 @@ impl Builder {
     }
 
     fn end(&mut self, tag: TagEnd) {
+        let container = matches!(tag, TagEnd::BlockQuote(_) | TagEnd::List(_) | TagEnd::Item);
+        if container && self.flattened > 0 {
+            self.close_inline();
+            self.flattened -= 1;
+            return;
+        }
+        if matches!(tag, TagEnd::BlockQuote(_) | TagEnd::List(_)) {
+            self.depth = self.depth.saturating_sub(1);
+        }
         match tag {
             TagEnd::Paragraph | TagEnd::Heading(_) => self.close_inline(),
             TagEnd::CodeBlock => {
@@ -468,5 +498,54 @@ mod tests {
             panic!("{items:?}");
         };
         assert!(matches!(inner[0].blocks[1], Block::Quote(_)));
+    }
+
+    fn depth(blocks: &[Block]) -> usize {
+        blocks
+            .iter()
+            .map(|block| match block {
+                Block::Quote(blocks) => 1 + depth(blocks),
+                Block::List { items, .. } => {
+                    1 + items
+                        .iter()
+                        .map(|item| depth(&item.blocks))
+                        .max()
+                        .unwrap_or(0)
+                }
+                _ => 0,
+            })
+            .max()
+            .unwrap_or(0)
+    }
+
+    fn words(blocks: &[Block]) -> Vec<String> {
+        blocks
+            .iter()
+            .flat_map(|block| match block {
+                Block::Paragraph(spans) => vec![plain(spans)],
+                Block::Quote(blocks) => words(blocks),
+                Block::List { items, .. } => {
+                    items.iter().flat_map(|item| words(&item.blocks)).collect()
+                }
+                _ => Vec::new(),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn deep_nesting_goes_on_at_the_deepest_kept_level() {
+        let quotes = format!(
+            "{} tief\n\n{}\n\nwieder oben\n",
+            ">".repeat(5000),
+            "- ".repeat(5000) + "x"
+        );
+        let blocks = parse(&quotes);
+        assert!(depth(&blocks) <= MAX_DEPTH, "{}", depth(&blocks));
+        assert_eq!(words(&blocks), ["tief", "x", "wieder oben"]);
+
+        let tasks = format!("{}[x] erledigt\n\n> c\n", "- ".repeat(40));
+        let blocks = parse(&tasks);
+        assert_eq!(words(&blocks), ["erledigt", "c"]);
+        assert!(matches!(blocks.last(), Some(Block::Quote(_))));
     }
 }
