@@ -6,8 +6,8 @@ Other sessions read only this file. Updated at the end of every phase.
 |---|---|---|
 | S0 Setup | merged | [#1](https://github.com/taulit/sheaf/pull/1) |
 | S1 Core, searchd, CLI | merged | [#2](https://github.com/taulit/sheaf/pull/2), [#3](https://github.com/taulit/sheaf/pull/3) |
-| S2 App | gate green, in review | `phase/s2-app` |
-| S3 Features | review findings fixed, gate green, pushed | `phase/s3-features` |
+| S2 App | merged | [#4](https://github.com/taulit/sheaf/pull/4) |
+| S3 Features | gate green, in review | `phase/s3-features` |
 | S4 Release | not started | |
 
 ## What works (S1)
@@ -101,3 +101,8 @@ None yet.
 - The S2 and S3 app was checked through tests and offscreen screenshots only, not by hand
   in a real desktop session; no real portal dialog (FileChooser, Print, GlobalShortcuts)
   was opened.
+- Every settings change rewrites `config.toml` and `.sheaf/config.toml` through
+  `toml::Table`: values and unknown keys survive, hand-written comments and key order do
+  not (`sheaf-core/src/config.rs`, `write_table`). A candidate for `toml_edit` in S4.
+- The S3 app was checked through tests, offscreen screenshots and a sandboxed headless
+  GNOME Shell (Visor module), not by hand in a real desktop session.
