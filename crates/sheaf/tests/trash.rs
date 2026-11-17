@@ -215,3 +215,28 @@ async fn notes_older_than_thirty_days_are_deleted(cx: &mut TestAppContext) {
     assert_eq!(app.titles(), ["Neu"]);
     assert_eq!(in_trash(&notes), ["Neu.md"]);
 }
+
+#[gpui::test]
+async fn an_image_another_note_shows_survives_the_trash(cx: &mut TestAppContext) {
+    let notes = Notes::empty();
+    let id = "01JD3K8Z6Q4X7V9B2M5N8P0R3T";
+    let foto = format!("_attachments/{id}/foto.png");
+    notes.write(
+        "Urlaub.md",
+        &format!("---\nid: {id}\n---\nUrlaub\n\n![Foto]({foto})\n"),
+    );
+    notes.write(&foto, "png");
+    notes.write("Album.md", &format!("Album\n\n![Foto]({foto})\n"));
+
+    let mut app = open_trash(&notes, &["Urlaub"], cx);
+    assert_eq!(app.titles(), ["Urlaub"]);
+    assert_eq!(notes.read(&foto), "png", "the album still shows it");
+
+    let id: sheaf_core::NoteId = id.parse().unwrap();
+    let purged = app
+        .library
+        .update(app.cx, |library, cx| library.purge(&id, cx));
+    app.cx.run_until_parked();
+    app.cx.foreground_executor().block_test(purged).unwrap();
+    assert_eq!(notes.read(&foto), "png", "not deleted for good either");
+}

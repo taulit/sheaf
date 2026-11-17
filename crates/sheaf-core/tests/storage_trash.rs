@@ -232,3 +232,61 @@ fn notes_expire_after_exactly_thirty_days() {
     assert_eq!(removed.len(), 2);
     assert!(store.list_trash().unwrap().is_empty());
 }
+
+#[test]
+fn attachments_another_note_links_to_stay_through_trash_and_purge() {
+    let (dir, store) = store();
+    let a = create_in(&store, "Fotos", "Urlaub\n");
+    let (a, foto) = store.add_attachment(&a.id, "foto.png", b"png").unwrap();
+    let (a, own) = store.add_attachment(&a.id, "notiz.txt", b"txt").unwrap();
+    store
+        .write_body(
+            &a.id,
+            &format!("Urlaub\n\n![Foto]({foto})\n[Notiz]({own})\n"),
+            &Default::default(),
+        )
+        .unwrap();
+    // Another note copied the image line; a third one names a similar file only.
+    create_in(&store, "Fotos", &format!("Album\n\n![Foto]({foto})\n"));
+    create_in(&store, "", &format!("Fast\n\n![x]({foto}.bak)\n"));
+    let at = |rel: &str| dir.path().join(rel);
+
+    store.trash(&a.id, time("2026-11-16T12:00:00Z")).unwrap();
+    assert!(
+        at("Fotos").join(&foto).is_file(),
+        "the album keeps its image"
+    );
+    assert!(!at("Fotos").join(&own).exists());
+    assert!(at(".trash").join(&own).is_file());
+
+    let restored = store.restore(&a.id).unwrap();
+    assert_eq!(restored.folder, "Fotos");
+    assert!(at("Fotos").join(&foto).is_file());
+    assert!(at("Fotos").join(&own).is_file(), "reunited");
+    assert!(!at(".trash/_attachments").exists());
+
+    store.trash(&a.id, time("2026-11-16T12:00:00Z")).unwrap();
+    store.purge(&a.id).unwrap();
+    assert_eq!(fs::read(at("Fotos").join(&foto)).unwrap(), b"png");
+    assert!(!at("Fotos").join(&own).exists());
+    assert!(!at(".trash/_attachments").exists());
+}
+
+#[test]
+fn purge_puts_back_a_file_a_note_links_to() {
+    let (dir, store) = store();
+    let a = create_in(&store, "", "Quelle\n");
+    let (a, _) = store.add_attachment(&a.id, "a.txt", b"a").unwrap();
+    // Put there by hand, with a space in its name.
+    let foto = format!("_attachments/{}/bild 1.png", a.id);
+    fs::write(dir.path().join(&foto), b"png").unwrap();
+    store.trash(&a.id, time("2026-11-16T12:00:00Z")).unwrap();
+    assert!(dir.path().join(".trash").join(&foto).is_file());
+    // Linked after the note went, with the space written as `%20`.
+    let linked = foto.replace(' ', "%20");
+    create_in(&store, "", &format!("Später\n\n![Bild]({linked})\n"));
+
+    store.purge(&a.id).unwrap();
+    assert_eq!(fs::read(dir.path().join(&foto)).unwrap(), b"png");
+    assert!(!dir.path().join(".trash/_attachments").exists());
+}
