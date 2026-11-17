@@ -483,9 +483,8 @@ fn note_menu(
     )
     .separator()
     .item(
-        PopupMenuItem::new(tr("Delete")).on_click(act(|gallery, window, cx| {
-            gallery.trash_selection(window, cx)
-        })),
+        PopupMenuItem::new(tr("Delete"))
+            .on_click(act(|gallery, _, cx| gallery.trash_selection(cx))),
     )
 }
 

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: sheaf\n"
 "Report-Msgid-Bugs-To: https://github.com/taulit/sheaf/issues\n"
-"POT-Creation-Date: 2026-11-17 11:09+0100\n"
+"POT-Creation-Date: 2026-11-17 11:12+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -41,7 +41,7 @@ msgstr[1] ""
 #: crates/sheaf/src/app/note/header.rs:94
 #: crates/sheaf/src/app/note/header.rs:240
 #: crates/sheaf/src/app/overlays/palette.rs:197
-#: crates/sheaf/src/app/window.rs:512
+#: crates/sheaf/src/app/window.rs:521
 msgid "Notes"
 msgstr ""
 
@@ -59,7 +59,7 @@ msgstr ""
 msgid "Quick Note"
 msgstr ""
 
-#: crates/sheaf/src/app/actions.rs:107 crates/sheaf/src/app/gallery/mod.rs:216
+#: crates/sheaf/src/app/actions.rs:107 crates/sheaf/src/app/gallery/mod.rs:210
 msgid "Search"
 msgstr ""
 
@@ -296,20 +296,9 @@ msgstr ""
 msgid "Sunday"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/mod.rs:110
+#: crates/sheaf/src/app/gallery/mod.rs:109
 #: crates/sheaf/src/app/gallery/render.rs:378
 msgid "All Notes"
-msgstr ""
-
-#: crates/sheaf/src/app/gallery/mod.rs:963
-#, rust-format
-msgid "Note deleted"
-msgid_plural "{} notes deleted"
-msgstr[0] ""
-msgstr[1] ""
-
-#: crates/sheaf/src/app/gallery/mod.rs:970 crates/sheaf/src/app/window.rs:302
-msgid "Undo"
 msgstr ""
 
 #: crates/sheaf/src/app/gallery/preview.rs:106
@@ -552,12 +541,19 @@ msgstr ""
 msgid "Note"
 msgstr ""
 
-#: crates/sheaf/src/app/window.rs:252
+#: crates/sheaf/src/app/window.rs:253
 msgid "Quick Note is not available yet"
 msgstr ""
 
-#: crates/sheaf/src/app/window.rs:302
+#: crates/sheaf/src/app/window.rs:275
+#, rust-format
 msgid "Note moved to trash"
+msgid_plural "{} notes moved to trash"
+msgstr[0] ""
+msgstr[1] ""
+
+#: crates/sheaf/src/app/window.rs:278
+msgid "Undo"
 msgstr ""
 
 #: crates/sheaf/src/cli/commands/app.rs:25

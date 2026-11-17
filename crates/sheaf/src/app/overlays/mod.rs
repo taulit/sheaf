@@ -6,7 +6,9 @@
 //!
 //! - **Toast:** emit an event the window turns into
 //!   [`MainWindow::toast`](crate::app::window::MainWindow::toast) with a [`Toast`];
-//!   the note view does it with `NoteEvent::Toast`.
+//!   the note view does it with `NoteEvent::Toast`. Deletions only report what went
+//!   to the trash (`NoteEvent::Trashed`, `GalleryEvent::Trashed`); the window builds
+//!   the one Undo toast for both.
 //! - **Palette and shortcuts** take their entries from
 //!   [`actions::commands`](crate::app::actions::commands) and the keymap; a new action
 //!   shows up in both once it is named there.

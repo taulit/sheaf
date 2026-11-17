@@ -21,7 +21,7 @@ use gpui_component::notification::Notification;
 use gpui_component::{Root, WindowExt as _};
 use sheaf_core::CreateOptions;
 use sheaf_core::NoteId;
-use sheaf_core::i18n::tr;
+use sheaf_core::i18n::{ntr, tr};
 use sheaf_searchd::api::APP_NAME;
 
 use super::actions::{
@@ -98,6 +98,7 @@ impl MainWindow {
                 GalleryEvent::Open { id, query } => {
                     this.open_note(id.clone(), query.clone(), window, cx);
                 }
+                GalleryEvent::Trashed(ids) => this.offer_undo(ids.clone(), cx),
             });
         gallery.focus_handle(cx).focus(window, cx);
         MainWindow {
@@ -268,6 +269,26 @@ impl MainWindow {
         self.toasts.update(cx, |toasts, cx| toasts.show(toast, cx));
     }
 
+    /// Tells that `ids` went to the trash, with an Undo that puts them back.
+    fn offer_undo(&mut self, ids: Vec<NoteId>, cx: &mut Context<Self>) {
+        let count = u32::try_from(ids.len()).unwrap_or(u32::MAX);
+        let message = ntr("Note moved to trash", "{} notes moved to trash", count)
+            .replace("{}", &count.to_string());
+        let library = self.library.clone();
+        let toast = Toast::new(message).action(tr("Undo"), move |_, cx| {
+            for id in &ids {
+                let restored = library.update(cx, |library, cx| library.restore(id, cx));
+                cx.background_spawn(async move {
+                    if let Err(err) = restored.await {
+                        log::error!("cannot restore the note: {err}");
+                    }
+                })
+                .detach();
+            }
+        });
+        self.toast(toast, cx);
+    }
+
     pub fn toasts(&self) -> &Entity<ToastHost> {
         &self.toasts
     }
@@ -296,19 +317,7 @@ impl MainWindow {
             }
             NoteEvent::Trashed(trashed) => {
                 self.back(window, cx);
-                let library = self.library.clone();
-                let id = trashed.id.clone();
-                let toast =
-                    Toast::new(tr("Note moved to trash")).action(tr("Undo"), move |_, cx| {
-                        let restored = library.update(cx, |library, cx| library.restore(&id, cx));
-                        cx.background_spawn(async move {
-                            if let Err(err) = restored.await {
-                                log::error!("cannot restore the note: {err}");
-                            }
-                        })
-                        .detach();
-                    });
-                self.toast(toast, cx);
+                self.offer_undo(vec![trashed.id.clone()], cx);
             }
             NoteEvent::Toast(toast) => self.toast(toast.clone(), cx),
         }

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: sheaf\n"
 "Report-Msgid-Bugs-To: https://github.com/taulit/sheaf/issues\n"
-"POT-Creation-Date: 2026-11-17 11:09+0100\n"
+"POT-Creation-Date: 2026-11-17 11:12+0100\n"
 "PO-Revision-Date: 2026-11-16 22:17+0100\n"
 "Last-Translator: Automatically generated\n"
 "Language-Team: German\n"
@@ -41,7 +41,7 @@ msgstr[1] "{} Notizen"
 #: crates/sheaf/src/app/note/header.rs:94
 #: crates/sheaf/src/app/note/header.rs:240
 #: crates/sheaf/src/app/overlays/palette.rs:197
-#: crates/sheaf/src/app/window.rs:512
+#: crates/sheaf/src/app/window.rs:521
 msgid "Notes"
 msgstr "Notizen"
 
@@ -59,7 +59,7 @@ msgstr "Neue Notiz"
 msgid "Quick Note"
 msgstr "Schnellnotiz"
 
-#: crates/sheaf/src/app/actions.rs:107 crates/sheaf/src/app/gallery/mod.rs:216
+#: crates/sheaf/src/app/actions.rs:107 crates/sheaf/src/app/gallery/mod.rs:210
 msgid "Search"
 msgstr "Suchen"
 
@@ -296,21 +296,10 @@ msgstr "Samstag"
 msgid "Sunday"
 msgstr "Sonntag"
 
-#: crates/sheaf/src/app/gallery/mod.rs:110
+#: crates/sheaf/src/app/gallery/mod.rs:109
 #: crates/sheaf/src/app/gallery/render.rs:378
 msgid "All Notes"
 msgstr "Alle Notizen"
-
-#: crates/sheaf/src/app/gallery/mod.rs:963
-#, rust-format
-msgid "Note deleted"
-msgid_plural "{} notes deleted"
-msgstr[0] "Notiz gelöscht"
-msgstr[1] "{} Notizen gelöscht"
-
-#: crates/sheaf/src/app/gallery/mod.rs:970 crates/sheaf/src/app/window.rs:302
-msgid "Undo"
-msgstr "Rückgängig"
 
 #: crates/sheaf/src/app/gallery/preview.rs:106
 msgid "No additional text"
@@ -552,13 +541,20 @@ msgstr "Allgemein"
 msgid "Note"
 msgstr "Notiz"
 
-#: crates/sheaf/src/app/window.rs:252
+#: crates/sheaf/src/app/window.rs:253
 msgid "Quick Note is not available yet"
 msgstr "Die Schnellnotiz gibt es noch nicht"
 
-#: crates/sheaf/src/app/window.rs:302
+#: crates/sheaf/src/app/window.rs:275
+#, rust-format
 msgid "Note moved to trash"
-msgstr "Notiz in den Papierkorb verschoben"
+msgid_plural "{} notes moved to trash"
+msgstr[0] "Notiz in den Papierkorb verschoben"
+msgstr[1] "{} Notizen in den Papierkorb verschoben"
+
+#: crates/sheaf/src/app/window.rs:278
+msgid "Undo"
+msgstr "Rückgängig"
 
 #: crates/sheaf/src/cli/commands/app.rs:25
 msgid "sheaf-searchd cannot be reached or found"

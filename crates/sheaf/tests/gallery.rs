@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use fixture::{Look, Notes};
 use gpui::{Entity, ListOffset, Modifiers, TestAppContext, VisualTestContext, WindowHandle, px};
-use gpui_component::{Root, WindowExt as _};
+use gpui_component::Root;
 use sheaf::app::gallery::dates::Group;
 use sheaf::app::gallery::{GalleryView, Popover, Scope};
 use sheaf::app::library::Library;
@@ -414,10 +414,15 @@ async fn delete_moves_the_selection_to_the_trash_and_undo_restores_it(cx: &mut T
     app.keys("delete");
     assert_eq!(app.titles().len(), 12);
     assert!(notes.dir.join(".trash/Lesestoff.md").exists());
-    let toasts = app.cx.update(|window, cx| window.notifications(cx).len());
-    assert_eq!(toasts, 1, "Note deleted · Undo");
+    let toasts = app.main.read_with(app.cx, |main, _| main.toasts().clone());
+    let shown = toasts.read_with(app.cx, |toasts, _| {
+        toasts.shown().map(|toast| toast.message.to_string())
+    });
+    assert_eq!(shown.as_deref(), Some("2 notes moved to trash"));
 
-    app.update(|gallery, cx| gallery.undo_trash(cx));
+    app.cx
+        .update(|window, cx| toasts.update(cx, |toasts, cx| toasts.run_action(window, cx)));
+    app.settle();
     assert_eq!(app.titles().len(), 14);
     assert!(notes.files().contains(&"Privat/Lesestoff.md".to_owned()));
     assert!(notes.files().contains(&"Arbeit/Notch-Ideen.md".to_owned()));

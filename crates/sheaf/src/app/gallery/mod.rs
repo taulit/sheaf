@@ -7,7 +7,8 @@
 //!   also while a note covers it, so it keeps its scroll position and selection.
 //! - It reads and changes notes only through the [`Library`] and reloads on every
 //!   [`LibraryEvent`].
-//! - It asks the window to open a note by emitting [`GalleryEvent::Open`]; creating a
+//! - It asks the window to open a note by emitting [`GalleryEvent::Open`] and reports
+//!   a deletion with [`GalleryEvent::Trashed`] for the window's Undo toast; creating a
 //!   note is the window's `NewNote` action, in [`current_folder`](GalleryView::current_folder).
 //! - The window calls [`set_query`](GalleryView::set_query) for a search that came
 //!   from outside (GNOME search, `sheaf` on the command line) and
@@ -45,13 +46,10 @@ use gpui::{
     App, AppContext as _, Context, Entity, EventEmitter, FocusHandle, Focusable, KeyDownEvent,
     ListAlignment, ListOffset, ListState, Modifiers, Subscription, Task, Window, px,
 };
-use gpui_component::WindowExt as _;
-use gpui_component::button::{Button, ButtonVariants as _};
 use gpui_component::input::{InputEvent, InputState};
-use gpui_component::notification::Notification;
 use jiff::Timestamp;
 use sheaf_core::config::{FolderView, Sort as SortOrder, View};
-use sheaf_core::i18n::{ntr, tr};
+use sheaf_core::i18n::tr;
 use sheaf_core::query::{self, ItemKind};
 use sheaf_core::{Filter, FolderConfig, NoteId, NoteMeta, Snippet, Sort};
 
@@ -74,6 +72,8 @@ const ROW_HEIGHT_HINT: f32 = 270.;
 pub enum GalleryEvent {
     /// Open this note; `query` is the search it was found with, or empty.
     Open { id: NoteId, query: String },
+    /// These notes went to the trash; the window offers to undo it.
+    Trashed(Vec<NoteId>),
 }
 
 /// Which notes the gallery shows: chosen in the chip row or the folder popover.
@@ -150,9 +150,6 @@ struct Hover {
     epoch: usize,
 }
 
-/// Marks the undo toast, so that a second deletion replaces it.
-struct UndoToast;
-
 pub struct GalleryView {
     library: Entity<Library>,
     scope: Scope,
@@ -187,8 +184,6 @@ pub struct GalleryView {
     popover: Option<Popover>,
     /// The name field of "New Folder" in the folder popover, while it is open.
     new_folder: Option<Entity<InputState>>,
-    /// What the last deletion moved to the trash, for its undo.
-    trashed: Vec<NoteId>,
     generation: u64,
     focus_handle: FocusHandle,
     /// The pause before a search, while typing.
@@ -244,7 +239,6 @@ impl GalleryView {
             hover: Hover::default(),
             popover: None,
             new_folder: None,
-            trashed: Vec::new(),
             generation: 0,
             focus_handle: cx.focus_handle(),
             debounce: Task::ready(()),
@@ -917,8 +911,8 @@ impl GalleryView {
         }
     }
 
-    /// Moves the selected notes to the trash and offers to undo it.
-    pub fn trash_selection(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    /// Moves the selected notes to the trash; the window offers to undo it.
+    pub fn trash_selection(&mut self, cx: &mut Context<Self>) {
         let trashing: Vec<_> = self
             .selection_ids()
             .iter()
@@ -927,7 +921,7 @@ impl GalleryView {
         if trashing.is_empty() {
             return;
         }
-        cx.spawn_in(window, async move |this, cx| {
+        cx.spawn(async move |this, cx| {
             let mut trashed = Vec::new();
             for task in trashing {
                 match task.await {
@@ -935,47 +929,11 @@ impl GalleryView {
                     Err(err) => log::error!("cannot move a note to the trash: {err}"),
                 }
             }
-            if trashed.is_empty() {
-                return;
+            if !trashed.is_empty() {
+                let _ = this.update(cx, |_, cx| cx.emit(GalleryEvent::Trashed(trashed)));
             }
-            let _ = this.update_in(cx, |this, window, cx| {
-                let count = trashed.len();
-                this.trashed = trashed;
-                this.offer_undo(count, window, cx);
-            });
         })
         .detach();
-    }
-
-    /// Puts back what the last deletion moved to the trash.
-    pub fn undo_trash(&mut self, cx: &mut Context<Self>) {
-        for id in std::mem::take(&mut self.trashed) {
-            self.library
-                .update(cx, |library, cx| library.restore(&id, cx))
-                .detach();
-        }
-    }
-
-    fn offer_undo(&mut self, count: usize, window: &mut Window, cx: &mut Context<Self>) {
-        let gallery = cx.entity().downgrade();
-        let count = u32::try_from(count).unwrap_or(u32::MAX);
-        let message =
-            ntr("Note deleted", "{} notes deleted", count).replace("{}", &count.to_string());
-        let toast = Notification::new()
-            .id::<UndoToast>()
-            .message(message)
-            .action(move |_, _, cx| {
-                let (gallery, toast) = (gallery.clone(), cx.entity().downgrade());
-                Button::new("undo")
-                    .label(tr("Undo"))
-                    .ghost()
-                    .on_click(move |_, window, cx| {
-                        let _ = gallery.update(cx, |gallery, cx| gallery.undo_trash(cx));
-                        let _ = toast.update(cx, |toast, cx| toast.dismiss(window, cx));
-                    })
-            })
-            .autohide(true);
-        window.push_notification(toast, cx);
     }
 
     fn selection_ids(&self) -> Vec<NoteId> {
@@ -1031,8 +989,8 @@ impl GalleryView {
         self.move_cursor(Direction::Right, cx);
     }
 
-    fn trash(&mut self, _: &Trash, window: &mut Window, cx: &mut Context<Self>) {
-        self.trash_selection(window, cx);
+    fn trash(&mut self, _: &Trash, _: &mut Window, cx: &mut Context<Self>) {
+        self.trash_selection(cx);
     }
 
     fn clear(&mut self, _: &ClearSearch, window: &mut Window, cx: &mut Context<Self>) {
