@@ -314,6 +314,41 @@ fn exits_when_idle_unless_the_app_runs() {
     });
 }
 
+/// Whether process `pid` has a file of the index under `cache` mapped.
+fn maps_the_index(pid: u32, cache: &std::path::Path) -> bool {
+    let maps = fs::read_to_string(format!("/proc/{pid}/maps")).unwrap();
+    maps.lines()
+        .any(|line| line.contains(&*cache.to_string_lossy()))
+}
+
+#[test]
+fn lets_go_of_the_index_while_idle() {
+    let Some(mut fx) = Fixture::new() else { return };
+    fx.write("figs.md", "Figs\n\nRipe figs from the market.\n");
+    zbus::block_on(async {
+        fx.start(60).await;
+        let conn = fx.connect().await;
+        let notes = notes_proxy(&conn).await;
+        assert_eq!(notes.search("market", 0).await.unwrap().len(), 1);
+        let pid = fx.service().id();
+        assert!(
+            maps_the_index(pid, &fx.cache()),
+            "no index mapped after a search"
+        );
+
+        let released = eventually(async || (!maps_the_index(pid, &fx.cache())).then_some(())).await;
+        assert!(released.is_some(), "the index is still mapped while idle");
+
+        fx.write("dates.md", "Dates\n\nSweet dates from the market.\n");
+        let found = eventually(async || {
+            let rows = notes.search("market", 0).await.unwrap();
+            (rows.len() == 2).then_some(())
+        })
+        .await;
+        assert!(found.is_some(), "a change while idle is not found");
+    });
+}
+
 #[test]
 fn catches_up_with_changes_made_while_stopped() {
     let Some(mut fx) = Fixture::new() else { return };
