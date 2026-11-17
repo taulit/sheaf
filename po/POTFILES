@@ -39,10 +39,15 @@ crates/sheaf/src/app/gallery/layout.rs
 crates/sheaf/src/app/gallery/mod.rs
 crates/sheaf/src/app/gallery/preview.rs
 crates/sheaf/src/app/gallery/render.rs
+crates/sheaf/src/app/gallery/smart.rs
+crates/sheaf/src/app/gallery/templates.rs
+crates/sheaf/src/app/gallery/trash.rs
 crates/sheaf/src/app/instance.rs
 crates/sheaf/src/app/library.rs
 crates/sheaf/src/app/library/overlay.rs
 crates/sheaf/src/app/library/service.rs
+crates/sheaf/src/app/library/templates.rs
+crates/sheaf/src/app/library/trash.rs
 crates/sheaf/src/app/logger.rs
 crates/sheaf/src/app/mod.rs
 crates/sheaf/src/app/note/date.rs
@@ -57,6 +62,8 @@ crates/sheaf/src/app/overlays/palette.rs
 crates/sheaf/src/app/overlays/shortcuts.rs
 crates/sheaf/src/app/overlays/toast.rs
 crates/sheaf/src/app/portal.rs
+crates/sheaf/src/app/quick.rs
+crates/sheaf/src/app/shortcut.rs
 crates/sheaf/src/app/state.rs
 crates/sheaf/src/app/theme.rs
 crates/sheaf/src/app/window.rs
