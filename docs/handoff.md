@@ -15,8 +15,28 @@ Written 2026-11-17 for whoever continues without the session's context. Read
 
 ## Running
 
-- **Second bug review** (child agent "S2 gate: re-review after fixes", read-only): checks
-  the fixes below and reads the files the first review skipped.
+- **Fixing the second S2 bug review's findings** (child agent "S2 gate: fix second review
+  findings", works in this checkout, commits and pushes one fix per finding). Check
+  `git log` for `fix(` commits after `5072cdf` to see which are done.
+
+## Open findings of the second S2 bug review
+
+1. Blocking: Shift+click panics with a stale selection anchor (`gallery/mod.rs`, range
+   slice of `self.notes`; anchor is not clamped after a reload).
+2. Major: text typed between opening a note and its file arriving is overwritten
+   (`note/mod.rs`, `loaded()` → `set_markdown`).
+3. Major: the cover cache thrashes when more than 48 covers are drawn in one frame
+   (`gallery/covers.rs`).
+4. Minor: two rapid New Note requests leave an empty `Untitled.md` (`window.rs`).
+5. Minor: a new note saved, then emptied, then left keeps the old text on disk.
+6. Minor: pin and "Move to…" fail silently.
+7. Minor: every worker step waits for a D-Bus sync with sheaf-searchd (`library.rs`).
+8. Minor: SIGTERM is not handled (no final save, no recovery file).
+9. Minor: recovery file stem is cut by characters, not bytes (`state.rs`).
+10. Minor: the palette opens a stale note result with the new query (`overlays/palette.rs`).
+
+Still unread by any reviewer: `app/instance.rs` (read in the first review), `app/logger.rs`,
+`note/{jump,setup}.rs`, most of `theme.rs`, `chrome.rs`, `assets.rs`.
 
 ## Review findings of the first S2 bug review: all fixed (commits `9e47287..90700b4`)
 
@@ -26,7 +46,7 @@ empty new note, cover image cache, delete during a conflict, scroll anchor under
 header title centring. After the fixes: fmt, clippy, `cargo deny check` clean, all
 workspace tests pass (`tests/shutdown.rs` runs on the real headless platform).
 
-Not yet confirmed by a second reviewer; findings of the second review, if any, are open.
+Confirmed by the second review, except the cover cache (finding 3 above).
 
 ## Next
 
