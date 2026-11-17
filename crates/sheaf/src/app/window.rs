@@ -7,12 +7,15 @@
 //! The window frame (rounded corners, shadow, resize edges) comes from
 //! gpui-component's `Root`, which [`open`] wraps the view in; the header bars are the
 //! views' own, built from [`chrome`](super::chrome).
+//!
+//! Over the pages lie the [`overlays`](super::overlays): the toast
+//! ([`MainWindow::toast`]), the command palette and the list of shortcuts.
 
 use gpui::{
-    AnimationExt as _, App, AppContext as _, Bounds, Context, Entity, Focusable as _,
-    InteractiveElement as _, IntoElement, ParentElement as _, Render, Styled as _, Subscription,
-    Task, TitlebarOptions, Window, WindowBounds, WindowDecorations, WindowHandle, WindowOptions,
-    div, prelude::FluentBuilder as _, px, relative, size as size_of,
+    AnimationExt as _, App, AppContext as _, Bounds, Context, DismissEvent, Entity, FocusHandle,
+    Focusable as _, InteractiveElement as _, IntoElement, ParentElement as _, Render, Styled as _,
+    Subscription, Task, TitlebarOptions, Window, WindowBounds, WindowDecorations, WindowHandle,
+    WindowOptions, div, prelude::FluentBuilder as _, px, relative, size as size_of,
 };
 use gpui_component::notification::Notification;
 use gpui_component::{Root, WindowExt as _};
@@ -22,13 +25,16 @@ use sheaf_core::i18n::tr;
 use sheaf_searchd::api::APP_NAME;
 
 use super::actions::{
-    self, Back, CloseWindow, NewNote, OpenCommandPalette, OpenSettings, QuickNote, ShowShortcuts,
-    TogglePin,
+    self, Back, CloseWindow, NewNote, OpenCommandPalette, OpenSettings, QuickNote, Search,
+    ShowShortcuts, TogglePin,
 };
 use super::gallery::{GalleryEvent, GalleryView};
 use super::instance::Request;
 use super::library::Library;
-use super::note::NoteView;
+use super::note::{NoteEvent, NoteView};
+use super::overlays::palette::{CommandPalette, PaletteEvent};
+use super::overlays::shortcuts::ShortcutsSheet;
+use super::overlays::{Toast, ToastHost};
 use super::state::{StateFile, WindowState};
 use super::theme::{ActiveTokens as _, motion, size};
 
@@ -58,8 +64,15 @@ pub struct MainWindow {
     /// Counts the slides, so that each one animates afresh.
     slide: usize,
     state_file: Option<StateFile>,
+    toasts: Entity<ToastHost>,
+    palette: Option<Entity<CommandPalette>>,
+    shortcuts: Option<Entity<ShortcutsSheet>>,
+    /// Where the keyboard was before the palette or the shortcuts opened.
+    restore_focus: Option<FocusHandle>,
     _sliding: Task<()>,
     _opening: Task<()>,
+    _note_events: Option<Subscription>,
+    _overlay_events: Option<Subscription>,
     _subscriptions: [Subscription; 1],
 }
 
@@ -95,8 +108,14 @@ impl MainWindow {
             entering: false,
             slide: 0,
             state_file,
+            toasts: cx.new(|_| ToastHost::default()),
+            palette: None,
+            shortcuts: None,
+            restore_focus: None,
             _sliding: Task::ready(()),
             _opening: Task::ready(()),
+            _note_events: None,
+            _overlay_events: None,
             _subscriptions: [gallery_event],
         }
     }
@@ -135,6 +154,7 @@ impl MainWindow {
         let library = self.library.clone();
         let note = cx.new(|cx| NoteView::new(library, id, query.clone(), window, cx));
         note.focus_handle(cx).focus(window, cx);
+        self._note_events = Some(cx.subscribe_in(&note, window, Self::note_event));
         self.note = Some((note, query));
         self.entering = true;
         self.slide(cx);
@@ -185,6 +205,9 @@ impl MainWindow {
             Ok(meta) => {
                 let _ = this.update_in(cx, |this, window, cx| {
                     this.open_note(meta.id, String::new(), window, cx);
+                    if let Some(note) = this.note() {
+                        note.update(cx, |note, _| note.mark_new());
+                    }
                 });
             }
             Err(err) => log::error!("cannot create a note: {err}"),
@@ -236,14 +259,114 @@ impl MainWindow {
         }
     }
 
-    /// Hook for the command palette (Ctrl+K), which does not exist yet.
+    /// Shows `toast` at the bottom of the window, in place of the one shown.
+    pub fn toast(&mut self, toast: Toast, cx: &mut Context<Self>) {
+        self.toasts.update(cx, |toasts, cx| toasts.show(toast, cx));
+    }
+
+    pub fn toasts(&self) -> &Entity<ToastHost> {
+        &self.toasts
+    }
+
+    pub fn palette(&self) -> Option<&Entity<CommandPalette>> {
+        self.palette.as_ref()
+    }
+
+    pub fn shortcuts(&self) -> Option<&Entity<ShortcutsSheet>> {
+        self.shortcuts.as_ref()
+    }
+
+    fn note_event(
+        &mut self,
+        _: &Entity<NoteView>,
+        event: &NoteEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match event {
+            NoteEvent::Open(id) => self.open_note(id.clone(), String::new(), window, cx),
+            NoteEvent::Search(query) => {
+                self.back(window, cx);
+                self.gallery
+                    .update(cx, |gallery, cx| gallery.set_query(query, cx));
+            }
+            NoteEvent::Trashed(trashed) => {
+                self.back(window, cx);
+                let library = self.library.clone();
+                let id = trashed.id.clone();
+                let toast =
+                    Toast::new(tr("Note moved to trash")).action(tr("Undo"), move |_, cx| {
+                        let restored = library.update(cx, |library, cx| library.restore(&id, cx));
+                        cx.background_spawn(async move {
+                            if let Err(err) = restored.await {
+                                log::error!("cannot restore the note: {err}");
+                            }
+                        })
+                        .detach();
+                    });
+                self.toast(toast, cx);
+            }
+            NoteEvent::Toast(toast) => self.toast(toast.clone(), cx),
+        }
+    }
+
+    /// Opens the command palette (Ctrl+K), or closes it.
     fn open_command_palette(
         &mut self,
         _: &OpenCommandPalette,
-        _: &mut Window,
-        _: &mut Context<Self>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
     ) {
-        log::debug!("the command palette is not built yet");
+        if self.palette.is_some() {
+            self.close_overlay(window, cx);
+            return;
+        }
+        self.close_overlay(window, cx);
+        self.restore_focus = window.focused(cx);
+        let library = self.library.clone();
+        let palette = cx.new(|cx| CommandPalette::new(library, window, cx));
+        self._overlay_events = Some(cx.subscribe_in(
+            &palette,
+            window,
+            |this, _, event: &PaletteEvent, window, cx| match event {
+                PaletteEvent::Run(action) => {
+                    this.close_overlay(window, cx);
+                    window.dispatch_action(action.boxed_clone(), cx);
+                }
+                PaletteEvent::Open { note, query } => {
+                    this.close_overlay(window, cx);
+                    this.open_note(note.id.clone(), query.clone(), window, cx);
+                }
+                PaletteEvent::Dismiss => this.close_overlay(window, cx),
+            },
+        ));
+        self.palette = Some(palette);
+        cx.notify();
+    }
+
+    /// Closes the palette or the list of shortcuts and gives the keyboard back.
+    fn close_overlay(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.palette.take().is_none() && self.shortcuts.take().is_none() {
+            return;
+        }
+        self._overlay_events = None;
+        match self.restore_focus.take() {
+            Some(focus) => focus.focus(window, cx),
+            None => match &self.note {
+                Some((note, _)) => note.focus_handle(cx).focus(window, cx),
+                None => self.gallery.focus_handle(cx).focus(window, cx),
+            },
+        }
+        cx.notify();
+    }
+
+    /// Search from a note (the palette's "Search"): back to the gallery's search field.
+    fn search(&mut self, _: &Search, window: &mut Window, cx: &mut Context<Self>) {
+        if self.note.is_none() {
+            return;
+        }
+        self.back(window, cx);
+        window.dispatch_action(Box::new(Search), cx);
     }
 
     /// Hook for the settings window (Ctrl+,), which does not exist yet.
@@ -251,9 +374,22 @@ impl MainWindow {
         log::debug!("the settings are not built yet");
     }
 
-    /// Hook for the list of shortcuts (Ctrl+?), which does not exist yet.
-    fn show_shortcuts(&mut self, _: &ShowShortcuts, _: &mut Window, _: &mut Context<Self>) {
-        log::debug!("the list of shortcuts is not built yet");
+    /// Shows the list of keyboard shortcuts (Ctrl+?), or closes it.
+    fn show_shortcuts(&mut self, _: &ShowShortcuts, window: &mut Window, cx: &mut Context<Self>) {
+        if self.shortcuts.is_some() {
+            self.close_overlay(window, cx);
+            return;
+        }
+        self.close_overlay(window, cx);
+        self.restore_focus = window.focused(cx);
+        let sheet = cx.new(|cx| ShortcutsSheet::new(window, cx));
+        self._overlay_events = Some(cx.subscribe_in(
+            &sheet,
+            window,
+            |this, _, _: &DismissEvent, window, cx| this.close_overlay(window, cx),
+        ));
+        self.shortcuts = Some(sheet);
+        cx.notify();
     }
 
     fn close(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -335,9 +471,13 @@ impl Render for MainWindow {
             .on_action(cx.listener(Self::open_command_palette))
             .on_action(cx.listener(Self::open_settings))
             .on_action(cx.listener(Self::show_shortcuts))
+            .on_action(cx.listener(Self::search))
             .child(self.gallery.clone())
             .when_some(leaving, |root, page| root.child(page))
             .when_some(open, |root, page| root.child(page))
+            .when_some(self.palette.clone(), |root, palette| root.child(palette))
+            .when_some(self.shortcuts.clone(), |root, sheet| root.child(sheet))
+            .child(self.toasts.clone())
     }
 }
 

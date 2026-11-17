@@ -9,8 +9,12 @@
 //!    `window.rs`, those of one view in the view.
 //!
 //! Buttons trigger the same handlers with `window.dispatch_action(Box::new(Action), cx)`.
+//!
+//! 4. Name it in [`commands`], so that the command palette offers it and the list of
+//!    shortcuts shows its keys. A test fails for a key whose action is missing there.
 
-use gpui::{App, KeyBinding, actions};
+use gpui::{Action, App, KeyBinding, actions};
+use sheaf_core::i18n::tr;
 
 actions!(
     sheaf,
@@ -63,4 +67,44 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl-w", Back, Some(NOTE)),
         KeyBinding::new("escape", Back, Some(NOTE)),
     ]);
+}
+
+/// An action as people see it: in the command palette and the list of shortcuts.
+#[derive(Debug)]
+pub struct CommandInfo {
+    pub action: Box<dyn Action>,
+    pub label: String,
+    /// Whether the command palette offers it; keys that only move a selection do
+    /// not belong there.
+    pub in_palette: bool,
+}
+
+/// Every action with its name, in the order the palette offers them. The keys come
+/// from the keymap, so that what is shown cannot drift from what is bound.
+pub fn commands() -> Vec<CommandInfo> {
+    let command = |action: Box<dyn Action>, label: String| CommandInfo {
+        action,
+        label,
+        in_palette: true,
+    };
+    let hidden = |action: Box<dyn Action>, label: String| CommandInfo {
+        action,
+        label,
+        in_palette: false,
+    };
+    vec![
+        command(Box::new(NewNote), tr("New Note")),
+        command(Box::new(QuickNote), tr("Quick Note")),
+        command(Box::new(Search), tr("Search")),
+        command(Box::new(TogglePin), tr("Pin or Unpin")),
+        command(Box::new(Trash), tr("Move to Trash")),
+        command(Box::new(Back), tr("Back to Notes")),
+        command(Box::new(ShowShortcuts), tr("Keyboard Shortcuts")),
+        command(Box::new(OpenSettings), tr("Settings")),
+        command(Box::new(CloseWindow), tr("Close Window")),
+        hidden(Box::new(OpenCommandPalette), tr("Command Palette")),
+        hidden(Box::new(OpenSelected), tr("Open Selected Note")),
+        hidden(Box::new(SelectNext), tr("Select Next Note")),
+        hidden(Box::new(SelectPrevious), tr("Select Previous Note")),
+    ]
 }

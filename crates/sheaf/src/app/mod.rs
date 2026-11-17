@@ -10,6 +10,7 @@
 //! | [`chrome`] | pane, header bar and buttons the views are built from |
 //! | [`window`] | the main window and its router |
 //! | [`gallery`], [`note`] | the two views |
+//! | [`overlays`] | toast, command palette, list of shortcuts, popover parts |
 //! | [`state`] | what is remembered between runs |
 
 pub mod actions;
@@ -20,6 +21,7 @@ pub mod instance;
 pub mod library;
 mod logger;
 pub mod note;
+pub mod overlays;
 pub mod portal;
 pub mod state;
 pub mod theme;
