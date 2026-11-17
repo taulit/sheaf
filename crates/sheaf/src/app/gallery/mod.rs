@@ -178,7 +178,9 @@ struct Hover {
 pub struct GalleryView {
     library: Entity<Library>,
     scope: Scope,
-    config: FolderConfig,
+    /// The settings of the notes folder; `None` until they are read. Nothing is
+    /// changed in them before.
+    config: Option<FolderConfig>,
     folders: Vec<Folder>,
     search: Entity<InputState>,
     /// Completed filters, shown as chips in front of the text.
@@ -219,6 +221,7 @@ pub struct GalleryView {
     /// The pause before a search, while typing.
     debounce: Task<()>,
     loading: Task<()>,
+    loading_config: Task<()>,
     saving: Task<()>,
     _subscriptions: [Subscription; 2],
 }
@@ -246,7 +249,7 @@ impl GalleryView {
         let mut view = GalleryView {
             library,
             scope: Scope::All,
-            config: FolderConfig::default(),
+            config: None,
             folders: Vec::new(),
             search,
             chips: Vec::new(),
@@ -277,6 +280,7 @@ impl GalleryView {
             focus_handle: cx.focus_handle(),
             debounce: Task::ready(()),
             loading: Task::ready(()),
+            loading_config: Task::ready(()),
             saving: Task::ready(()),
             _subscriptions: subscriptions,
         };
@@ -323,11 +327,18 @@ impl GalleryView {
     }
 
     pub fn view(&self) -> View {
-        self.config.view(self.scope.config_key()).view
+        self.folder_view().view
     }
 
     pub fn sort(&self) -> SortOrder {
-        self.config.view(self.scope.config_key()).sort
+        self.folder_view().sort
+    }
+
+    fn folder_view(&self) -> FolderView {
+        self.config
+            .as_ref()
+            .map(|config| config.view(self.scope.config_key()))
+            .unwrap_or_default()
     }
 
     pub fn popover(&self) -> Option<Popover> {
@@ -538,11 +549,11 @@ impl GalleryView {
     /// again; the scope, search and selection stay.
     pub fn load_config(&mut self, cx: &mut Context<Self>) {
         let config = self.library.read(cx).folder_config(cx);
-        self.loading = cx.spawn(async move |this, cx| {
+        self.loading_config = cx.spawn(async move |this, cx| {
             let config = config.await;
             let _ = this.update(cx, |this, cx| {
                 match config {
-                    Ok(config) => this.config = config,
+                    Ok(config) => this.config = Some(config),
                     Err(err) => log::warn!("cannot read the folder settings: {err}"),
                 }
                 this.reload(cx);
@@ -550,12 +561,21 @@ impl GalleryView {
         });
     }
 
-    fn save_config(&mut self, cx: &mut Context<Self>) {
-        let saved = self
-            .library
-            .read(cx)
-            .save_folder_config(self.config.clone(), cx);
+    /// Changes the folder settings shown and writes the keys `change` changes, after
+    /// the changes before it. Does nothing before the settings were read.
+    fn change_config(
+        &mut self,
+        change: impl Fn(&mut FolderConfig) + Send + 'static,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(config) = &mut self.config else {
+            return;
+        };
+        change(config);
+        let saved = self.library.read(cx).update_folder_config(change, cx);
+        let previous = std::mem::replace(&mut self.saving, Task::ready(()));
         self.saving = cx.background_spawn(async move {
+            previous.await;
             if let Err(err) = saved.await {
                 log::warn!("cannot save the folder settings: {err}");
             }
@@ -807,11 +827,11 @@ impl GalleryView {
     }
 
     pub fn set_view(&mut self, view: View, cx: &mut Context<Self>) {
-        if self.view() == view {
+        if self.config.is_none() || self.view() == view {
             return;
         }
-        self.folder_view().view = view;
-        self.save_config(cx);
+        let key = self.scope.config_key().to_owned();
+        self.change_config(move |config| folder_view(config, &key).view = view, cx);
         self.relayout();
         if let Some(row) = self.selected.and_then(|index| self.layout.row_of(index)) {
             self.list_state.scroll_to_reveal_item(row);
@@ -830,19 +850,13 @@ impl GalleryView {
 
     pub fn set_sort(&mut self, sort: SortOrder, cx: &mut Context<Self>) {
         self.popover = None;
-        if self.sort() != sort {
-            self.folder_view().sort = sort;
-            self.save_config(cx);
+        if self.config.is_some() && self.sort() != sort {
+            let key = self.scope.config_key().to_owned();
+            self.change_config(move |config| folder_view(config, &key).sort = sort, cx);
             self.scroll_to_top = true;
             self.reload(cx);
         }
         cx.notify();
-    }
-
-    fn folder_view(&mut self) -> &mut FolderView {
-        let key = self.scope.config_key().to_owned();
-        let current = self.config.view(&key);
-        self.config.folders.entry(key).or_insert(current)
     }
 
     /// Opens or closes a popover of the header bar.
@@ -1145,6 +1159,12 @@ enum Direction {
 
 /// The words and phrases of what is typed, without the filters still being typed:
 /// `#re` must not empty the results before it becomes `#rezepte`.
+/// How `folder` is shown in `config`, stored for it from now on.
+fn folder_view<'a>(config: &'a mut FolderConfig, folder: &str) -> &'a mut FolderView {
+    let current = config.view(folder);
+    config.folders.entry(folder.to_owned()).or_insert(current)
+}
+
 fn searchable_text(text: &str) -> String {
     query::parse(text)
         .items

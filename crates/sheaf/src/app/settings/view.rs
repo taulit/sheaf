@@ -176,16 +176,12 @@ impl SettingsView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(mut quick) = self.quick.clone() else {
-            return;
-        };
-        quick.resume_minutes = minutes;
-        self.store_quick_note(quick, window, cx);
+        self.change_quick_note(move |quick| quick.resume_minutes = minutes, window, cx);
     }
 
     /// The folder for quick notes as typed; empty for the default.
     fn quick_folder_typed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(mut quick) = self.quick.clone() else {
+        let Some(quick) = &self.quick else {
             return;
         };
         let typed = self
@@ -199,8 +195,7 @@ impl SettingsView {
         if folder == quick.folder {
             return;
         }
-        quick.folder = folder;
-        self.store_quick_note(quick, window, cx);
+        self.change_quick_note(move |quick| quick.folder.clone_from(&folder), window, cx);
     }
 
     pub fn set_quick_folder(&mut self, folder: &str, window: &mut Window, cx: &mut Context<Self>) {
@@ -210,9 +205,22 @@ impl SettingsView {
         self.quick_folder_typed(window, cx);
     }
 
-    fn store_quick_note(&mut self, quick: QuickNote, window: &mut Window, cx: &mut Context<Self>) {
-        self.quick = Some(quick.clone());
-        let stored = self.library.read(cx).set_quick_note(quick, cx);
+    /// Changes the Quick Note settings shown and those of the notes folder; nothing
+    /// happens before they were read.
+    fn change_quick_note(
+        &mut self,
+        change: impl Fn(&mut QuickNote) + Send + 'static,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(quick) = &mut self.quick else {
+            return;
+        };
+        change(quick);
+        let stored = self
+            .library
+            .read(cx)
+            .update_folder_config(move |config| change(&mut config.quick_note), cx);
         self._saving_quick_note = cx.spawn_in(window, async move |this, cx| {
             if let Err(err) = stored.await {
                 let reason = err.to_string();

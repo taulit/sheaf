@@ -14,6 +14,7 @@
 //! | [`dialogs`] | save, open and print dialogs of the portals |
 //! | [`settings`] | the user's settings and their window |
 //! | [`state`] | what is remembered between runs |
+//! | `serial` | background jobs in order, for the writes of settings files |
 //! | [`quick`] | the Quick Note window |
 //! | [`shortcut`] | the global Quick Note shortcut through the portal |
 
@@ -29,6 +30,7 @@ pub mod note;
 pub mod overlays;
 pub mod portal;
 pub mod quick;
+mod serial;
 pub mod settings;
 pub mod shortcut;
 pub mod state;

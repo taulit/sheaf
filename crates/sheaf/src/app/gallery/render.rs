@@ -247,8 +247,8 @@ impl GalleryView {
         );
         scopes.extend(
             self.config
-                .pinned_tags
                 .iter()
+                .flat_map(|config| &config.pinned_tags)
                 .map(|tag| (Scope::Tag(tag.clone()), format!("#{tag}"))),
         );
         scopes.extend(self.smart_scopes());

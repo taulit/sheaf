@@ -50,7 +50,10 @@ pub fn unique_name(existing: &[SmartFolder], name: &str) -> String {
 
 impl GalleryView {
     pub fn smart_folders(&self) -> &[SmartFolder] {
-        &self.config.smart_folders
+        self.config
+            .as_ref()
+            .map(|config| config.smart_folders.as_slice())
+            .unwrap_or_default()
     }
 
     /// The filters and the words of the smart folder shown, if it is one.
@@ -58,8 +61,7 @@ impl GalleryView {
         let Scope::Smart(name) = &self.scope else {
             return (Vec::new(), String::new());
         };
-        self.config
-            .smart_folders
+        self.smart_folders()
             .iter()
             .find(|folder| folder.name == *name)
             .map(|folder| chips::take(&folder.query, true))
@@ -88,14 +90,17 @@ impl GalleryView {
         if name.is_empty() || query.is_empty() {
             return;
         }
-        let name = unique_name(&self.config.smart_folders, name);
-        self.config.smart_folders.push(SmartFolder {
+        if self.config.is_none() {
+            return;
+        }
+        let name = unique_name(self.smart_folders(), name);
+        let folder = SmartFolder {
             name: name.clone(),
             icon: ICON.to_owned(),
             query,
             other: toml::Table::new(),
-        });
-        self.save_config(cx);
+        };
+        self.change_config(move |config| config.smart_folders.push(folder.clone()), cx);
         self.smart.editing = None;
         self.popover = None;
         self.chips.clear();
@@ -113,17 +118,27 @@ impl GalleryView {
             cx.notify();
             return;
         }
-        let to = unique_name(&self.config.smart_folders, to);
-        let Some(folder) = self
-            .config
-            .smart_folders
-            .iter_mut()
-            .find(|folder| folder.name == from)
-        else {
+        if !self
+            .smart_folders()
+            .iter()
+            .any(|folder| folder.name == from)
+        {
             return;
-        };
-        folder.name.clone_from(&to);
-        self.save_config(cx);
+        }
+        let to = unique_name(self.smart_folders(), to);
+        let (old, new) = (from.to_owned(), to.clone());
+        self.change_config(
+            move |config| {
+                if let Some(folder) = config
+                    .smart_folders
+                    .iter_mut()
+                    .find(|folder| folder.name == old)
+                {
+                    folder.name.clone_from(&new);
+                }
+            },
+            cx,
+        );
         if self.scope == Scope::Smart(from.to_owned()) {
             self.scope = Scope::Smart(to);
         }
@@ -132,14 +147,18 @@ impl GalleryView {
 
     /// Deletes the smart folder `name`; its notes stay where they are.
     pub fn delete_smart_folder(&mut self, name: &str, cx: &mut Context<Self>) {
-        let before = self.config.smart_folders.len();
-        self.config
-            .smart_folders
-            .retain(|folder| folder.name != name);
-        if self.config.smart_folders.len() == before {
+        if !self
+            .smart_folders()
+            .iter()
+            .any(|folder| folder.name == name)
+        {
             return;
         }
-        self.save_config(cx);
+        let gone = name.to_owned();
+        self.change_config(
+            move |config| config.smart_folders.retain(|folder| folder.name != gone),
+            cx,
+        );
         if self.scope == Scope::Smart(name.to_owned()) {
             self.set_scope(Scope::All, cx);
         }
@@ -196,8 +215,7 @@ impl GalleryView {
         cx: &mut Context<Self>,
     ) -> Vec<AnyElement> {
         let gallery = cx.entity().downgrade();
-        self.config
-            .smart_folders
+        self.smart_folders()
             .iter()
             .enumerate()
             .map(|(index, folder)| {
@@ -287,8 +305,7 @@ impl GalleryView {
 
     /// The smart folders as chips, after the folders and tags.
     pub(super) fn smart_scopes(&self) -> Vec<(Scope, String)> {
-        self.config
-            .smart_folders
+        self.smart_folders()
             .iter()
             .map(|folder| (Scope::Smart(folder.name.clone()), folder.name.clone()))
             .collect()

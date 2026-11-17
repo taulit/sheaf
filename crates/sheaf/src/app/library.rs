@@ -18,14 +18,15 @@
 //!   in: a file Sheaf never wrote gets its real id on the first write, so keep using
 //!   the returned one.
 //!   [`create_folder`](Library::create_folder) and
-//!   [`save_folder_config`](Library::save_folder_config) change no note.
+//!   [`update_folder_config`](Library::update_folder_config) change no note.
 //! - **Several steps on the store** in one go, such as a save with its fallbacks:
 //!   [`run`](Library::run), which says what it touched in a [`Touched`]. The open
 //!   note's last save when the window closes or the app quits uses
 //!   [`run_now`](Library::run_now), the one call that blocks.
 //! - **Per-note view state** (column widths, folded headings) with
-//!   [`note_state`](Library::note_state) and [`set_note_state`](Library::set_note_state);
-//!   it lives in the folder's `.sheaf/config.toml`, not in the note.
+//!   [`note_state`](Library::note_state) and
+//!   [`update_folder_config`](Library::update_folder_config); it lives in the folder's
+//!   `.sheaf/config.toml`, not in the note.
 //! - **Trash and templates**: [`trashed`](Library::trashed),
 //!   [`trashed_note`](Library::trashed_note), [`purge`](Library::purge),
 //!   [`empty_trash`](Library::empty_trash); [`templates`](Library::templates),
@@ -60,7 +61,6 @@ use async_channel::Receiver;
 use gpui::{App, AppContext as _, Context, Entity, EventEmitter, Task};
 use jiff::tz::TimeZone;
 use jiff::{Timestamp, ZonedDateTime};
-use sheaf_core::config::QuickNote;
 use sheaf_core::{
     CreateOptions, Filter, Fingerprint, FolderConfig, Note, NoteId, NoteMeta, NoteStore, Reader,
     Result, SearchIndex, SearchResults, Sort, WriteOptions, query,
@@ -69,6 +69,8 @@ use zbus::Connection;
 
 use overlay::{Lists, Overlay};
 use service::{ServiceLink, Syncer};
+
+use super::serial::Serial;
 
 /// Where the index comes from, see the module documentation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -217,9 +219,9 @@ pub struct Library {
     reader: Reader,
     backend: Backend,
     clock: Clock,
-    /// Keeps the writers of `.sheaf/config.toml` apart: each reads, changes and writes
-    /// the whole file.
-    config: Arc<Mutex<()>>,
+    /// Keeps the writers of `.sheaf/config.toml` apart and in order: each reads the
+    /// file, changes its keys and writes it.
+    config: Serial,
     /// The session bus it was opened with, for [`reopen`](Self::reopen).
     connection: Option<Connection>,
     _starting: Task<()>,
@@ -269,7 +271,7 @@ impl Library {
             reader,
             backend: Backend::Opening,
             clock: Arc::new(|| Timestamp::now().to_zoned_datetime(TimeZone::system())),
-            config: Arc::new(Mutex::new(())),
+            config: Serial::new(cx),
             connection: kept,
             _following: None,
             _confirming: None,
@@ -473,23 +475,6 @@ impl Library {
         })
     }
 
-    /// Remembers `state` for a note; an empty table forgets it.
-    pub fn set_note_state(&self, id: &NoteId, state: toml::Table, cx: &App) -> Task<Result<()>> {
-        let root = self.store.root().to_owned();
-        let lock = self.config.clone();
-        let id = id.clone();
-        cx.background_spawn(async move {
-            let _writing = lock.lock().unwrap_or_else(PoisonError::into_inner);
-            let mut config = FolderConfig::load(&root)?;
-            if state.is_empty() {
-                config.notes.remove(&id);
-            } else {
-                config.notes.insert(id, state);
-            }
-            config.save(&root)
-        })
-    }
-
     /// The note a `file://` URI or a path points to, if it is in the notes folder.
     pub fn note_at(&self, uri: &str, cx: &App) -> Task<Option<NoteMeta>> {
         let store = self.store.clone();
@@ -506,43 +491,46 @@ impl Library {
     }
 
     /// The settings of the notes folder: view and sort per folder, pinned tags. Folders
-    /// without an order of their own take the default order of the settings.
+    /// without an order of their own take the default order of the settings. Read
+    /// after the changes asked for before, so it shows them.
     pub fn folder_config(&self, cx: &App) -> Task<Result<FolderConfig>> {
         let root = self.store.root().to_owned();
         let default_sort = super::settings::config(cx).sort.unwrap_or_default();
-        cx.background_spawn(async move {
-            let mut config = FolderConfig::load(&root)?;
-            config.default_sort = default_sort;
-            Ok(config)
-        })
+        let loaded = self.config.run(
+            move || {
+                let mut config = FolderConfig::load(&root)?;
+                config.default_sort = default_sort;
+                Ok(config)
+            },
+            cx,
+        );
+        cx.background_spawn(async move { loaded.await.unwrap_or_else(closing) })
     }
 
-    /// Writes the folder settings. The per-note view state and the Quick Note settings
-    /// are taken from the file, not from `config`: [`set_note_state`](Self::set_note_state)
-    /// and [`set_quick_note`](Self::set_quick_note) may have changed them since `config`
-    /// was read.
-    pub fn save_folder_config(&self, mut config: FolderConfig, cx: &App) -> Task<Result<()>> {
+    /// Changes the settings of the notes folder: the file is read again under the
+    /// queue that keeps its writers apart and in order, `change` changes what it was read as, and
+    /// only the keys `change` touched are written. Every writer of
+    /// `.sheaf/config.toml` goes through here, so none overwrites another's keys with
+    /// an old copy. Resolves to the settings as they are now, with the default order
+    /// of [`folder_config`](Self::folder_config); fails without writing if the file
+    /// cannot be read. Dropping the task does not cancel the change.
+    pub fn update_folder_config(
+        &self,
+        change: impl FnOnce(&mut FolderConfig) + Send + 'static,
+        cx: &App,
+    ) -> Task<Result<FolderConfig>> {
         let root = self.store.root().to_owned();
-        let lock = self.config.clone();
-        cx.background_spawn(async move {
-            let _writing = lock.lock().unwrap_or_else(PoisonError::into_inner);
-            let stored = FolderConfig::load(&root)?;
-            config.notes = stored.notes;
-            config.quick_note = stored.quick_note;
-            config.save(&root)
-        })
-    }
-
-    /// Writes the Quick Note settings of the notes folder.
-    pub fn set_quick_note(&self, quick_note: QuickNote, cx: &App) -> Task<Result<()>> {
-        let root = self.store.root().to_owned();
-        let lock = self.config.clone();
-        cx.background_spawn(async move {
-            let _writing = lock.lock().unwrap_or_else(PoisonError::into_inner);
-            let mut config = FolderConfig::load(&root)?;
-            config.quick_note = quick_note;
-            config.save(&root)
-        })
+        let default_sort = super::settings::config(cx).sort.unwrap_or_default();
+        let updated = self.config.run(
+            move || {
+                FolderConfig::update(&root, |config| {
+                    config.default_sort = default_sort;
+                    change(config);
+                })
+            },
+            cx,
+        );
+        cx.background_spawn(async move { updated.await.unwrap_or_else(closing) })
     }
 
     /// A Library of another notes folder, opened the way this one was: with the same
@@ -776,6 +764,11 @@ impl Library {
         }
         outcome
     }
+}
+
+/// What a task of the Library resolves to when the app closed before it ran.
+fn closing<T>() -> Result<T> {
+    Err(sheaf_core::Error::Invalid("the app is closing".into()))
 }
 
 /// Decides where the index comes from and returns a reader of it. Blocks.

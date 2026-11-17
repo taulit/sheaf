@@ -840,7 +840,17 @@ impl NoteView {
         let Some(state) = meta_to_table(self.editor.read(cx).meta()) else {
             return;
         };
-        let stored = self.library.read(cx).set_note_state(&self.id, state, cx);
+        let id = self.id.clone();
+        let stored = self.library.read(cx).update_folder_config(
+            move |config| {
+                if state.is_empty() {
+                    config.notes.remove(&id);
+                } else {
+                    config.notes.insert(id, state);
+                }
+            },
+            cx,
+        );
         cx.background_spawn(async move {
             if let Err(err) = stored.await {
                 log::warn!("cannot remember the view of a note: {err}");

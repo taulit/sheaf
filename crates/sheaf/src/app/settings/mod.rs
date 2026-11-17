@@ -20,6 +20,7 @@ use gpui::{App, AppContext as _, Global, Pixels, SharedString, Task, px};
 use sheaf_core::AppConfig;
 use sheaf_core::config::{EditorFont, LineWidth};
 
+use super::serial::Serial;
 use super::theme::ActiveTokens as _;
 
 /// The settings and the file they live in.
@@ -27,6 +28,8 @@ use super::theme::ActiveTokens as _;
 pub struct Settings {
     file: Option<PathBuf>,
     config: AppConfig,
+    /// Writes the changes to `file` one after another; started with the first.
+    writes: Option<Serial>,
 }
 
 impl Global for Settings {}
@@ -42,12 +45,17 @@ impl Settings {
         Settings {
             file: Some(file),
             config,
+            writes: None,
         }
     }
 
     /// `config`, stored in `file` when changed; nowhere without one.
     pub fn new(file: Option<PathBuf>, config: AppConfig) -> Self {
-        Settings { file, config }
+        Settings {
+            file,
+            config,
+            writes: None,
+        }
     }
 }
 
@@ -58,21 +66,33 @@ pub fn config(cx: &App) -> AppConfig {
         .unwrap_or_default()
 }
 
-/// Changes the settings, tells the observers and writes the file in the background.
-/// The task fails with the reason if the file cannot be written.
+/// Changes the settings, tells the observers and writes the keys `change` changed to
+/// the file in the background; the file's other keys stay as they are on disk. The
+/// task fails with the reason if the file cannot be read as TOML or written; dropping
+/// it does not cancel the write.
 pub fn update(cx: &mut App, change: impl FnOnce(&mut AppConfig)) -> Task<Result<(), String>> {
     let mut settings = cx.try_global::<Settings>().cloned().unwrap_or_default();
+    let before = settings.config.clone();
     change(&mut settings.config);
     let file = settings.file.clone();
-    let config = settings.config.clone();
+    let after = settings.config.clone();
+    let writes = settings
+        .writes
+        .get_or_insert_with(|| Serial::new(cx))
+        .clone();
     cx.set_global(settings);
-    cx.background_spawn(async move {
-        match file {
-            Some(file) => config
-                .save(&file)
+    let saved = writes.run(
+        move || match file {
+            Some(file) => AppConfig::save_changes(&file, &before, &after)
                 .map_err(|err| format!("{}: {err}", file.display())),
             None => Ok(()),
-        }
+        },
+        cx,
+    );
+    cx.background_spawn(async move {
+        saved
+            .await
+            .unwrap_or_else(|| Err("the app is closing".to_owned()))
     })
 }
 
