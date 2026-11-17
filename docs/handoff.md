@@ -15,19 +15,33 @@ Written 2026-11-17 for whoever continues without the session's context. Read
 
 ## Running
 
-Nothing. All three S3 work packages are merged into `phase/s3-features` **locally**:
-the Visor module (`061a76a`), quick note, trash, smart folders and templates
-(`e584815`), export, settings, backlinks and attachments (`9c840d5`), then integrated
-and polished (`1d60611..`). Gate on 2026-11-17: fmt and clippy clean, all workspace
-tests pass, `cargo deny check` ok, `scripts/test-visor-module.sh` 22 of 22, screenshots
-regenerated and looked at, a sample PDF checked. See `docs/STATUS.md` "What works (S3)"
-and "Open".
+All three S3 work packages are merged, integrated and pushed on `phase/s3-features`.
+A child agent ("S3 gate: fix review findings") fixes the findings of the S3 bug review
+in this checkout, one commit and push per finding; check `git log` for `fix(` commits
+after `fd2978d`.
 
-The pushes are pending because of the lost GitHub login (below): `phase/s3-features`
-is ahead of origin. S2 is still in review: https://github.com/taulit/sheaf/pull/4.
+## Open findings of the S3 bug review
 
-Next: after the login is back, push `phase/s3-features`; one `bug-review` over `git diff
-phase/s2-app...phase/s3-features`, fix; then the S3 PR against `main` once #4 is merged.
+1. Blocking: the gallery can overwrite `.sheaf/config.toml` with defaults (load and
+   reload share one task field in `gallery/mod.rs`; whole-struct saves from stale copies).
+   Fix at the root: every config writer changes only its own keys, read-modify-write
+   under the Library's config lock, never before the config was loaded.
+2. Major: a Quick Note window whose note cannot be created cannot be closed (`quick.rs`).
+3. Major: trash/purge of a note takes attachments other notes still link to
+   (`sheaf-core/src/trash.rs`).
+4. Major: PDF export reads any path an image names (`/dev/zero`, huge files)
+   (`sheaf-export/src/layout.rs`, `load_image`).
+5. Minor: PDF export overflows the stack on ~3000 nested quotes or lists.
+6. Minor: settings that could not be read are overwritten with defaults.
+7. Minor: a failed write of folder settings is only logged.
+8. Minor: overlay entries stay when a sync is not confirmed (`library/service.rs`).
+9. Minor: attaching a large file loads it into memory under the note's write lock.
+10. Minor: the Shell extension can drop typed text when Create fails.
+11. Minor: "Open as PDF" after a failed print leaves the PDF in the shared temp dir.
+12. Minor: Enter confirms "Delete Permanently" and "Empty Trash".
+
+After the fixes: a narrow re-review of the fix commits, the gate, then the S3 PR
+against `main` (needs #4 merged first, or the PR shows S2's commits too).
 
 ## Second and third S2 review: no blocking finding left
 
