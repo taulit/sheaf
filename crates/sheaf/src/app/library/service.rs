@@ -1,13 +1,16 @@
 //! The app's link to `sheaf-searchd`, the only writer of the on-disk index.
 //!
-//! Every function here blocks on D-Bus and belongs on a background thread.
+//! Every function of [`ServiceLink`] blocks on D-Bus and belongs on a background
+//! thread; [`Syncer`] asks the service to look at the folder without blocking.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
 use async_channel::Sender;
+use async_io::Timer;
 use futures_util::StreamExt as _;
+use futures_util::future::{self, Either};
 use sheaf_searchd::api::Sheaf1Proxy;
 use zbus::Connection;
 use zbus::proxy::CacheProperties;
@@ -17,6 +20,9 @@ use crate::searchd;
 /// How long a service started by hand may take to appear on the bus.
 const START_TIMEOUT: Duration = Duration::from_secs(5);
 const START_POLL: Duration = Duration::from_millis(50);
+/// How long the service may take to confirm that it looked at the folder after a
+/// write; it sees the change through its watcher anyway.
+const SYNC_TIMEOUT: Duration = Duration::from_secs(2);
 
 #[derive(Debug)]
 pub(super) struct ServiceLink {
@@ -46,12 +52,19 @@ impl ServiceLink {
         Some(link)
     }
 
-    /// Returns once the index reflects the notes folder. `false` if the service is gone.
+    /// Returns once the index reflects the notes folder, or after [`SYNC_TIMEOUT`].
+    /// `false` if the service is gone or did not answer in time.
     pub fn sync(&self) -> bool {
         zbus::block_on(async {
-            match searchd::service_for(&self.connection, &self.notes_dir).await {
-                Ok(Some(service)) => service.sync().await.is_ok(),
-                _ => false,
+            let synced = Box::pin(async {
+                match searchd::service_for(&self.connection, &self.notes_dir).await {
+                    Ok(Some(service)) => service.sync().await.is_ok(),
+                    _ => false,
+                }
+            });
+            match future::select(synced, Timer::after(SYNC_TIMEOUT)).await {
+                Either::Left((synced, _)) => synced,
+                Either::Right(_) => false,
             }
         })
     }
@@ -96,6 +109,11 @@ impl ServiceLink {
         None
     }
 
+    /// Hands this link to a [`Syncer`].
+    pub fn into_syncer(self) -> Syncer {
+        Syncer::new(move || self.sync())
+    }
+
     fn watch(&self, changes: Sender<Vec<String>>) {
         let connection = self.connection.clone();
         let watching = std::thread::Builder::new()
@@ -121,5 +139,38 @@ impl ServiceLink {
         if let Err(err) = watching {
             log::warn!("cannot follow sheaf-searchd: {err}");
         }
+    }
+}
+
+/// Runs `sync` on a thread of its own whenever the app wrote a note: a write never
+/// waits for the service, and requests made while one waits become one. The service
+/// announces what it indexed with its `Changed` signal.
+#[derive(Debug)]
+pub(super) struct Syncer {
+    requests: Sender<()>,
+}
+
+impl Syncer {
+    pub fn new(sync: impl Fn() -> bool + Send + 'static) -> Syncer {
+        // Room for one request: one waiting while a sync runs covers all writes since.
+        let (requests, pending) = async_channel::bounded(1);
+        let spawned = std::thread::Builder::new()
+            .name("sheaf-searchd-sync".to_owned())
+            .spawn(move || {
+                while pending.recv_blocking().is_ok() {
+                    if !sync() {
+                        log::warn!("sheaf-searchd did not confirm the change, lists may lag");
+                    }
+                }
+            });
+        if let Err(err) = spawned {
+            log::warn!("cannot ask sheaf-searchd to follow changes: {err}");
+        }
+        Syncer { requests }
+    }
+
+    /// Asks for a sync, unless one is already waiting.
+    pub fn request(&self) {
+        let _ = self.requests.try_send(());
     }
 }

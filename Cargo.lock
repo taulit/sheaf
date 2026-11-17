@@ -6705,6 +6705,7 @@ dependencies = [
  "ashpd 0.14.0",
  "assert_cmd",
  "async-channel",
+ "async-io",
  "clap",
  "clap_complete",
  "futures-util",

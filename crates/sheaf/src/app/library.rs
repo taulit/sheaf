@@ -25,8 +25,9 @@
 //! - **Per-note view state** (column widths, folded headings) with
 //!   [`note_state`](Library::note_state) and [`set_note_state`](Library::set_note_state);
 //!   it lives in the folder's `.sheaf/config.toml`, not in the note.
-//! - **Follow** changes by subscribing to [`LibraryEvent`]; when a change task
-//!   resolves, the lists already contain it.
+//! - **Follow** changes by subscribing to [`LibraryEvent`]. When a change task
+//!   resolves, the lists of the in-memory index already contain it; with
+//!   `sheaf-searchd` they follow, with another event, once the service indexed it.
 //!
 //! Every method but [`run_now`](Library::run_now) returns a [`Task`]: file and index
 //! work runs on the background executor, never on the UI thread. Dropping the task of
@@ -56,7 +57,7 @@ use sheaf_core::{
 };
 use zbus::Connection;
 
-use service::ServiceLink;
+use service::{ServiceLink, Syncer};
 
 /// Where the index comes from, see the module documentation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -99,22 +100,24 @@ pub type Clock = Arc<dyn Fn() -> ZonedDateTime + Send + Sync>;
 enum Backend {
     /// Writes go to the files only; the index catches up when it is ready.
     Opening,
-    Service(Arc<ServiceLink>),
+    Service(Arc<Syncer>),
     /// The lock keeps writers apart: an index takes one at a time.
     Local(Arc<Mutex<SearchIndex>>),
 }
 
 impl Backend {
     /// Brings the index in line after a write: each of `paths` is indexed if it is a
-    /// note file now and dropped from the index otherwise. Blocks.
+    /// note file now and dropped from the index otherwise. Blocks on the in-memory
+    /// index only: the service is asked without waiting for it.
     fn reflect(&self, store: &NoteStore, reader: &Reader, paths: &[String]) -> Result<()> {
+        if paths.is_empty() {
+            return Ok(());
+        }
         match self {
             Backend::Opening => Ok(()),
-            Backend::Service(service) => {
-                if !service.sync() {
-                    log::warn!("sheaf-searchd did not confirm the change, lists may lag");
-                }
-                reader.reload()
+            Backend::Service(syncer) => {
+                syncer.request();
+                Ok(())
             }
             Backend::Local(index) => {
                 let index = index.lock().unwrap_or_else(PoisonError::into_inner);
@@ -632,12 +635,9 @@ impl Library {
     ) -> Result<T> {
         let mut touched = Touched::default();
         let outcome = change(&self.store, &mut touched);
-        // The service sees the files change through its watcher; waiting for it to
-        // confirm could hold up the closing window by the length of a D-Bus timeout.
-        if !matches!(self.backend, Backend::Service(_))
-            && let Err(err) = self
-                .backend
-                .reflect(&self.store, &self.reader, &touched.paths)
+        if let Err(err) = self
+            .backend
+            .reflect(&self.store, &self.reader, &touched.paths)
         {
             log::warn!("cannot bring the index in line: {err}");
         }
@@ -660,7 +660,7 @@ fn establish(
     {
         let reader = index.reader();
         reader.reload()?;
-        return Ok((Backend::Service(Arc::new(link)), reader));
+        return Ok((Backend::Service(Arc::new(link.into_syncer())), reader));
     }
     let index = SearchIndex::in_memory()?;
     let mut writer = index.writer()?;
@@ -706,7 +706,71 @@ fn decode_file_uri(uri: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::decode_file_uri;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use gpui::TestAppContext;
+
+    use super::*;
+
+    /// A `sheaf-searchd` that hangs: reads and writes go on, the writes ask once.
+    #[gpui::test]
+    async fn notes_are_read_and_written_without_waiting_for_the_service(cx: &mut TestAppContext) {
+        let dir = tempfile::tempdir().expect("a temporary directory");
+        let library = cx
+            .update(|cx| Library::local(dir.path(), cx))
+            .expect("a library");
+        cx.run_until_parked();
+        let asked = Arc::new(AtomicUsize::new(0));
+        let (release, hang) = std::sync::mpsc::channel::<()>();
+        let syncer = Syncer::new({
+            let asked = asked.clone();
+            move || {
+                asked.fetch_add(1, Ordering::SeqCst);
+                let _ = hang.recv();
+                true
+            }
+        });
+        library.update(cx, |library, _| {
+            library.backend = Backend::Service(Arc::new(syncer));
+        });
+
+        let created = library.update(cx, |library, cx| {
+            library.create("Eins", CreateOptions::default(), cx)
+        });
+        cx.run_until_parked();
+        let id = created.await.expect("created").id;
+        let asked_once = || {
+            let started = std::time::Instant::now();
+            while asked.load(Ordering::SeqCst) < 1 && started.elapsed().as_secs() < 5 {
+                std::thread::yield_now();
+            }
+            asked.load(Ordering::SeqCst)
+        };
+        assert_eq!(asked_once(), 1, "the write asks the service");
+        let read = library.update(cx, |library, cx| {
+            library.run(cx, {
+                let id = id.clone();
+                move |store, _| store.get(&id)
+            })
+        });
+        cx.run_until_parked();
+        assert_eq!(read.await.expect("read").body(), "Eins\n");
+        for pinned in [true, false, true] {
+            let pinning = library.update(cx, |library, cx| library.set_pinned(&id, pinned, cx));
+            cx.run_until_parked();
+            pinning.await.expect("pinned");
+        }
+        drop(release);
+        let started = std::time::Instant::now();
+        while asked.load(Ordering::SeqCst) < 2 && started.elapsed().as_secs() < 5 {
+            std::thread::yield_now();
+        }
+        assert_eq!(
+            asked.load(Ordering::SeqCst),
+            2,
+            "one sync, and one for the writes during it"
+        );
+    }
 
     #[test]
     fn file_uris_become_paths() {

@@ -28,6 +28,7 @@ gpui-markdown-editor.workspace = true
 anyhow.workspace = true
 ashpd.workspace = true
 async-channel.workspace = true
+async-io.workspace = true
 futures-util.workspace = true
 image.workspace = true
 
