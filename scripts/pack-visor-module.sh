@@ -15,11 +15,11 @@ mkdir -p "$out"
 if command -v gnome-extensions >/dev/null; then
     gnome-extensions pack --force --out-dir "$out" \
         --podir=po --gettext-domain="$domain" \
-        --extra-source=lib --extra-source=icons --extra-source="$repo/LICENSE" "$src" >&2
+        --extra-source=lib --extra-source="$repo/LICENSE" "$src" >&2
 else
     stage="$(mktemp -d)"
     trap 'rm -rf "$stage"' EXIT
-    cp -r "$src/extension.js" "$src/metadata.json" "$src/stylesheet.css" "$src/lib" "$src/icons" "$repo/LICENSE" "$stage/"
+    cp -r "$src/extension.js" "$src/metadata.json" "$src/stylesheet.css" "$src/lib" "$repo/LICENSE" "$stage/"
     for po in "$src"/po/*.po; do
         lang="$(basename "$po" .po)"
         mkdir -p "$stage/locale/$lang/LC_MESSAGES"

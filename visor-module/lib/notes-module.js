@@ -12,7 +12,9 @@ import {SheafClient, isCancelled} from './sheaf-client.js';
 import {RECENT_LIMIT, initialState, reduce, screen, shouldLoad} from './state.js';
 import {timeLabel} from './time.js';
 
-const ICON = 'notes-symbolic';
+// Visor takes the name of an icon of the theme; an extension cannot add icons to it. This
+// one is a sheet with lines, like the symbolic icon of Sheaf.
+const ICON = 'text-x-generic-symbolic';
 const SEARCH_LIMIT = 5;
 
 /** @param {import('resource:///org/gnome/shell/extensions/extension.js').Extension} extension */
