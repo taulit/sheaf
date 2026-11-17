@@ -465,6 +465,19 @@ pub enum Sort {
     Title,
 }
 
+impl Sort {
+    /// Which of two notes a listing in this order shows first, for merging listings.
+    pub fn compare(self, a: &NoteMeta, b: &NoteMeta) -> std::cmp::Ordering {
+        match self {
+            Sort::Modified => b.modified.cmp(&a.modified),
+            Sort::Created => b.created.cmp(&a.created),
+            Sort::Title => analysis::key(&a.title)
+                .primary
+                .cmp(&analysis::key(&b.title).primary),
+        }
+    }
+}
+
 /// Searches and lists the index. All methods see the state of the last reload.
 #[derive(Clone)]
 pub struct Reader {

@@ -414,6 +414,13 @@ fn listing_filters_and_sorts() {
         list(&[], Sort::Title, Some(3)),
         [KUCHEN, AUSSCHREIBUNG, EINKAUF]
     );
+    for sort in [Sort::Modified, Sort::Created, Sort::Title] {
+        let listed = reader.list(&[], sort, None, &now()).unwrap();
+        let mut sorted = listed.clone();
+        sorted.reverse();
+        sorted.sort_by(|a, b| sort.compare(a, b));
+        assert_eq!(sorted, listed, "{sort:?} compares as it lists");
+    }
     assert_eq!(list(&[], Sort::Modified, Some(2)), [EINKAUF, MEETING]);
     assert_eq!(
         list(&[Filter::Folder("arbeit".into())], Sort::Title, None),
