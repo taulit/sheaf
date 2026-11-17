@@ -6779,9 +6779,10 @@ name = "sheaf-export"
 version = "0.1.0"
 dependencies = [
  "fontdb",
+ "harfrust",
  "krilla",
  "pulldown-cmark",
- "rustybuzz",
+ "read-fonts 0.37.0",
  "tempfile",
  "thiserror 2.0.21",
 ]

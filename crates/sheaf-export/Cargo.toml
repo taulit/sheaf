@@ -10,7 +10,8 @@ publish.workspace = true
 
 [dependencies]
 krilla = { version = "0.8.2", default-features = false, features = ["raster-images"] }
-rustybuzz = "0.20"
+harfrust = "0.5"
+read-fonts = "0.37"
 fontdb = "0.23"
 pulldown-cmark.workspace = true
 thiserror.workspace = true

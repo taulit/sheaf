@@ -1,4 +1,4 @@
-//! Text: picks a face per character, shapes with rustybuzz and breaks lines greedily
+//! Text: picks a face per character, shapes with HarfRust and breaks lines greedily
 //! at spaces, and inside a word only if the word alone is wider than the line.
 //!
 //! Text runs left to right; right-to-left scripts are set in logical order.
@@ -6,8 +6,10 @@
 use std::collections::VecDeque;
 use std::ops::Range;
 
+use harfrust::{FontRef, ShaperData, UnicodeBuffer};
 use krilla::text::{Font, GlyphId, KrillaGlyph};
-use rustybuzz::UnicodeBuffer;
+use read_fonts::TableProvider as _;
+use read_fonts::tables::cmap::Cmap;
 
 use crate::Error;
 use crate::blocks::Span;
@@ -42,14 +44,16 @@ impl Faces {
         let mut faces = Vec::new();
         let mut add = |file: &FontFile, name: &'static str| -> Result<FaceId, Error> {
             let font = Font::new(file.data().clone(), file.index()).ok_or(Error::Font(name))?;
-            let face = rustybuzz::Face::from_slice(file.data().as_ref(), file.index())
-                .ok_or(Error::Font(name))?;
-            let em = f32::from(u16::try_from(face.units_per_em()).unwrap_or(1000));
+            let face = FontRef::from_index(file.data().as_ref(), file.index())
+                .map_err(|_| Error::Font(name))?;
+            let em = face.head().map_err(|_| Error::Font(name))?.units_per_em();
+            let em = f32::from(em.max(1));
+            let hhea = face.hhea().map_err(|_| Error::Font(name))?;
             faces.push(Face {
                 file: file.clone(),
                 font,
-                ascent: f32::from(face.ascender()) / em,
-                descent: -f32::from(face.descender()) / em,
+                ascent: f32::from(hhea.ascender().to_i16()) / em,
+                descent: -f32::from(hhea.descender().to_i16()) / em,
             });
             Ok(FaceId(faces.len() - 1))
         };
@@ -82,9 +86,9 @@ impl Faces {
         &self.faces[id.0]
     }
 
-    fn parse(&self, id: FaceId) -> Option<rustybuzz::Face<'_>> {
+    fn parse(&self, id: FaceId) -> Option<FontRef<'_>> {
         let file = &self.get(id).file;
-        rustybuzz::Face::from_slice(file.data().as_ref(), file.index())
+        FontRef::from_index(file.data().as_ref(), file.index()).ok()
     }
 }
 
@@ -161,9 +165,9 @@ fn joins_previous(c: char) -> bool {
 /// Splits `text` into runs of the face that has its characters: `primary` where it
 /// can, else the first fallback that can.
 fn runs(faces: &Faces, primary: FaceId, text: &str) -> Vec<(Range<usize>, FaceId)> {
-    let parsed: Vec<(FaceId, Option<rustybuzz::Face<'_>>)> = std::iter::once(primary)
+    let parsed: Vec<(FaceId, Option<Cmap<'_>>)> = std::iter::once(primary)
         .chain(faces.fallbacks.iter().copied())
-        .map(|id| (id, faces.parse(id)))
+        .map(|id| (id, faces.parse(id).and_then(|font| font.cmap().ok())))
         .collect();
     let mut runs: Vec<(Range<usize>, FaceId)> = Vec::new();
     for (start, c) in text.char_indices() {
@@ -172,9 +176,11 @@ fn runs(faces: &Faces, primary: FaceId, text: &str) -> Vec<(Range<usize>, FaceId
             Some((_, face)) if c.is_whitespace() || joins_previous(c) => *face,
             _ => parsed
                 .iter()
-                .find(|(_, face)| {
-                    face.as_ref()
-                        .is_some_and(|face| face.glyph_index(c).is_some())
+                .find(|(_, cmap)| {
+                    cmap.as_ref().is_some_and(|cmap| {
+                        cmap.map_codepoint(c)
+                            .is_some_and(|glyph| glyph.to_u32() != 0)
+                    })
                 })
                 .map_or(primary, |(id, _)| *id),
         };
@@ -188,15 +194,17 @@ fn runs(faces: &Faces, primary: FaceId, text: &str) -> Vec<(Range<usize>, FaceId
 
 /// Shapes `text` in one face; text ranges relative to `text`.
 fn shape(faces: &Faces, face: FaceId, text: &str) -> Vec<KrillaGlyph> {
-    let Some(parsed) = faces.parse(face) else {
+    let Some(font) = faces.parse(face) else {
         return Vec::new();
     };
-    let em = f32::from(u16::try_from(parsed.units_per_em()).unwrap_or(1000));
+    let data = ShaperData::new(&font);
+    let shaper = data.shaper(&font).build();
+    let em = f32::from(u16::try_from(shaper.units_per_em()).unwrap_or(1000));
     let mut buffer = UnicodeBuffer::new();
     buffer.push_str(text);
     buffer.guess_segment_properties();
-    buffer.set_direction(rustybuzz::Direction::LeftToRight);
-    let shaped = rustybuzz::shape(&parsed, &[], buffer);
+    buffer.set_direction(harfrust::Direction::LeftToRight);
+    let shaped = shaper.shape(buffer, &[]);
     let infos = shaped.glyph_infos();
     let positions = shaped.glyph_positions();
     let mut glyphs = Vec::with_capacity(infos.len());

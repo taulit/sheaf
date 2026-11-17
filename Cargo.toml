@@ -81,9 +81,7 @@ opt-level = 3
 
 # The PDF renderer's shaping, subsetting and compression are slow unoptimised; tests
 # render a 200-page note.
-[profile.dev.package.rustybuzz]
-opt-level = 3
-[profile.dev.package.ttf-parser]
+[profile.dev.package.harfrust]
 opt-level = 3
 [profile.dev.package.krilla]
 opt-level = 3
