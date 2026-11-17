@@ -601,8 +601,9 @@ impl GalleryView {
     }
 
     fn apply(&mut self, listing: Listing, cx: &mut Context<Self>) {
-        // The selection follows its notes, not their rows.
+        // The selection and the scroll position follow their notes, not their rows.
         let cursor = self.selected().map(|note| note.id.clone());
+        let anchor = self.scroll_anchor();
         let Listing {
             notes,
             sections,
@@ -618,44 +619,54 @@ impl GalleryView {
         self.sections = sections;
         self.marks = marks;
         self.loaded = true;
-        self.relayout();
+        self.relayout_from(anchor);
         cx.notify();
     }
 
     /// Cuts the notes into rows for the current width and view, keeping the first
     /// visible note in view.
     fn relayout(&mut self) {
+        let anchor = self.scroll_anchor();
+        self.relayout_from(anchor);
+    }
+
+    /// Where the list is scrolled to, the note at the top and whether the heading
+    /// above it is in view: what a new layout scrolls back to.
+    fn scroll_anchor(&self) -> Option<(ListOffset, NoteId, bool)> {
+        let top = self.list_state.logical_scroll_top();
+        let rows = self.layout.rows();
+        let note = rows.get(top.item_ix..)?.iter().find_map(|row| match row {
+            Row::Notes(range) => self.notes.get(range.start),
+            Row::Header(_) => None,
+        })?;
+        let at_header = matches!(rows.get(top.item_ix), Some(Row::Header(_)));
+        Some((top, note.id.clone(), at_header))
+    }
+
+    fn relayout_from(&mut self, anchor: Option<(ListOffset, NoteId, bool)>) {
         let columns = match self.view() {
             View::Gallery => self.columns,
             View::List => 1,
         };
-        let top = self.list_state.logical_scroll_top();
-        let first_note = self.layout.rows()[top.item_ix.min(self.layout.rows().len())..]
-            .iter()
-            .find_map(|row| match row {
-                Row::Notes(range) => Some(range.start),
-                Row::Header(_) => None,
-            });
-        let at_header = matches!(self.layout.rows().get(top.item_ix), Some(Row::Header(_)));
         self.layout = Layout::new(&self.sections, columns);
         let count = self.layout.rows().len();
         self.list_state
             .reset_with_uniform_height(count, px(ROW_HEIGHT_HINT));
-        let offset = if std::mem::take(&mut self.scroll_to_top) {
-            ListOffset::default()
-        } else {
-            let row = first_note
-                .and_then(|note| self.layout.row_of(note))
-                .map(|row| row.saturating_sub(usize::from(at_header)));
-            match row {
-                Some(row) if row == top.item_ix => top,
-                Some(row) => ListOffset {
-                    item_ix: row,
-                    offset_in_item: px(0.),
-                },
-                None => ListOffset::default(),
-            }
-        };
+        let anchor = anchor.filter(|_| !std::mem::take(&mut self.scroll_to_top));
+        let offset = anchor
+            .and_then(|(top, id, at_header)| {
+                let note = self.notes.iter().position(|note| note.id == id)?;
+                let row = self.layout.row_of(note)? - usize::from(at_header);
+                Some(if row == top.item_ix {
+                    top
+                } else {
+                    ListOffset {
+                        item_ix: row,
+                        offset_in_item: px(0.),
+                    }
+                })
+            })
+            .unwrap_or_default();
         self.list_state.scroll_to(offset);
     }
 
