@@ -6,6 +6,8 @@
 
 mod fixture;
 
+use std::os::unix::fs::PermissionsExt as _;
+use std::path::Path;
 use std::time::Duration;
 
 use fixture::{Look, Notes};
@@ -17,6 +19,7 @@ use sheaf::app::instance::Request;
 use sheaf::app::library::{Library, LibraryEvent};
 use sheaf::app::note::{Banner, NoteView, Popover, RENAME_DELAY, SAVE_DELAY};
 use sheaf::app::overlays::shortcuts;
+use sheaf::app::state::Recovery;
 use sheaf::app::theme::ActiveTokens as _;
 use sheaf::app::window::{self, MainWindow, Route};
 use sheaf_core::{NoteId, NoteMeta, Sort};
@@ -85,7 +88,7 @@ impl TestApp {
 
     fn banner(&mut self) -> Option<Banner> {
         let note = self.note();
-        note.read_with(self.cx, |note, _| note.banner())
+        note.read_with(self.cx, |note, _| note.banner().cloned())
     }
 
     fn wait(&mut self, time: Duration) {
@@ -105,6 +108,15 @@ impl TestApp {
         let editor = note.read_with(self.cx, |note, _| note.editor().clone());
         editor.update(self.cx, |_, cx| cx.emit(event));
         self.cx.run_until_parked();
+    }
+
+    fn toast(&mut self) -> Option<String> {
+        self.main.read_with(self.cx, |main, cx| {
+            main.toasts()
+                .read(cx)
+                .shown()
+                .map(|toast| toast.message.to_string())
+        })
     }
 
     /// Another program changed notes; this is what the service reports then.
@@ -230,6 +242,108 @@ async fn a_new_note_left_empty_is_not_kept(cx: &mut TestAppContext) {
     assert_eq!(notes.files(), ["Idee.md"]);
 }
 
+#[gpui::test]
+async fn a_new_note_written_elsewhere_is_not_discarded(cx: &mut TestAppContext) {
+    let notes = Notes::empty();
+    let app = open_app(&notes, cx);
+
+    // Text from elsewhere: kept.
+    app.cx.simulate_keystrokes("ctrl-n");
+    let created = notes.read("Untitled.md");
+    notes.write("Untitled.md", &format!("{created}Vom Handy\n"));
+    app.cx.simulate_keystrokes("escape");
+    assert!(notes.read("Untitled.md").ends_with("Vom Handy\n"));
+    std::fs::remove_file(notes.dir.join("Untitled.md")).unwrap();
+
+    // Still empty but written elsewhere: to the trash, not gone.
+    app.cx.simulate_keystrokes("ctrl-n");
+    let created = notes.read("Untitled.md");
+    notes.write("Untitled.md", &format!("{created}\n"));
+    app.cx.simulate_keystrokes("escape");
+    assert!(notes.files().is_empty());
+    assert!(notes.dir.join(".trash/Untitled.md").exists());
+}
+
+/// Sets the permission bits of `path`, as `chmod` does.
+fn chmod(path: &Path, mode: u32) {
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode)).unwrap();
+}
+
+#[gpui::test]
+async fn a_failed_save_says_so_keeps_the_view_and_saves_once_it_can(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let mut app = open_app(&notes, cx);
+    app.open("Notch-Ideen");
+    let folder = notes.dir.join("Arbeit");
+    chmod(&folder.join("Notch-Ideen.md"), 0o444);
+    chmod(&folder, 0o555);
+
+    app.cx.simulate_input("Eins ");
+    app.wait(SAVE_DELAY);
+    let failed = Some(Banner::SaveFailed("permission denied".to_owned()));
+    assert_eq!(app.banner(), failed);
+    assert!(!app.note().read_with(app.cx, |note, _| note.saved_shown()));
+    assert!(!notes.read(NOTCH).contains("Eins"));
+
+    // The next change tries again; leaving does too, and stays while it fails.
+    app.cx.simulate_input("Zwei ");
+    app.wait(SAVE_DELAY);
+    assert_eq!(app.banner(), failed);
+    app.cx.simulate_keystrokes("escape");
+    assert!(
+        matches!(app.route(), Route::Note { .. }),
+        "the text is only here"
+    );
+    assert_eq!(app.banner(), failed);
+
+    chmod(&folder, 0o755);
+    app.note_do(|note, cx| note.retry_save(cx));
+    assert_eq!(app.banner(), None);
+    let renamed = "Arbeit/Eins Zwei Notch-Ideen.md";
+    assert!(
+        notes
+            .read(renamed)
+            .contains("Eins Zwei Notch-Ideen\n\nWas die")
+    );
+    app.cx.simulate_keystrokes("escape");
+    assert_eq!(app.route(), Route::Gallery);
+    assert_eq!(notes.files().len(), 14);
+}
+
+#[gpui::test]
+async fn closing_the_window_keeps_a_text_that_cannot_be_saved(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let recovery = Recovery::at(notes.scratch("recovered"));
+    let mut app = open_app(&notes, cx);
+    app.cx.update(|_, cx| cx.set_global(recovery.clone()));
+    app.open("Notch-Ideen");
+    chmod(&notes.dir.join("Arbeit"), 0o555);
+
+    app.cx.simulate_input("Rettung ");
+    app.cx.dispatch_action(actions::CloseWindow);
+    app.cx.run_until_parked();
+    chmod(&notes.dir.join("Arbeit"), 0o755);
+    assert!(!notes.read(NOTCH).contains("Rettung"));
+    let kept: Vec<_> = std::fs::read_dir(recovery.dir())
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| path.extension().is_some_and(|ext| ext == "md"))
+        .collect();
+    assert_eq!(kept.len(), 1, "{kept:?}");
+    let name = kept[0].file_name().unwrap().to_string_lossy().into_owned();
+    assert!(name.starts_with("Rettung Notch-Ideen-"), "{name}");
+    assert!(
+        std::fs::read_to_string(&kept[0])
+            .unwrap()
+            .starts_with("Rettung Notch-Ideen\n\nWas die Notch")
+    );
+
+    // The next window says so, once.
+    let mut app = open_app(&notes, cx);
+    assert_eq!(app.toast().as_deref(), Some("Recovered unsaved notes"));
+    assert!(!recovery.take_unseen());
+}
+
 // ---- Changes made elsewhere ---------------------------------------------------------
 
 /// Writes `text` into the Notch note, as another editor would.
@@ -352,6 +466,51 @@ async fn keep_mine_stores_the_edits_as_a_conflict_copy(cx: &mut TestAppContext) 
     assert!(notes.read(NOTCH).contains("Von Syncthing."));
 }
 
+/// Leaving a note deleted elsewhere keeps its text as a new note, whether the deletion
+/// was seen through a change event or by the save, and also without edits.
+#[gpui::test]
+async fn leaving_a_note_deleted_elsewhere_keeps_its_text(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let mut app = open_app(&notes, cx);
+    let restored = "Arbeit/Rettung Notch-Ideen.md";
+
+    // The change event first.
+    let note = app.open("Notch-Ideen");
+    let id = note.read_with(app.cx, |note, _| note.id().clone());
+    app.cx.simulate_input("Rettung ");
+    std::fs::remove_file(notes.dir.join(NOTCH)).unwrap();
+    app.changed_elsewhere(vec![id]);
+    assert_eq!(app.banner(), Some(Banner::DeletedOnDisk));
+    app.cx.simulate_keystrokes("escape");
+    assert_eq!(app.route(), Route::Gallery);
+    assert!(
+        notes
+            .read(restored)
+            .contains("Rettung Notch-Ideen\n\nWas die Notch")
+    );
+
+    // The save first.
+    std::fs::rename(notes.dir.join(restored), notes.dir.join(NOTCH)).unwrap();
+    app.changed_elsewhere(Vec::new());
+    app.open("Rettung Notch-Ideen");
+    app.cx.simulate_input("Noch ");
+    std::fs::remove_file(notes.dir.join(NOTCH)).unwrap();
+    app.wait(SAVE_DELAY);
+    assert_eq!(app.banner(), Some(Banner::DeletedOnDisk));
+    app.cx.simulate_keystrokes("escape");
+    assert_eq!(app.route(), Route::Gallery);
+    let again = "Arbeit/Noch Rettung Notch-Ideen.md";
+    assert!(notes.read(again).contains("Noch Rettung Notch-Ideen"));
+
+    // Without edits: the text exists nowhere else.
+    let note = app.open("Noch Rettung Notch-Ideen");
+    let id = note.read_with(app.cx, |note, _| note.id().clone());
+    std::fs::remove_file(notes.dir.join(again)).unwrap();
+    app.changed_elsewhere(vec![id]);
+    app.cx.simulate_keystrokes("escape");
+    assert!(notes.read(again).contains("Noch Rettung Notch-Ideen"));
+}
+
 #[gpui::test]
 async fn a_note_deleted_elsewhere_can_be_saved_as_new(cx: &mut TestAppContext) {
     let notes = Notes::seeded();
@@ -441,6 +600,71 @@ async fn pin_move_copy_and_delete_with_undo(cx: &mut TestAppContext) {
     assert!(
         app.main
             .read_with(app.cx, |main, cx| main.toasts().read(cx).shown().is_none())
+    );
+}
+
+#[gpui::test]
+async fn a_trash_that_fails_leaves_the_note_working(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let mut app = open_app(&notes, cx);
+    let trash = notes.dir.join(".trash");
+    std::fs::create_dir(&trash).unwrap();
+    chmod(&trash, 0o555);
+    app.open("Notch-Ideen");
+
+    app.cx.simulate_input("Vorher ");
+    app.cx.dispatch_action(actions::Trash);
+    app.cx.run_until_parked();
+    chmod(&trash, 0o755);
+    assert!(matches!(app.route(), Route::Note { .. }));
+    assert_eq!(
+        app.toast().as_deref(),
+        Some("Could not move to trash: permission denied")
+    );
+    assert!(notes.files().contains(&NOTCH.to_owned()));
+
+    app.cx.simulate_input("Nachher ");
+    app.wait(SAVE_DELAY);
+    assert!(notes.read(NOTCH).contains("Vorher Nachher Notch-Ideen"));
+    app.cx.dispatch_action(actions::Trash);
+    app.cx.run_until_parked();
+    assert_eq!(app.route(), Route::Gallery);
+    assert!(notes.dir.join(".trash/Notch-Ideen.md").exists());
+}
+
+#[gpui::test]
+async fn delete_on_a_note_changed_elsewhere_asks_first(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let mut app = open_app(&notes, cx);
+    app.open("Notch-Ideen");
+
+    app.cx.simulate_input("Meins ");
+    edit_elsewhere(&notes, "Notch-Ideen\n\nVon Syncthing.\n");
+    app.cx.dispatch_action(actions::Trash);
+    app.cx.run_until_parked();
+    assert_eq!(app.banner(), Some(Banner::ChangedOnDisk));
+    assert!(matches!(app.route(), Route::Note { .. }));
+    app.cx.dispatch_action(actions::Trash);
+    app.cx.run_until_parked();
+    assert!(
+        matches!(app.route(), Route::Note { .. }),
+        "not while it asks"
+    );
+    assert!(!notes.dir.join(".trash").exists());
+    assert!(notes.read(NOTCH).contains("Von Syncthing."));
+    assert!(app.editor_text().starts_with("Meins Notch-Ideen"));
+
+    // Once it is answered, Delete takes the note the view shows.
+    app.note_do(|note, cx| note.keep_mine(cx));
+    app.cx.dispatch_action(actions::Trash);
+    app.cx.run_until_parked();
+    assert_eq!(app.route(), Route::Gallery);
+    assert!(notes.read(NOTCH).contains("Von Syncthing."));
+    assert!(
+        notes
+            .dir
+            .join(".trash/Meins Notch-Ideen (conflict).md")
+            .exists()
     );
 }
 

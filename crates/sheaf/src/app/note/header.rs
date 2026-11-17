@@ -1,5 +1,6 @@
 //! The parts of the note view around the editor: the header bar with its popovers
-//! (share, menu, info, "Move to…") and the banner for changes made elsewhere.
+//! (share, menu, info, "Move to…") and the banner for changes made elsewhere and
+//! failed saves.
 
 use gpui::{
     AnyElement, App, Context, FontWeight, InteractiveElement as _, IntoElement, MouseButton,
@@ -268,7 +269,7 @@ fn move_popover(view: &NoteView, folders: &[Folder], cx: &mut Context<NoteView>)
         .into_any_element()
 }
 
-/// The question about a change made elsewhere, under the header bar.
+/// The question about a change made elsewhere, or a failed save, under the header bar.
 pub fn banner(banner: Banner, cx: &mut Context<NoteView>) -> impl IntoElement {
     let tokens = cx.tokens().clone();
     let (message, buttons): (String, Vec<AnyElement>) = match banner {
@@ -288,6 +289,14 @@ pub fn banner(banner: Banner, cx: &mut Context<NoteView>) -> impl IntoElement {
             vec![
                 pill("save-as-new", tr("Save as New Note"), true, cx)
                     .on_click(cx.listener(|this, _, _, cx| this.save_as_new(cx)))
+                    .into_any_element(),
+            ],
+        ),
+        Banner::SaveFailed(reason) => (
+            tr("Could not save: {}").replace("{}", &reason),
+            vec![
+                pill("try-again", tr("Try Again"), true, cx)
+                    .on_click(cx.listener(|this, _, _, cx| this.retry_save(cx)))
                     .into_any_element(),
             ],
         ),

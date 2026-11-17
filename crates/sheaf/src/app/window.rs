@@ -150,7 +150,7 @@ impl MainWindow {
     }
 
     /// Opens a note over the gallery; `query` is what to jump to in it. A note that is
-    /// already open is saved and replaced.
+    /// already open is left first, see [`back`](Self::back).
     pub fn open_note(
         &mut self,
         id: NoteId,
@@ -158,24 +158,78 @@ impl MainWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some((open, _)) = self.note.take() {
-            open.update(cx, |note, cx| note.flush(cx)).detach();
-        }
-        let library = self.library.clone();
-        let note = cx.new(|cx| NoteView::new(library, id, query.clone(), window, cx));
-        note.focus_handle(cx).focus(window, cx);
-        self._note_events = Some(cx.subscribe_in(&note, window, Self::note_event));
-        self.note = Some((note, query));
-        self.entering = true;
-        self.slide(cx);
+        self.open(id, query, false, window, cx);
     }
 
-    /// Returns to the gallery; what was typed is saved first.
+    /// [`open_note`](Self::open_note); `fresh` for a note just created for this visit.
+    fn open(
+        &mut self,
+        id: NoteId,
+        query: String,
+        fresh: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.leave_note(window, cx, move |this, _, window, cx| {
+            let library = this.library.clone();
+            let note = cx.new(|cx| NoteView::new(library, id, query.clone(), window, cx));
+            if fresh {
+                note.update(cx, |note, _| note.mark_new());
+            }
+            note.focus_handle(cx).focus(window, cx);
+            this._note_events = Some(cx.subscribe_in(&note, window, Self::note_event));
+            this.note = Some((note, query));
+            this.entering = true;
+            this.slide(cx);
+        });
+    }
+
+    /// Returns to the gallery once what was typed is saved. If it cannot be saved, the
+    /// note stays open with a banner that says why.
     pub fn back(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some((note, _)) = self.note.take() else {
+        self.leave_note(window, cx, |this, note, window, cx| {
+            if let Some(note) = note {
+                this.slide_out(note, window, cx);
+            }
+        });
+    }
+
+    /// Leaves the open note and runs `then` with it once what was typed is on disk;
+    /// with no note open, at once. If it cannot be stored, the note stays open and
+    /// `then` does not run.
+    fn leave_note(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        then: impl FnOnce(&mut Self, Option<Entity<NoteView>>, &mut Window, &mut Context<Self>)
+        + 'static,
+    ) {
+        let Some((note, _)) = &self.note else {
+            then(self, None, window, cx);
             return;
         };
-        note.update(cx, |note, cx| note.flush(cx)).detach();
+        let note = note.clone();
+        let Some(leaving) = note.update(cx, |note, cx| note.leave(cx)) else {
+            self.note = None;
+            then(self, Some(note), window, cx);
+            return;
+        };
+        cx.spawn_in(window, async move |this, cx| {
+            if !leaving.await {
+                return;
+            }
+            let _ = this.update_in(cx, |this, window, cx| {
+                if this.note().is_some_and(|open| *open == note) {
+                    this.note = None;
+                    then(this, Some(note), window, cx);
+                }
+            });
+        })
+        .detach();
+    }
+
+    /// Lets `note` slide out over the gallery, which takes the keyboard.
+    fn slide_out(&mut self, note: Entity<NoteView>, window: &mut Window, cx: &mut Context<Self>) {
         self.gallery.focus_handle(cx).focus(window, cx);
         self.entering = false;
         self.leaving = Some(note);
@@ -206,25 +260,25 @@ impl MainWindow {
         self.leaving = None;
     }
 
-    /// Creates an empty note in the folder the gallery shows and opens it.
+    /// Creates an empty note in the folder the gallery shows and opens it, once the
+    /// open note is left.
     pub fn new_note(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let options = CreateOptions {
-            folder: self.gallery.read(cx).current_folder(),
-            ..CreateOptions::default()
-        };
-        let created = self
-            .library
-            .update(cx, |library, cx| library.create("", options, cx));
-        self._opening = cx.spawn_in(window, async move |this, cx| match created.await {
-            Ok(meta) => {
-                let _ = this.update_in(cx, |this, window, cx| {
-                    this.open_note(meta.id, String::new(), window, cx);
-                    if let Some(note) = this.note() {
-                        note.update(cx, |note, _| note.mark_new());
-                    }
-                });
-            }
-            Err(err) => log::error!("cannot create a note: {err}"),
+        self.leave_note(window, cx, |this, _, window, cx| {
+            let options = CreateOptions {
+                folder: this.gallery.read(cx).current_folder(),
+                ..CreateOptions::default()
+            };
+            let created = this
+                .library
+                .update(cx, |library, cx| library.create("", options, cx));
+            this._opening = cx.spawn_in(window, async move |this, cx| match created.await {
+                Ok(meta) => {
+                    let _ = this.update_in(cx, |this, window, cx| {
+                        this.open(meta.id, String::new(), true, window, cx);
+                    });
+                }
+                Err(err) => log::error!("cannot create a note: {err}"),
+            });
         });
     }
 
@@ -389,12 +443,17 @@ impl MainWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.back(window, cx);
-        self.gallery.update(cx, |gallery, cx| {
-            if let Some(query) = query {
-                gallery.set_query(query, cx);
+        let query = query.map(str::to_owned);
+        self.leave_note(window, cx, move |this, note, window, cx| {
+            if let Some(note) = note {
+                this.slide_out(note, window, cx);
             }
-            gallery.focus_search(window, cx);
+            this.gallery.update(cx, |gallery, cx| {
+                if let Some(query) = &query {
+                    gallery.set_query(query, cx);
+                }
+                gallery.focus_search(window, cx);
+            });
         });
     }
 
@@ -423,11 +482,18 @@ impl MainWindow {
 
     fn close(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.remember(window);
-        if let Some((note, _)) = &self.note {
-            // The app waits for the save when it quits with its last window.
-            note.update(cx, |note, cx| note.flush(cx)).detach();
-        }
+        self.save_now(cx);
         window.remove_window();
+    }
+
+    /// The last save of the notes in the window, at once: it is closing, and with the
+    /// last window the app quits without running another task.
+    fn save_now(&mut self, cx: &mut Context<Self>) {
+        let open = self.note.as_ref().map(|(note, _)| note);
+        let notes: Vec<Entity<NoteView>> = open.into_iter().chain(&self.leaving).cloned().collect();
+        for note in notes {
+            note.update(cx, |note, cx| note.save_now(cx));
+        }
     }
 
     /// Writes size and state of the window to the state file.
@@ -569,9 +635,7 @@ pub fn build(
         move |window, cx| {
             let _ = view.update(cx, |view, cx| {
                 view.remember(window);
-                if let Some((note, _)) = &view.note {
-                    note.update(cx, |note, cx| note.flush(cx)).detach();
-                }
+                view.save_now(cx);
             });
             true
         }

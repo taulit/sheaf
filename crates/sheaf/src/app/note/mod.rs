@@ -4,8 +4,11 @@
 //! # Interface
 //!
 //! - The window creates a [`NoteView`] per opened note and drops it after it has slid
-//!   out. Before that it calls [`flush`](NoteView::flush), which saves what was typed
-//!   (or deletes a new note that stayed empty, see [`mark_new`](NoteView::mark_new)).
+//!   out. Before that it calls [`leave`](NoteView::leave), which saves what was typed
+//!   (or deletes a new note that stayed empty, see [`mark_new`](NoteView::mark_new)),
+//!   and lets the view go only once that is on disk. When the window closes or the app
+//!   quits, [`save_now`](NoteView::save_now) does the same at once on the UI thread:
+//!   GPUI runs no task after that.
 //! - Everything that writes the open note goes through one worker task in file order
 //!   (`worker`): saving, renaming, pinning, moving. Add new writes as a `Job`, not as
 //!   a direct call to the [`Library`]: a write behind the worker's back changes the
@@ -24,6 +27,10 @@
 //! title 2 s after the title last changed, and on leaving. A change on disk that the
 //! view did not make is told apart from its own writes by the file's fingerprint: with
 //! nothing unsaved the view takes the new text silently, otherwise it asks.
+//!
+//! The editor counts as saved only once the worker reports that its text is on disk.
+//! A save that fails shows a banner and is tried again with the next change, with "Try
+//! Again" and on leaving; leaving that fails keeps the view open.
 
 mod date;
 mod files;
@@ -51,9 +58,10 @@ use super::actions::{self, Back, Trash};
 use super::chrome::pane;
 use super::library::{Folder, Library, LibraryEvent};
 use super::overlays::Toast;
+use super::state::Recovery;
 use super::theme::ActiveTokens as _;
 use setup::{Lookup, SharedLookup};
-use worker::{Job, Queued, Report};
+use worker::{Job, Leave, Queued, Report, Shared};
 
 /// How long typing may pause before the text is saved.
 pub const SAVE_DELAY: Duration = Duration::from_millis(600);
@@ -74,13 +82,15 @@ pub enum NoteEvent {
     Toast(Toast),
 }
 
-/// A question about the file the view cannot answer alone.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// What the view has to tell about the file, under the header bar.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Banner {
     /// Another program changed the file while there were unsaved edits.
     ChangedOnDisk,
     /// Another program deleted the file.
     DeletedOnDisk,
+    /// The text could not be stored; `0` says why.
+    SaveFailed(String),
 }
 
 /// The popover open under a header button.
@@ -103,17 +113,21 @@ pub struct NoteView {
     query: String,
     editor: Entity<MarkdownEditor>,
     jobs: Sender<Queued>,
+    /// The file as the worker knows it, for the last save.
+    shared: Shared,
     lookup: SharedLookup,
     /// Created for this visit: if it is left empty, it is deleted on leaving.
     fresh: bool,
-    /// Flushed for leaving, trashed or deleted: nothing more is written.
+    /// Left, trashed or saved for the last time: nothing more is written.
     closed: bool,
+    /// Leaving is under way.
+    leaving: bool,
+    /// Moving to the trash is under way.
+    trashing: bool,
     /// The first line as last seen, to notice when the title changes.
     title: String,
     /// The title changed since the file was last renamed after it.
     rename_pending: bool,
-    /// Saves handed to the worker that it has not finished.
-    pending_saves: usize,
     banner: Option<Banner>,
     popover: Option<Popover>,
     /// Counts the saves; "Saved" fades in afresh after each one.
@@ -163,8 +177,11 @@ impl NoteView {
                 this.editor
                     .update(cx, |editor, cx| editor.set_style(style, cx));
             }),
-            // The app waits for this before it exits, so nothing typed is lost.
-            cx.on_app_quit(|this, cx| this.flush(cx)),
+            // GPUI runs no task while it quits, so the save happens right here.
+            cx.on_app_quit(|this, cx| {
+                this.save_now(cx);
+                std::future::ready(())
+            }),
             cx.subscribe(&editor, |this, _, event: &EditorEvent, cx| {
                 this.editor_event(event, cx);
             }),
@@ -178,10 +195,11 @@ impl NoteView {
         ];
 
         let (jobs, queue) = async_channel::unbounded();
+        let shared = worker::shared(id.clone());
         cx.spawn({
             let library = library.clone();
-            let id = id.clone();
-            async move |this, cx| worker::work(this, library, id, queue, cx).await
+            let shared = shared.clone();
+            async move |this, cx| worker::work(this, library, shared, queue, cx).await
         })
         .detach();
 
@@ -193,12 +211,14 @@ impl NoteView {
             query,
             editor,
             jobs,
+            shared,
             lookup,
             fresh: false,
             closed: false,
+            leaving: false,
+            trashing: false,
             title: String::new(),
             rename_pending: false,
-            pending_saves: 0,
             banner: None,
             popover: None,
             saves: 0,
@@ -227,8 +247,8 @@ impl NoteView {
         &self.editor
     }
 
-    pub fn banner(&self) -> Option<Banner> {
-        self.banner
+    pub fn banner(&self) -> Option<&Banner> {
+        self.banner.as_ref()
     }
 
     pub fn popover(&self) -> Option<&Popover> {
@@ -246,50 +266,117 @@ impl NoteView {
         self.fresh = true;
     }
 
-    /// Saves what was typed and lets the file name follow the title; a new note that
-    /// stayed empty is deleted. Resolves when that is done; it also happens if the
-    /// view is dropped before. Nothing is written after this.
-    pub fn flush(&mut self, cx: &mut Context<Self>) -> Task<()> {
+    /// Leaving the note: stores what was typed and lets the file name follow the
+    /// title; a new note that stayed empty is deleted. `None` if there is nothing to
+    /// store and the view may go at once. Otherwise the task resolves to whether it may
+    /// go: `false` if the text could not be stored, and the banner says why.
+    pub fn leave(&mut self, cx: &mut Context<Self>) -> Option<Task<bool>> {
         if self.closed {
-            return Task::ready(());
+            return None;
         }
-        self.close();
-        let editor = self.editor.read(cx);
-        let dirty = editor.is_dirty();
-        let body = editor.markdown();
-        let job = if self.fresh && body.trim().is_empty() {
-            Some(Job::Discard)
-        } else {
-            match self.banner {
-                Some(Banner::ChangedOnDisk) => Some(Job::KeepMine(body)),
-                Some(Banner::DeletedOnDisk) => dirty.then(|| Job::SaveAsNew {
-                    body,
-                    folder: self.folder(),
-                }),
-                None if dirty => Some(Job::Save {
-                    body,
-                    rename: true,
-                    leaving: true,
-                }),
-                None if self.rename_pending => Some(Job::Rename),
-                None => None,
+        if self.leaving || self.trashing {
+            return Some(Task::ready(false));
+        }
+        let Some(leave) = self.leave_plan(cx) else {
+            self.finish();
+            return None;
+        };
+        let text = self.editor.read(cx).markdown();
+        let (done, left) = async_channel::bounded(1);
+        if self.jobs.try_send(Queued::Leave { leave, done }).is_err() {
+            return Some(Task::ready(false));
+        }
+        self.leaving = true;
+        self._save_timer = Task::ready(());
+        self._rename_timer = Task::ready(());
+        Some(cx.spawn(async move |this, cx| {
+            let left = left.recv().await.unwrap_or(false);
+            this.update(cx, |this, cx| this.left(left, &text, cx))
+                .unwrap_or(left)
+        }))
+    }
+
+    /// The last save, at once on this thread, for the window closing and the app
+    /// quitting: GPUI runs no task after that, not even the worker. What cannot be
+    /// stored in the notes folder goes to a recovery file. Nothing is written after
+    /// this.
+    pub fn save_now(&mut self, cx: &mut Context<Self>) {
+        if self.closed {
+            return;
+        }
+        if let Some(leave) = self.leave_plan(cx) {
+            let text = self.editor.read(cx).markdown();
+            let shared = self.shared.clone();
+            let stored = self.library.update(cx, |library, cx| {
+                library.run_now(cx, move |store, touched| {
+                    let mut known = worker::lock(&shared);
+                    if known.finished {
+                        return Ok(());
+                    }
+                    known.leave(store, touched, leave)
+                })
+            });
+            if let Err(err) = stored {
+                self.recover(&text, &err, cx);
             }
-        };
-        let Some(job) = job else {
-            return Task::ready(());
-        };
-        self.editor.update(cx, |editor, _| editor.mark_saved());
-        let (done, finished) = async_channel::bounded(1);
-        let queued = Queued {
-            job,
-            done: Some(done),
-        };
-        if self.jobs.try_send(queued).is_err() {
-            return Task::ready(());
         }
-        cx.background_spawn(async move {
-            let _ = finished.recv().await;
-        })
+        self.finish();
+    }
+
+    /// What leaving has to store, if anything.
+    fn leave_plan(&self, cx: &App) -> Option<Leave> {
+        let editor = self.editor.read(cx);
+        let body = editor.markdown();
+        if self.fresh && body.trim().is_empty() {
+            return Some(Leave::Discard(self.library.read(cx).now().timestamp()));
+        }
+        match self.banner {
+            Some(Banner::ChangedOnDisk) => Some(Leave::KeepMine(body)),
+            // Kept whether or not it was edited: the file is gone, the text exists only here.
+            Some(Banner::DeletedOnDisk) => {
+                (!body.trim().is_empty()).then_some(Leave::SaveAsNew(body))
+            }
+            _ if editor.is_dirty() => Some(Leave::Save(body)),
+            _ if self.rename_pending => Some(Leave::Rename),
+            _ => None,
+        }
+    }
+
+    /// The worker is done with leaving: the view may go if that stored everything and
+    /// nothing was typed since.
+    fn left(&mut self, left: bool, text: &str, cx: &mut Context<Self>) -> bool {
+        self.leaving = false;
+        if !left {
+            return false;
+        }
+        if self.editor.read(cx).markdown() != text {
+            // Typed while leaving: stay, with what leaving stored as the note.
+            worker::lock(&self.shared).finished = false;
+            self.banner = None;
+            self._save_timer = self.after(SAVE_DELAY, false, cx);
+            return false;
+        }
+        self.finish();
+        true
+    }
+
+    /// Keeps the text in a recovery file after the last save failed.
+    fn recover(&self, text: &str, err: &sheaf_core::Error, cx: &App) {
+        let kept = cx
+            .try_global::<Recovery>()
+            .map(|recovery| recovery.keep(first_line(text), text));
+        match kept {
+            Some(Ok(path)) => log::error!(
+                "cannot save the note {}: {err}; its text is in {}",
+                self.id,
+                path.display()
+            ),
+            Some(Err(kept)) => log::error!(
+                "cannot save the note {} ({err}) nor keep it ({kept}), its text:\n{text}",
+                self.id
+            ),
+            None => log::error!("cannot save the note {}: {err}, its text:\n{text}", self.id),
+        }
     }
 
     /// Pins the note, or unpins it.
@@ -305,24 +392,24 @@ impl NoteView {
     }
 
     /// Moves the note to the trash, after saving what was typed. The window hears
-    /// [`NoteEvent::Trashed`] when it is there.
+    /// [`NoteEvent::Trashed`] when it is there; if it fails, the view stays as it was
+    /// and a toast says why. A note that changed or went elsewhere stays until the
+    /// banner is answered, so that neither text is lost.
     pub fn trash(&mut self, cx: &mut Context<Self>) {
-        if self.closed {
+        if self.closed || self.leaving || self.trashing {
             return;
         }
         self.popover = None;
-        let editor = self.editor.read(cx);
-        if editor.is_dirty() && self.banner.is_none() {
-            let body = editor.markdown();
-            self.editor.update(cx, |editor, _| editor.mark_saved());
-            self.send(Job::Save {
-                body,
-                rename: false,
-                leaving: true,
-            });
+        if !matches!(
+            self.banner,
+            Some(Banner::ChangedOnDisk | Banner::DeletedOnDisk)
+        ) {
+            let editor = self.editor.read(cx);
+            let body = editor.is_dirty().then(|| editor.markdown());
+            let now = self.library.read(cx).now().timestamp();
+            self.trashing = true;
+            self.send(Job::Trash { body, now });
         }
-        self.close();
-        self.send(Job::Trash);
         cx.notify();
     }
 
@@ -388,7 +475,6 @@ impl NoteView {
             return;
         }
         let body = self.editor.read(cx).markdown();
-        self.editor.update(cx, |editor, _| editor.mark_saved());
         self.send(Job::KeepMine(body));
     }
 
@@ -398,19 +484,26 @@ impl NoteView {
             return;
         }
         let body = self.editor.read(cx).markdown();
-        self.editor.update(cx, |editor, _| editor.mark_saved());
-        let folder = self.folder();
-        self.send(Job::SaveAsNew { body, folder });
+        self.send(Job::SaveAsNew(body));
     }
 
-    fn close(&mut self) {
+    /// "Try Again" after a save failed.
+    pub fn retry_save(&mut self, cx: &mut Context<Self>) {
+        if matches!(self.banner, Some(Banner::SaveFailed(_))) {
+            self.save(true, cx);
+        }
+    }
+
+    /// Nothing more is written.
+    fn finish(&mut self) {
         self.closed = true;
+        worker::lock(&self.shared).finished = true;
         self._save_timer = Task::ready(());
         self._rename_timer = Task::ready(());
     }
 
     fn send(&self, job: Job) {
-        let _ = self.jobs.try_send(Queued { job, done: None });
+        let _ = self.jobs.try_send(Queued::Job(job));
     }
 
     fn folder(&self) -> String {
@@ -463,7 +556,11 @@ impl NoteView {
     /// Hands the text to the worker if it changed; with `rename`, the file name also
     /// follows the title if that changed.
     fn save(&mut self, rename: bool, cx: &mut Context<Self>) {
-        if self.closed || self.banner.is_some() {
+        let asks = matches!(
+            self.banner,
+            Some(Banner::ChangedOnDisk | Banner::DeletedOnDisk)
+        );
+        if self.closed || self.leaving || asks {
             return;
         }
         let rename = rename && self.rename_pending;
@@ -472,13 +569,7 @@ impl NoteView {
         }
         if self.editor.read(cx).is_dirty() {
             let body = self.editor.read(cx).markdown();
-            self.editor.update(cx, |editor, _| editor.mark_saved());
-            self.pending_saves += 1;
-            self.send(Job::Save {
-                body,
-                rename,
-                leaving: false,
-            });
+            self.send(Job::Save { body, rename });
         } else if rename {
             self.send(Job::Rename);
         }
@@ -487,33 +578,59 @@ impl NoteView {
     fn worker_reported(&mut self, report: Report, cx: &mut Context<Self>) {
         match report {
             Report::Loaded(note) => self.loaded(note, cx),
-            Report::Written { meta, saved } => {
+            Report::Saved { meta, body } => {
                 self.took(meta);
-                if saved && !self.editor.read(cx).is_dirty() {
-                    self.saves += 1;
-                    self.saved_shown = true;
+                if matches!(self.banner, Some(Banner::SaveFailed(_))) {
+                    self.banner = None;
                 }
+                self.saved(&body, cx);
             }
-            Report::SaveDone => self.pending_saves = self.pending_saves.saturating_sub(1),
-            Report::Resolved(meta) => {
+            Report::Written(meta) => self.took(meta),
+            Report::Resolved { meta, body } => {
                 self.took(meta);
                 self.banner = None;
-                self.saves += 1;
-                self.saved_shown = true;
+                self.saved(&body, cx);
             }
-            Report::Conflict => self.banner = Some(Banner::ChangedOnDisk),
-            Report::Deleted => {
-                if !self.closed {
-                    self.banner = Some(Banner::DeletedOnDisk);
-                }
+            Report::Conflict => self.ask(Banner::ChangedOnDisk),
+            Report::Deleted => self.ask(Banner::DeletedOnDisk),
+            Report::Trashed(meta) => {
+                self.finish();
+                cx.emit(NoteEvent::Trashed(meta));
             }
-            Report::Trashed(meta) => cx.emit(NoteEvent::Trashed(meta)),
+            Report::TrashFailed(reason) => {
+                self.trashing = false;
+                let message = tr("Could not move to trash: {}").replace("{}", &reason);
+                cx.emit(NoteEvent::Toast(Toast::new(message)));
+            }
             Report::Reloaded(note) => {
                 self.banner = None;
                 self.show(&note, cx);
             }
+            Report::SaveFailed(reason) => {
+                if !self.closed {
+                    self.banner = Some(Banner::SaveFailed(reason));
+                }
+            }
         }
         cx.notify();
+    }
+
+    /// Shows `banner`, unless the view is done with the note; a trash that was under
+    /// way did not happen.
+    fn ask(&mut self, banner: Banner) {
+        self.trashing = false;
+        if !self.closed {
+            self.banner = Some(banner);
+        }
+    }
+
+    /// `body` is on disk: if the editor still shows it, nothing is unsaved.
+    fn saved(&mut self, body: &str, cx: &mut Context<Self>) {
+        if self.editor.read(cx).markdown() == body {
+            self.editor.update(cx, |editor, _| editor.mark_saved());
+            self.saves += 1;
+            self.saved_shown = true;
+        }
     }
 
     /// The worker found the file changed by another program. Takes the new text and
@@ -522,7 +639,7 @@ impl NoteView {
         if self.closed || self.banner.is_some() {
             return false;
         }
-        if self.editor.read(cx).is_dirty() || self.pending_saves > 0 {
+        if self.editor.read(cx).is_dirty() {
             self.banner = Some(Banner::ChangedOnDisk);
             cx.notify();
             return false;
@@ -711,7 +828,7 @@ impl Render for NoteView {
             }))
             .on_action(cx.listener(|this, _: &Trash, _, cx| this.trash(cx)))
             .child(header::header(self, cx))
-            .children(self.banner.map(|banner| header::banner(banner, cx)))
+            .children(self.banner.clone().map(|banner| header::banner(banner, cx)))
             .child(
                 div()
                     .flex_none()

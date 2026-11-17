@@ -10,7 +10,6 @@
 //!   [`load`](Library::load) (the file, with the fingerprint a later save needs) and
 //!   [`folder_config`](Library::folder_config) (what is remembered per folder).
 //! - **Change** with [`create`](Library::create), [`save_body`](Library::save_body),
-//!   [`save_conflict_copy`](Library::save_conflict_copy),
 //!   [`sync_filename`](Library::sync_filename), [`set_pinned`](Library::set_pinned),
 //!   [`trash`](Library::trash), [`restore`](Library::restore),
 //!   [`move_to`](Library::move_to) and [`duplicate`](Library::duplicate). Each
@@ -501,20 +500,6 @@ impl Library {
         })
     }
 
-    /// Stores `body` as a note of its own beside the original, for edits that lost
-    /// against a change on disk.
-    pub fn save_conflict_copy(
-        &mut self,
-        id: &NoteId,
-        body: String,
-        cx: &mut Context<Self>,
-    ) -> Task<Result<NoteMeta>> {
-        let target = id.clone();
-        self.write(None, Effect::Keep, cx, move |store| {
-            store.save_conflict_copy(&target, &body)
-        })
-    }
-
     /// Renames the file so that it follows the title.
     pub fn sync_filename(&mut self, id: &NoteId, cx: &mut Context<Self>) -> Task<Result<NoteMeta>> {
         let target = id.clone();
@@ -541,18 +526,6 @@ impl Library {
         let now = self.now().timestamp();
         self.write(Some(id.clone()), Effect::Remove, cx, move |store| {
             store.trash(&target, now)
-        })
-    }
-
-    /// Deletes a note for good, without a stop in the trash: for a new note that was
-    /// left empty.
-    pub fn discard(&mut self, id: &NoteId, cx: &mut Context<Self>) -> Task<Result<NoteMeta>> {
-        let target = id.clone();
-        let now = self.now().timestamp();
-        self.write(Some(id.clone()), Effect::Remove, cx, move |store| {
-            let trashed = store.trash(&target, now)?;
-            store.purge(&trashed.id)?;
-            Ok(trashed)
         })
     }
 
