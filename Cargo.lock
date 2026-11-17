@@ -342,6 +342,7 @@ dependencies = [
  "futures-util",
  "getrandom 0.4.3",
  "serde",
+ "serde_repr",
  "zbus 6.3.0",
 ]
 
@@ -6744,6 +6745,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sheaf-core",
+ "sheaf-export",
  "sheaf-searchd",
  "tempfile",
  "thiserror 2.0.21",

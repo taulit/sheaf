@@ -51,6 +51,16 @@ actions!(
         OpenSettings,
         ShowShortcuts,
         CloseWindow,
+        /// Save a copy of the open note as a Markdown file.
+        ExportMarkdown,
+        /// Save the open note as a PDF file.
+        ExportPdf,
+        /// Print the open note.
+        Print,
+        /// Copy a file into the open note's attachments and link it.
+        AttachFile,
+        /// Paste into the open note: files and images become attachments.
+        PasteAttachment,
     ]
 );
 
@@ -61,7 +71,7 @@ pub const GALLERY: &str = "Gallery";
 /// Key context of the note view, around the editor.
 pub const NOTE: &str = "Note";
 /// Key context of the editor itself, inside [`NOTE`].
-const EDITOR: &str = "MarkdownEditor";
+pub const EDITOR: &str = "MarkdownEditor";
 
 pub fn bind_keys(cx: &mut App) {
     // The editor's keys first, so that ours win where both bind the same key.
@@ -87,6 +97,8 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("escape", ClearSearch, Some(GALLERY)),
         KeyBinding::new("ctrl-w", Back, Some(NOTE)),
         KeyBinding::new("escape", Back, Some(NOTE)),
+        // The editor pastes text only; files and images on the clipboard are ours.
+        KeyBinding::new("ctrl-v", PasteAttachment, Some(EDITOR)),
     ]);
 }
 
@@ -126,6 +138,10 @@ pub fn commands() -> Vec<CommandInfo> {
         command(Box::new(ShowShortcuts), tr("Keyboard Shortcuts")),
         command(Box::new(OpenSettings), tr("Settings")),
         command(Box::new(CloseWindow), tr("Close Window")),
+        command(Box::new(ExportMarkdown), tr("Export as Markdown…")),
+        command(Box::new(ExportPdf), tr("Export as PDF…")),
+        command(Box::new(Print), tr("Print…")),
+        command(Box::new(AttachFile), tr("Attach File…")),
         hidden(Box::new(OpenCommandPalette), tr("Command Palette")),
         hidden(Box::new(OpenSelected), tr("Open Selected Note")),
         hidden(Box::new(SelectNext), tr("Select Next Note")),
@@ -133,5 +149,6 @@ pub fn commands() -> Vec<CommandInfo> {
         hidden(Box::new(SelectLeft), tr("Select Note on the Left")),
         hidden(Box::new(SelectRight), tr("Select Note on the Right")),
         hidden(Box::new(ClearSearch), tr("Clear Search")),
+        hidden(Box::new(PasteAttachment), tr("Paste")),
     ]
 }

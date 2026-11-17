@@ -32,7 +32,9 @@
 //! A save that fails shows a banner and is tried again with the next change, with "Try
 //! Again" and on leaving; leaving that fails keeps the view open.
 
+mod attach;
 mod date;
+mod export;
 mod files;
 mod header;
 mod jump;
@@ -46,21 +48,25 @@ use std::time::Duration;
 use async_channel::Sender;
 use gpui::{
     AnimationExt as _, App, AppContext as _, ClipboardItem, Context, Entity, EventEmitter,
-    FocusHandle, Focusable, InteractiveElement as _, IntoElement, ParentElement as _, Render,
-    Styled as _, Subscription, Task, Window, div, prelude::FluentBuilder as _, px,
+    ExternalPaths, FocusHandle, Focusable, InteractiveElement as _, IntoElement,
+    ParentElement as _, Render, Styled as _, Subscription, Task, Window, div,
+    prelude::FluentBuilder as _, px,
 };
 use gpui_component::Theme;
 use gpui_markdown_editor::{DocMeta, EditorEvent, MarkdownEditor};
 use sheaf_core::i18n::tr;
 use sheaf_core::{CreateOptions, Note, NoteId, NoteMeta, Sort};
 
-use super::actions::{self, Back, Trash};
+use super::actions::{
+    self, AttachFile, Back, ExportMarkdown, ExportPdf, PasteAttachment, Print, Trash,
+};
 use super::chrome::pane;
 use super::library::{Folder, Library, LibraryEvent};
 use super::overlays::Toast;
 use super::state::Recovery;
 use super::theme::ActiveTokens as _;
 use setup::{Lookup, SharedLookup};
+pub use worker::Upload;
 use worker::{Change, Job, Leave, Queued, Report, Shared};
 
 /// How long typing may pause before the text is saved.
@@ -142,6 +148,8 @@ pub struct NoteView {
     _rename_timer: Task<()>,
     _lookup: Task<()>,
     _state: Task<()>,
+    _export: Task<()>,
+    _attach: Task<()>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -234,6 +242,8 @@ impl NoteView {
             _rename_timer: Task::ready(()),
             _lookup: Task::ready(()),
             _state: Task::ready(()),
+            _export: Task::ready(()),
+            _attach: Task::ready(()),
             _subscriptions: subscriptions,
         };
         view.load_state(cx);
@@ -643,6 +653,7 @@ impl NoteView {
                 }
             }
             Change::Move => tr("Could not move the note: {}"),
+            Change::Attach => tr("Could not attach: {}"),
         };
         cx.emit(NoteEvent::Toast(Toast::new(message.replace("{}", reason))));
     }
@@ -875,6 +886,11 @@ impl Render for NoteView {
                 }
             }))
             .on_action(cx.listener(|this, _: &Trash, _, cx| this.trash(cx)))
+            .on_action(cx.listener(|this, _: &ExportMarkdown, _, cx| this.export_markdown(cx)))
+            .on_action(cx.listener(|this, _: &ExportPdf, _, cx| this.export_pdf(cx)))
+            .on_action(cx.listener(|this, _: &Print, _, cx| this.print(cx)))
+            .on_action(cx.listener(|this, _: &AttachFile, window, cx| this.attach_file(window, cx)))
+            .on_action(cx.listener(|this, _: &PasteAttachment, window, cx| this.paste(window, cx)))
             .child(header::header(self, cx))
             .children(self.banner.clone().map(|banner| header::banner(banner, cx)))
             .child(
@@ -889,8 +905,13 @@ impl Render for NoteView {
             )
             .child(
                 div()
+                    .id("note-text")
                     .flex_1()
                     .min_h_0()
+                    .on_drop(cx.listener(|this, paths: &ExternalPaths, window, cx| {
+                        let files = paths.paths().iter().cloned().map(Upload::File).collect();
+                        this.attach(files, window, cx);
+                    }))
                     .when(self.loaded, |area| area.child(self.editor.clone())),
             )
             .children(saved)

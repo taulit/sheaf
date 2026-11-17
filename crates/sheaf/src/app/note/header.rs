@@ -144,14 +144,19 @@ fn share_popover(cx: &mut Context<NoteView>) -> AnyElement {
                 .on_click(cx.listener(|this, _, _, cx| this.copy_markdown(cx))),
         )
         .child(
+            MenuRow::new("export-markdown", tr("Export as Markdown…"))
+                .icon(IconName::Text)
+                .on_click(cx.listener(|this, _, _, cx| this.export_markdown(cx))),
+        )
+        .child(
             MenuRow::new("export-pdf", tr("Export as PDF…"))
                 .icon(IconName::SaveAs)
-                .disabled(true),
+                .on_click(cx.listener(|this, _, _, cx| this.export_pdf(cx))),
         )
         .child(
             MenuRow::new("print", tr("Print…"))
                 .icon(IconName::Print)
-                .disabled(true),
+                .on_click(cx.listener(|this, _, _, cx| this.print(cx))),
         )
         .into_any_element()
 }
@@ -175,6 +180,11 @@ fn menu_popover(cx: &mut Context<NoteView>) -> AnyElement {
             MenuRow::new("move", tr("Move to…"))
                 .icon(IconName::Forward)
                 .on_click(page(Popover::Move(Vec::new()))),
+        )
+        .child(
+            MenuRow::new("attach-file", tr("Attach File…"))
+                .icon(IconName::Attachment)
+                .on_click(cx.listener(|this, _, window, cx| this.attach_file(window, cx))),
         )
         .child(overlays::separator(cx))
         .child(

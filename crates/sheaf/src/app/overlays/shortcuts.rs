@@ -30,7 +30,7 @@ pub fn groups(cx: &App) -> Vec<ShortcutGroup> {
         (actions::NOTE, tr("Note")),
     ];
     let commands = actions::commands();
-    let bound: Vec<(String, String, String)> = commands
+    let mut bound: Vec<(String, String, String)> = commands
         .iter()
         .flat_map(|command| {
             super::bindings_of(command.action.as_ref(), cx)
@@ -38,6 +38,21 @@ pub fn groups(cx: &App) -> Vec<ShortcutGroup> {
                 .map(|(context, keys)| (context, command.label.clone(), keys))
         })
         .collect();
+    // The editor's own keys work in the note and are listed with it, unless the
+    // whole window has them anyway.
+    let window_wide: Vec<(String, String)> = bound
+        .iter()
+        .filter(|(context, _, _)| context == actions::WINDOW)
+        .map(|(_, label, keys)| (label.clone(), keys.clone()))
+        .collect();
+    bound.retain(|(context, label, keys)| {
+        context != actions::EDITOR || !window_wide.contains(&(label.clone(), keys.clone()))
+    });
+    for (context, _, _) in &mut bound {
+        if context == actions::EDITOR {
+            *context = actions::NOTE.to_owned();
+        }
+    }
     contexts
         .into_iter()
         .map(|(context, title)| {

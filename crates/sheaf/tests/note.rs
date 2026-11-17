@@ -958,7 +958,10 @@ async fn the_shortcuts_list_shows_every_binding(cx: &mut TestAppContext) {
     let note = &groups[2].lines;
     assert_eq!(
         note,
-        &[("Back to Notes".to_owned(), "Ctrl+W, Esc".to_owned())]
+        &[
+            ("Back to Notes".to_owned(), "Ctrl+W, Esc".to_owned()),
+            ("Paste".to_owned(), "Ctrl+V".to_owned())
+        ]
     );
 
     app.cx.simulate_keystrokes("escape");

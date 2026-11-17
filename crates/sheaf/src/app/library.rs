@@ -749,7 +749,7 @@ fn establish(
 
 /// The path of a `file://` URI with its percent escapes resolved; anything else is
 /// taken as a path as it is.
-fn decode_file_uri(uri: &str) -> String {
+pub(crate) fn decode_file_uri(uri: &str) -> String {
     let Some(path) = uri.strip_prefix("file://") else {
         return uri.to_owned();
     };

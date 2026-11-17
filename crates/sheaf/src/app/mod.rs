@@ -11,11 +11,13 @@
 //! | [`window`] | the main window and its router |
 //! | [`gallery`], [`note`] | the two views |
 //! | [`overlays`] | toast, command palette, list of shortcuts, popover parts |
+//! | [`dialogs`] | save, open and print dialogs of the portals |
 //! | [`state`] | what is remembered between runs |
 
 pub mod actions;
 pub mod assets;
 pub mod chrome;
+pub mod dialogs;
 pub mod gallery;
 pub mod instance;
 pub mod library;
