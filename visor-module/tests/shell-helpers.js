@@ -61,7 +61,8 @@
     },
     // Title, quiet line and time of the rows of the view.
     rows: () => find('visor-row', view()).filter(a => a.mapped).map(row => [
-      text('visor-row-title', row), text('visor-row-subtitle', row), text('visor-row-meta', row)]),
+      text('visor-row-title', row), text('visor-row-subtitle', row), text('visor-row-meta', row),
+    ]),
     entry: () => find('sheaf-notes-entry', view())[0] ?? null,
     // Texts of the quiet lines (empty states, errors) in the view.
     quiet: () => find('visor-empty', view()).map(a => a.text),

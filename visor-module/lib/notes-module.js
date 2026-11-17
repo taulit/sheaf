@@ -95,7 +95,7 @@ class NotesModule {
     const content = new St.BoxLayout({style_class: 'sheaf-notes-content', vertical: true, x_expand: true});
     root.add_child(entry);
     root.add_child(content);
-    this._view = {root, entry, content, error: null, saving: false, shown: null};
+    this._view = {root, entry, content, error: null, saving: false};
     root.connectObject('notify::mapped', () => this._onMapped(), this);
     this._render();
     return root;
