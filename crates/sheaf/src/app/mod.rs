@@ -12,6 +12,7 @@
 //! | [`gallery`], [`note`] | the two views |
 //! | [`overlays`] | toast, command palette, list of shortcuts, popover parts |
 //! | [`dialogs`] | save, open and print dialogs of the portals |
+//! | [`settings`] | the user's settings and their window |
 //! | [`state`] | what is remembered between runs |
 
 pub mod actions;
@@ -25,6 +26,7 @@ mod logger;
 pub mod note;
 pub mod overlays;
 pub mod portal;
+pub mod settings;
 pub mod state;
 pub mod theme;
 pub mod window;
@@ -77,6 +79,7 @@ pub fn run(launch: Launch, dir: Option<PathBuf>) -> ExitCode {
         Err(err) => return fail(&err.to_string()),
     };
     let index_dir = env.index_dir(&notes_dir).ok();
+    let settings = env.app_config_path().ok().map(settings::Settings::load);
 
     let mut application = gpui_platform::application().with_assets(assets::Assets);
     if launch.service {
@@ -88,6 +91,9 @@ pub fn run(launch: Launch, dir: Option<PathBuf>) -> ExitCode {
         quit_on_signals(cx);
         gpui_component::init(cx);
         theme::init(theme::Overrides::from_process(), cx);
+        if let Some(settings) = settings {
+            cx.set_global(settings);
+        }
         actions::bind_keys(cx);
         if let Some(connection) = &connection {
             portal::follow(connection.clone(), cx);
@@ -216,6 +222,14 @@ struct Session {
 }
 
 impl Global for Session {}
+
+/// Makes `library` the one a main window opened from now on shows, after the notes
+/// folder changed.
+pub(crate) fn use_library(library: Entity<Library>, cx: &mut App) {
+    if cx.has_global::<Session>() {
+        cx.global_mut::<Session>().library = library;
+    }
+}
 
 /// Brings the main window to the front, opening it if needed, and passes it `request`.
 async fn show(request: Request, token: Option<String>, cx: &mut AsyncApp) {

@@ -64,6 +64,7 @@ use super::actions::{
 use super::chrome::pane;
 use super::library::{Folder, Library, LibraryEvent};
 use super::overlays::Toast;
+use super::settings::{self, Settings};
 use super::state::Recovery;
 use super::theme::ActiveTokens as _;
 use setup::{Lookup, SharedLookup};
@@ -192,6 +193,11 @@ impl NoteView {
         });
         let subscriptions = vec![
             cx.observe_global::<Theme>(|this, cx| {
+                let style = setup::style(cx);
+                this.editor
+                    .update(cx, |editor, cx| editor.set_style(style, cx));
+            }),
+            cx.observe_global::<Settings>(|this, cx| {
                 let style = setup::style(cx);
                 this.editor
                     .update(cx, |editor, cx| editor.set_style(style, cx));
@@ -790,6 +796,26 @@ impl NoteView {
         });
     }
 
+    /// Keeps the column of text at the line width of the settings for the width of
+    /// the window. The editor's column is fixed when it is created, so narrower lines
+    /// are space beside the text.
+    fn fit_column(&mut self, window: &Window, cx: &mut Context<Self>) {
+        let frame = match window.window_decorations() {
+            gpui::Decorations::Client { .. } if !window.is_maximized() => px(40.),
+            _ => px(0.),
+        };
+        let width = window.viewport_size().width - frame;
+        let side = setup::side_padding(width, settings::config(cx).editor.line_width);
+        let padding = self.editor.read(cx).style().padding;
+        if padding.left != side || padding.right != side {
+            let mut style = self.editor.read(cx).style().clone();
+            style.padding.left = side;
+            style.padding.right = side;
+            self.editor
+                .update(cx, |editor, cx| editor.set_style(style, cx));
+        }
+    }
+
     /// Hands the editor what it remembered about this note, such as column widths.
     fn load_state(&mut self, cx: &mut Context<Self>) {
         let state = self.library.read(cx).note_state(&self.id, cx);
@@ -865,6 +891,7 @@ impl Render for NoteView {
         if self.loaded && self.focus_handle.is_focused(window) {
             self.editor.focus_handle(cx).focus(window, cx);
         }
+        self.fit_column(window, cx);
         let tokens = cx.tokens().clone();
         let date = self.meta.as_ref().map(|meta| {
             let zone = self.library.read(cx).now().time_zone().clone();

@@ -53,6 +53,7 @@ use async_channel::Receiver;
 use gpui::{App, AppContext as _, Context, Entity, EventEmitter, Task};
 use jiff::tz::TimeZone;
 use jiff::{Timestamp, ZonedDateTime};
+use sheaf_core::config::QuickNote;
 use sheaf_core::{
     CreateOptions, Filter, Fingerprint, FolderConfig, Note, NoteId, NoteMeta, NoteStore, Reader,
     Result, SearchIndex, SearchResults, Sort, WriteOptions, query,
@@ -212,6 +213,8 @@ pub struct Library {
     /// Keeps the writers of `.sheaf/config.toml` apart: each reads, changes and writes
     /// the whole file.
     config: Arc<Mutex<()>>,
+    /// The session bus it was opened with, for [`reopen`](Self::reopen).
+    connection: Option<Connection>,
     _starting: Task<()>,
     _following: Option<Task<()>>,
     _confirming: Option<Task<()>>,
@@ -243,6 +246,7 @@ impl Library {
     ) -> Result<Entity<Self>> {
         std::fs::create_dir_all(notes_dir)?;
         let store = Arc::new(NoteStore::new(notes_dir));
+        let kept = connection.clone();
         let service = connection.zip(index_dir);
         let on_disk = match &service {
             Some((_, index_dir)) => SearchIndex::open_read_only(index_dir).ok().flatten(),
@@ -259,6 +263,7 @@ impl Library {
             backend: Backend::Opening,
             clock: Arc::new(|| Timestamp::now().to_zoned_datetime(TimeZone::system())),
             config: Arc::new(Mutex::new(())),
+            connection: kept,
             _following: None,
             _confirming: None,
         }))
@@ -493,23 +498,61 @@ impl Library {
         })
     }
 
-    /// The settings of the notes folder: view and sort per folder, pinned tags.
+    /// The settings of the notes folder: view and sort per folder, pinned tags. Folders
+    /// without an order of their own take the default order of the settings.
     pub fn folder_config(&self, cx: &App) -> Task<Result<FolderConfig>> {
         let root = self.store.root().to_owned();
-        cx.background_spawn(async move { FolderConfig::load(&root) })
+        let default_sort = super::settings::config(cx).sort.unwrap_or_default();
+        cx.background_spawn(async move {
+            let mut config = FolderConfig::load(&root)?;
+            config.default_sort = default_sort;
+            Ok(config)
+        })
     }
 
-    /// Writes the folder settings. The per-note view state is taken from the file, not
-    /// from `config`: [`set_note_state`](Self::set_note_state) may have changed it since
-    /// `config` was read.
+    /// Writes the folder settings. The per-note view state and the Quick Note settings
+    /// are taken from the file, not from `config`: [`set_note_state`](Self::set_note_state)
+    /// and [`set_quick_note`](Self::set_quick_note) may have changed them since `config`
+    /// was read.
     pub fn save_folder_config(&self, mut config: FolderConfig, cx: &App) -> Task<Result<()>> {
         let root = self.store.root().to_owned();
         let lock = self.config.clone();
         cx.background_spawn(async move {
             let _writing = lock.lock().unwrap_or_else(PoisonError::into_inner);
-            config.notes = FolderConfig::load(&root)?.notes;
+            let stored = FolderConfig::load(&root)?;
+            config.notes = stored.notes;
+            config.quick_note = stored.quick_note;
             config.save(&root)
         })
+    }
+
+    /// Writes the Quick Note settings of the notes folder.
+    pub fn set_quick_note(&self, quick_note: QuickNote, cx: &App) -> Task<Result<()>> {
+        let root = self.store.root().to_owned();
+        let lock = self.config.clone();
+        cx.background_spawn(async move {
+            let _writing = lock.lock().unwrap_or_else(PoisonError::into_inner);
+            let mut config = FolderConfig::load(&root)?;
+            config.quick_note = quick_note;
+            config.save(&root)
+        })
+    }
+
+    /// A Library of another notes folder, opened the way this one was: with the same
+    /// link to the session bus and the same clock.
+    pub fn reopen(this: &Entity<Self>, notes_dir: &Path, cx: &mut App) -> Result<Entity<Self>> {
+        let (connection, clock) = {
+            let this = this.read(cx);
+            (this.connection.clone(), this.clock.clone())
+        };
+        let index_dir = connection.as_ref().and_then(|_| {
+            sheaf_core::paths::Env::from_process()
+                .index_dir(notes_dir)
+                .ok()
+        });
+        let library = Self::open(notes_dir, index_dir, connection, cx)?;
+        library.update(cx, |library, _| library.clock = clock);
+        Ok(library)
     }
 
     /// Creates an empty folder (relative to the notes folder) and tells the listeners,

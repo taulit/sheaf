@@ -336,3 +336,181 @@ async fn a_note_nobody_links_to_has_no_backlinks(cx: &mut TestAppContext) {
     app.open("Einkauf");
     assert!(backlink_titles(&mut app).is_empty());
 }
+
+// ---- Settings ------------------------------------------------------------------------
+
+use sheaf::app::settings::view::SettingsView;
+use sheaf::app::settings::{self, Settings};
+use sheaf_core::config::{EditorFont, LineWidth, Sort as Order};
+
+impl TestApp {
+    /// Opens the settings window with Ctrl+, and returns its view and window.
+    fn open_settings(&mut self) -> (Entity<SettingsView>, gpui::AnyWindowHandle) {
+        self.cx.dispatch_action(sheaf::app::actions::OpenSettings);
+        self.cx.run_until_parked();
+        let view = self
+            .main
+            .read_with(self.cx, |main, _| main.settings_window().cloned())
+            .expect("the settings window is open");
+        let window = self
+            .cx
+            .update(|_, cx| {
+                cx.windows().into_iter().find(|window| {
+                    window
+                        .downcast::<gpui_component::Root>()
+                        .and_then(|root| root.read(cx).ok())
+                        .is_some_and(|root| root.view().entity_id() == view.entity_id())
+                })
+            })
+            .expect("its window");
+        (view, window)
+    }
+
+    fn settings_do(
+        &mut self,
+        view: &Entity<SettingsView>,
+        window: gpui::AnyWindowHandle,
+        run: impl FnOnce(&mut SettingsView, &mut gpui::Window, &mut gpui::Context<SettingsView>),
+    ) {
+        let view = view.clone();
+        self.cx
+            .update(|_, cx| {
+                window.update(cx, |_, window, cx| {
+                    view.update(cx, |view, cx| run(view, window, cx))
+                })
+            })
+            .unwrap();
+        self.cx.run_until_parked();
+    }
+}
+
+fn with_settings(notes: &Notes, cx: &mut TestAppContext) -> std::path::PathBuf {
+    let file = notes.scratch("config/sheaf/config.toml");
+    let settings = Settings::new(Some(file.clone()), sheaf_core::AppConfig::default());
+    cx.update(|cx| cx.set_global(settings));
+    file
+}
+
+#[gpui::test]
+async fn editor_settings_apply_to_the_open_note_and_are_stored(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let file = with_settings(&notes, cx);
+    let mut app = open_app(&notes, cx);
+    let note = app.open("Notch-Ideen");
+    let (view, window) = app.open_settings();
+    let padding = |app: &mut TestApp| {
+        note.read_with(app.cx, |note, cx| {
+            note.editor().read(cx).style().padding.left
+        })
+    };
+    let medium = padding(&mut app);
+
+    app.settings_do(&view, window, |view, window, cx| {
+        view.set_line_width(LineWidth::Narrow, window, cx);
+        view.set_font(EditorFont::Mono, window, cx);
+    });
+    app.cx.update(|window, _| window.refresh());
+    app.cx.run_until_parked();
+
+    assert!(padding(&mut app) > medium, "a narrower column");
+    let (family, expected) = app.cx.update(|_, cx| {
+        let family = note.read(cx).editor().read(cx).style().font_family.clone();
+        (family, settings::font_family(EditorFont::Mono, cx))
+    });
+    assert_eq!(family, expected);
+    let stored = std::fs::read_to_string(&file).unwrap();
+    assert!(stored.contains("font = \"mono\""), "{stored}");
+    assert!(stored.contains("line_width = \"narrow\""), "{stored}");
+}
+
+#[gpui::test]
+async fn the_default_order_reaches_the_gallery(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    with_settings(&notes, cx);
+    let mut app = open_app(&notes, cx);
+    let (view, window) = app.open_settings();
+    app.settings_do(&view, window, |view, window, cx| {
+        view.set_sort(Order::Title, window, cx)
+    });
+    let (order, titles) = app.main.read_with(app.cx, |main, cx| {
+        let gallery = main.gallery().read(cx);
+        let titles: Vec<String> = gallery
+            .notes()
+            .iter()
+            .map(|note| note.title.clone())
+            .collect();
+        (gallery.sort(), titles)
+    });
+    assert_eq!(order, Order::Title);
+    let unpinned = &titles[2..];
+    let mut sorted = unpinned.to_vec();
+    sorted.sort_by_key(|title| title.to_lowercase());
+    assert_eq!(unpinned, sorted.as_slice());
+}
+
+#[gpui::test]
+async fn quick_note_settings_go_to_the_notes_folder(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let mut app = open_app(&notes, cx);
+    let (view, window) = app.open_settings();
+    app.settings_do(&view, window, |view, window, cx| {
+        view.set_resume_minutes(15, window, cx);
+        view.set_quick_folder("Eingang", window, cx);
+    });
+    let config = sheaf_core::FolderConfig::load(&notes.dir).unwrap();
+    assert_eq!(config.quick_note.resume_minutes, 15);
+    assert_eq!(config.quick_note.folder.as_deref(), Some("Eingang"));
+    assert_eq!(
+        config.pinned_tags,
+        ["ausschreibung", "rezepte"],
+        "the rest stays"
+    );
+}
+
+#[gpui::test]
+async fn a_new_notes_folder_is_opened_at_once(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let file = with_settings(&notes, cx);
+    let other = Notes::empty();
+    other.write("Anderswo.md", "Anderswo\n\nIm neuen Ordner.\n");
+    let mut app = open_app(&notes, cx);
+    app.open("Einkauf");
+    app.dialogs
+        .folders
+        .lock()
+        .unwrap()
+        .push_back(other.dir.clone());
+    let (view, window) = app.open_settings();
+
+    app.settings_do(&view, window, |view, window, cx| {
+        view.choose_notes_folder(window, cx)
+    });
+    app.cx.run_until_parked();
+
+    let (dir, route, titles) = app.main.read_with(app.cx, |main, cx| {
+        let titles: Vec<String> = main
+            .gallery()
+            .read(cx)
+            .notes()
+            .iter()
+            .map(|note| note.title.clone())
+            .collect();
+        (
+            main.library().read(cx).notes_dir().to_owned(),
+            main.route(cx),
+            titles,
+        )
+    });
+    assert_eq!(dir, other.dir);
+    assert_eq!(
+        route,
+        sheaf::app::window::Route::Gallery,
+        "the note was left"
+    );
+    assert_eq!(titles, ["Anderswo"]);
+    assert!(
+        std::fs::read_to_string(&file)
+            .unwrap()
+            .contains("notes_dir")
+    );
+}

@@ -11,7 +11,8 @@ use sheaf_core::i18n::{ntr, tr};
 
 use super::{NoteEvent, NoteView};
 use crate::app::assets::{IconName, icon};
-use crate::app::theme::{ActiveTokens as _, size};
+use crate::app::settings;
+use crate::app::theme::ActiveTokens as _;
 
 impl NoteView {
     /// The notes that link to this one, most recently changed first.
@@ -151,14 +152,14 @@ impl NoteView {
                 .flex()
                 .flex_none()
                 .justify_center()
-                .px(px(40.))
+                .px(px(48.))
                 .pb(px(30.))
                 .child(
                     div()
                         .flex()
                         .flex_col()
                         .w_full()
-                        .max_w(size::EDITOR_MAX_WIDTH)
+                        .max_w(settings::column(settings::config(cx).editor.line_width) - px(96.))
                         .pt(px(6.))
                         .border_t_1()
                         .border_color(tokens.hair)

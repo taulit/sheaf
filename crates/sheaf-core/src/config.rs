@@ -202,10 +202,13 @@ impl FolderConfig {
     /// How `folder` is shown; the defaults, with [`default_sort`](Self::default_sort),
     /// if nothing was stored for it.
     pub fn view(&self, folder: &str) -> FolderView {
-        self.folders.get(folder).cloned().unwrap_or_else(|| FolderView {
-            sort: self.default_sort,
-            ..FolderView::default()
-        })
+        self.folders
+            .get(folder)
+            .cloned()
+            .unwrap_or_else(|| FolderView {
+                sort: self.default_sort,
+                ..FolderView::default()
+            })
     }
 }
 
