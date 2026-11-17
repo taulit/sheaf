@@ -7,6 +7,7 @@
 //! - **Read** with [`notes`](Library::notes), [`search`](Library::search),
 //!   [`folders`](Library::folders), [`tags`](Library::tags), [`meta`](Library::meta),
 //!   [`body`](Library::body) (text as indexed, for previews),
+//!   [`backlinks`](Library::backlinks) (notes that link to a title),
 //!   [`load`](Library::load) (the file, with the fingerprint a later save needs) and
 //!   [`folder_config`](Library::folder_config) (what is remembered per folder).
 //! - **Change** with [`create`](Library::create), [`save_body`](Library::save_body),
@@ -425,6 +426,14 @@ impl Library {
         let lists = self.lists();
         let id = id.clone();
         cx.background_spawn(async move { lists.body(&id) })
+    }
+
+    /// The notes with a `[[wiki link]]` to `title`, ignoring case, most recently
+    /// modified first.
+    pub fn backlinks(&self, title: &str, cx: &App) -> Task<Result<Vec<NoteMeta>>> {
+        let lists = self.lists();
+        let title = title.to_owned();
+        cx.background_spawn(async move { lists.backlinks(&title) })
     }
 
     /// Reads the note's file. This is what an editor starts from.

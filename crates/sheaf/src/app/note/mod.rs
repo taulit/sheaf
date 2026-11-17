@@ -33,6 +33,7 @@
 //! Again" and on leaving; leaving that fails keeps the view open.
 
 mod attach;
+mod backlinks;
 mod date;
 mod export;
 mod files;
@@ -148,6 +149,11 @@ pub struct NoteView {
     _rename_timer: Task<()>,
     _lookup: Task<()>,
     _state: Task<()>,
+    /// The notes that link here, and the title they were looked up for.
+    backlinks: Vec<NoteMeta>,
+    backlinks_title: String,
+    backlinks_open: bool,
+    _backlinks: Task<()>,
     _export: Task<()>,
     _attach: Task<()>,
     _subscriptions: Vec<Subscription>,
@@ -204,6 +210,7 @@ impl NoteView {
                     this.send(Job::Check);
                 }
                 this.refresh_lookup(cx);
+                this.refresh_backlinks(true, cx);
             }),
         ];
 
@@ -242,6 +249,10 @@ impl NoteView {
             _rename_timer: Task::ready(()),
             _lookup: Task::ready(()),
             _state: Task::ready(()),
+            backlinks: Vec::new(),
+            backlinks_title: String::new(),
+            backlinks_open: false,
+            _backlinks: Task::ready(()),
             _export: Task::ready(()),
             _attach: Task::ready(()),
             _subscriptions: subscriptions,
@@ -634,6 +645,7 @@ impl NoteView {
             }
             Report::ChangeFailed { change, reason } => self.change_failed(change, &reason, cx),
         }
+        self.refresh_backlinks(false, cx);
         cx.notify();
     }
 
@@ -914,6 +926,7 @@ impl Render for NoteView {
                     }))
                     .when(self.loaded, |area| area.child(self.editor.clone())),
             )
+            .children(self.backlinks_section(cx))
             .children(saved)
             .when(self.popover.is_some(), |pane| {
                 pane.child(header::dismiss_layer(cx))

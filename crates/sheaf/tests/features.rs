@@ -18,7 +18,6 @@ use sheaf::app::window::{self, MainWindow};
 use sheaf_core::NoteId;
 
 struct TestApp {
-    #[allow(dead_code)]
     library: Entity<Library>,
     main: Entity<MainWindow>,
     dialogs: Arc<Scripted>,
@@ -281,4 +280,59 @@ async fn a_file_that_cannot_be_read_is_reported(cx: &mut TestAppContext) {
     let (message, _) = app.toast().unwrap();
     assert!(message.starts_with("Could not attach: "), "{message}");
     assert!(!app.editor_text().contains("_attachments"));
+}
+
+// ---- Backlinks -----------------------------------------------------------------------
+
+fn backlink_titles(app: &mut TestApp) -> Vec<String> {
+    let note = app.note();
+    note.read_with(app.cx, |note, _| {
+        note.backlinks()
+            .iter()
+            .map(|note| note.title.clone())
+            .collect()
+    })
+}
+
+#[gpui::test]
+async fn backlinks_list_the_notes_that_link_here_and_open_them(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let mut app = open_app(&notes, cx);
+    app.open("Project plan");
+    assert_eq!(backlink_titles(&mut app), ["Meeting notes 2026-11-03"]);
+    let open = app
+        .note()
+        .read_with(app.cx, |note, _| note.backlinks_open());
+    assert!(!open, "folded at first");
+
+    // Another note starts linking here: the list follows.
+    let created = app.library.update(app.cx, |library, cx| {
+        library.create(
+            "Kickoff\n\nSiehe [[project plan]].\n",
+            sheaf_core::CreateOptions::default(),
+            cx,
+        )
+    });
+    app.cx.run_until_parked();
+    created.await.unwrap();
+    app.cx.run_until_parked();
+    assert_eq!(
+        backlink_titles(&mut app),
+        ["Kickoff", "Meeting notes 2026-11-03"]
+    );
+
+    app.note_do(|note, _, cx| note.toggle_backlinks(cx));
+    app.note_do(|note, _, cx| note.open_backlink(1, cx));
+    let title = app
+        .note()
+        .read_with(app.cx, |note, _| note.meta().map(|meta| meta.title.clone()));
+    assert_eq!(title.as_deref(), Some("Meeting notes 2026-11-03"));
+}
+
+#[gpui::test]
+async fn a_note_nobody_links_to_has_no_backlinks(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let mut app = open_app(&notes, cx);
+    app.open("Einkauf");
+    assert!(backlink_titles(&mut app).is_empty());
 }

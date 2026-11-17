@@ -168,6 +168,21 @@ impl Lists {
         }))
     }
 
+    /// Notes with a wiki link to `title`, most recently modified first.
+    pub fn backlinks(&self, title: &str) -> Result<Vec<NoteMeta>> {
+        let found = self.disk.backlinks(title)?;
+        let Some(own) = self.own() else {
+            return Ok(found);
+        };
+        let mut merged: Vec<NoteMeta> = found
+            .into_iter()
+            .filter(|note| !own.paths.contains(&note.rel_path))
+            .collect();
+        merged.extend(own.reader.backlinks(title)?);
+        merged.sort_by(|a, b| Sort::Modified.compare(a, b));
+        Ok(merged)
+    }
+
     pub fn body(&self, id: &NoteId) -> Result<Option<String>> {
         let Some(own) = self.own() else {
             return self.disk.body(id);
