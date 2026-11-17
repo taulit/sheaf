@@ -8,6 +8,15 @@ license.workspace = true
 repository.workspace = true
 publish.workspace = true
 
+[features]
+# The measurements of scripts/budgets.sh: generated notes, the start, scrolling.
+budgets = ["sheaf-core/testgen"]
+
+[[bin]]
+name = "sheaf-budgets"
+path = "src/bin/sheaf-budgets.rs"
+required-features = ["budgets"]
+
 [dependencies]
 sheaf-core.workspace = true
 sheaf-searchd.workspace = true
