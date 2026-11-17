@@ -19,6 +19,7 @@ use jiff::{SignedDuration, Timestamp};
 use crate::error::{Error, Result};
 use crate::frontmatter;
 use crate::model::{NoteId, NoteMeta};
+use crate::scan;
 use crate::store::fsops;
 use crate::store::write::{checked_folder, stamped};
 use crate::store::{
@@ -163,7 +164,8 @@ impl NoteStore {
 
     /// The names of the files in `dir`, the attachments of `id`, that a note outside
     /// the trash links to, other than the one at `except`. The folder name holds the
-    /// note's id, so any link that names `_attachments/<id>/<file>` means this file.
+    /// note's id, so any link whose target ends in `_attachments/<id>/<file>` means this
+    /// file.
     fn linked_elsewhere(
         &self,
         id: &NoteId,
@@ -193,11 +195,13 @@ impl NoteStore {
                     continue;
                 }
             };
-            if !text.contains(&prefix) {
+            // The id is plain ASCII, so it shows in the text however the link is written.
+            if !text.contains(id.as_str()) {
                 continue;
             }
+            let targets = scan::file_targets(frontmatter::split(&text).body);
             for name in &names {
-                if links_to(&text, &prefix, name) {
+                if links_to(&targets, &prefix, name) {
                     linked.insert(name.clone());
                 }
             }
@@ -250,18 +254,13 @@ fn remove_if_empty(dir: Option<&Path>) {
     }
 }
 
-/// Whether `text` links to the file `name` under `prefix`: the name is followed by
-/// something that cannot be part of a file name in a link. A name with spaces may be
-/// written with `%20`.
-fn links_to(text: &str, prefix: &str, name: &str) -> bool {
-    let encoded = name.replace(' ', "%20");
-    [name, encoded.as_str()].iter().any(|name| {
-        let target = format!("{prefix}{name}");
-        text.match_indices(&target).any(|(at, _)| {
-            text[at + target.len()..]
-                .chars()
-                .next()
-                .is_none_or(|next| !(next.is_alphanumeric() || "._-~%+".contains(next)))
-        })
+/// Whether one of the link `targets` is the file `name` under `prefix`, relative to
+/// the note or to a folder above it.
+fn links_to(targets: &[String], prefix: &str, name: &str) -> bool {
+    let file = format!("{prefix}{name}");
+    targets.iter().any(|target| {
+        target
+            .strip_suffix(&file)
+            .is_some_and(|before| before.is_empty() || before.ends_with('/'))
     })
 }

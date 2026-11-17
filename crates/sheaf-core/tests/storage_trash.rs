@@ -290,3 +290,43 @@ fn purge_puts_back_a_file_a_note_links_to() {
     assert_eq!(fs::read(dir.path().join(&foto)).unwrap(), b"png");
     assert!(!dir.path().join(".trash/_attachments").exists());
 }
+
+#[test]
+fn links_count_as_the_app_resolves_them() {
+    let (dir, store) = store();
+    let a = create_in(&store, "", "Quelle\n");
+    let (a, _) = store.add_attachment(&a.id, "a.txt", b"a").unwrap();
+    let folder = format!("_attachments/{}", a.id);
+    let names = ["Übersicht-2026.pdf", "bild 1.png", "100%.txt", "code.txt"];
+    for name in names {
+        fs::write(dir.path().join(&folder).join(name), name).unwrap();
+    }
+    create_in(
+        &store,
+        "",
+        &format!(
+            "Nutzer\n\n[PDF]({folder}/%C3%9Cbersicht-2026.pdf)\n\
+             ![Bild](<./{folder}/bild 1.png>)\n[Prozent](./{folder}/100%25.txt)\n\n\
+             ```\n[Code]({folder}/code.txt)\n```\n"
+        ),
+    );
+
+    store.trash(&a.id, time("2026-11-16T12:00:00Z")).unwrap();
+    for name in &names[..3] {
+        assert!(dir.path().join(&folder).join(name).is_file(), "{name}");
+    }
+    assert!(
+        dir.path()
+            .join(".trash")
+            .join(&folder)
+            .join("code.txt")
+            .is_file()
+    );
+
+    store.purge(&a.id).unwrap();
+    for name in &names[..3] {
+        assert!(dir.path().join(&folder).join(name).is_file(), "{name}");
+    }
+    assert!(!dir.path().join(&folder).join("code.txt").exists());
+    assert!(!dir.path().join(".trash/_attachments").exists());
+}
