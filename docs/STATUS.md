@@ -51,8 +51,9 @@ None yet.
   `--filesystem=xdg-documents` (S4), passing an activation token to a window opened later
   by the running GPUI app (S2), reading the Settings portal inside the sandbox (S4).
 - `rust-version` goes from 1.91 to 1.92 when `krilla` is added for PDF export (S3).
-- S2 CI needs the repository secret `EDITOR_DEPLOY_KEY` (read-only deploy key on
-  `taulit/gpui-markdown-editor`); not created yet.
+- CI fetches `taulit/gpui-markdown-editor` over https without credentials, so it is red
+  until that repository is public (decided 2026-11-17; the organisation has deploy keys
+  disabled).
 - S2 review leftovers, all minor, to fix at the start of S3: in service mode the gallery
   shows the old title, or a just-trashed note, until the service's `Changed` signal
   arrives (`app/library.rs`); a second SIGTERM/SIGINT is ignored while the final save
