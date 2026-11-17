@@ -471,7 +471,7 @@ impl QuickNoteView {
             Some(Banner::SaveFailed(reason)) => tr("Not saved: {}").replace("{}", reason),
             Some(Banner::ChangedOnDisk) => tr("Changed elsewhere"),
             Some(Banner::DeletedOnDisk) => tr("Deleted elsewhere"),
-            None => tr("Saved automatically"),
+            None => tr("Saved"),
         };
         div()
             .flex()

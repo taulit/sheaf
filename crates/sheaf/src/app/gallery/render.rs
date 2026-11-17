@@ -141,17 +141,20 @@ impl GalleryView {
                     .active(view == View::List)
                     .on_click(cx.listener(|this, _, _, cx| this.set_view(View::List, cx))),
             )
-            .end(
-                FlatButton::new("new-note", IconName::Edit)
-                    .tooltip(tr("New Note"))
-                    .on_click(|_, window, cx| window.dispatch_action(Box::new(NewNote), cx)),
-            )
-            .end(
-                FlatButton::new("new-note-menu", IconName::PanDown)
-                    .tooltip(tr("New Note from Template"))
-                    .active(self.popover == Some(Popover::Templates))
-                    .on_click(toggle(Popover::Templates)),
-            )
+            // New notes never land in the trash.
+            .when(self.scope != Scope::Trash, |bar| {
+                bar.end(
+                    FlatButton::new("new-note", IconName::Edit)
+                        .tooltip(tr("New Note"))
+                        .on_click(|_, window, cx| window.dispatch_action(Box::new(NewNote), cx)),
+                )
+                .end(
+                    FlatButton::new("new-note-menu", IconName::PanDown)
+                        .tooltip(tr("New Note from Template"))
+                        .active(self.popover == Some(Popover::Templates))
+                        .on_click(toggle(Popover::Templates)),
+                )
+            })
     }
 
     /// The field: the search icon, the chips, then the text.
@@ -226,12 +229,15 @@ impl GalleryView {
     }
 
     /// "All", the folders at the top and the pinned tags; nothing if there are no
-    /// folders or tags to choose.
+    /// folders or tags to choose, or in the trash, which they do not filter.
     fn render_scope_chips(
         &self,
         tokens: &Tokens,
         cx: &mut Context<Self>,
     ) -> Option<impl IntoElement + use<>> {
+        if self.scope == Scope::Trash {
+            return None;
+        }
         let mut scopes = vec![(Scope::All, tr("All"))];
         scopes.extend(
             self.folders
