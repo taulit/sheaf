@@ -6,8 +6,9 @@
 //!
 //! - **Read** with [`notes`](Library::notes), [`search`](Library::search),
 //!   [`folders`](Library::folders), [`tags`](Library::tags), [`meta`](Library::meta),
-//!   [`body`](Library::body) (text as indexed, for previews) and
-//!   [`load`](Library::load) (the file, with the fingerprint a later save needs).
+//!   [`body`](Library::body) (text as indexed, for previews),
+//!   [`load`](Library::load) (the file, with the fingerprint a later save needs) and
+//!   [`folder_config`](Library::folder_config) (what is remembered per folder).
 //! - **Change** with [`create`](Library::create), [`save_body`](Library::save_body),
 //!   [`save_conflict_copy`](Library::save_conflict_copy),
 //!   [`sync_filename`](Library::sync_filename), [`set_pinned`](Library::set_pinned),
@@ -16,6 +17,8 @@
 //!   resolves to the note as it is afterwards. Its id can differ from the one passed
 //!   in: a file Sheaf never wrote gets its real id on the first write, so keep using
 //!   the returned one.
+//!   [`create_folder`](Library::create_folder) and
+//!   [`save_folder_config`](Library::save_folder_config) change no note.
 //! - **Follow** changes by subscribing to [`LibraryEvent`]; when a change task
 //!   resolves, the lists already contain it.
 //!
@@ -41,8 +44,8 @@ use gpui::{App, AppContext as _, Context, Entity, EventEmitter, Task};
 use jiff::tz::TimeZone;
 use jiff::{Timestamp, ZonedDateTime};
 use sheaf_core::{
-    CreateOptions, Filter, Fingerprint, Note, NoteId, NoteMeta, NoteStore, Reader, Result,
-    SearchIndex, SearchResults, Sort, WriteOptions, query,
+    CreateOptions, Filter, Fingerprint, FolderConfig, Note, NoteId, NoteMeta, NoteStore, Reader,
+    Result, SearchIndex, SearchResults, Sort, WriteOptions, query,
 };
 use zbus::Connection;
 
@@ -340,6 +343,32 @@ impl Library {
                 .to_str()?
                 .to_owned();
             Some(store.load(&rel_path).ok()?.meta)
+        })
+    }
+
+    /// The settings of the notes folder: view and sort per folder, pinned tags.
+    pub fn folder_config(&self, cx: &App) -> Task<Result<FolderConfig>> {
+        let root = self.store.root().to_owned();
+        cx.background_spawn(async move { FolderConfig::load(&root) })
+    }
+
+    pub fn save_folder_config(&self, config: FolderConfig, cx: &App) -> Task<Result<()>> {
+        let root = self.store.root().to_owned();
+        cx.background_spawn(async move { config.save(&root) })
+    }
+
+    /// Creates an empty folder (relative to the notes folder) and tells the listeners,
+    /// with no ids, so that folder lists reload.
+    pub fn create_folder(&mut self, folder: &str, cx: &mut Context<Self>) -> Task<Result<()>> {
+        let store = self.store.clone();
+        let folder = folder.to_owned();
+        cx.spawn(async move |this, cx| {
+            cx.background_spawn(async move { store.create_folder(&folder) })
+                .await?;
+            let _ = this.update(cx, |_, cx| {
+                cx.emit(LibraryEvent::Changed { ids: Vec::new() })
+            });
+            Ok(())
         })
     }
 
