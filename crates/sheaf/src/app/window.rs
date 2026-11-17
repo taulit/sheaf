@@ -102,6 +102,7 @@ impl MainWindow {
                     this.open_note(id.clone(), query.clone(), window, cx);
                 }
                 GalleryEvent::Trashed(ids) => this.offer_undo(ids.clone(), cx),
+                GalleryEvent::Failed(message) => this.toast(Toast::new(message.clone()), cx),
             });
         gallery.focus_handle(cx).focus(window, cx);
         let mut main = MainWindow {

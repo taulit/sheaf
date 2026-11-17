@@ -7,8 +7,9 @@
 //!   also while a note covers it, so it keeps its scroll position and selection.
 //! - It reads and changes notes only through the [`Library`] and reloads on every
 //!   [`LibraryEvent`].
-//! - It asks the window to open a note by emitting [`GalleryEvent::Open`] and reports
-//!   a deletion with [`GalleryEvent::Trashed`] for the window's Undo toast; creating a
+//! - It asks the window to open a note by emitting [`GalleryEvent::Open`], reports
+//!   a deletion with [`GalleryEvent::Trashed`] for the window's Undo toast and a change
+//!   that failed with [`GalleryEvent::Failed`]; creating a
 //!   note is the window's `NewNote` action, in [`current_folder`](GalleryView::current_folder).
 //! - The window calls [`set_query`](GalleryView::set_query) for a search that came
 //!   from outside (GNOME search, `sheaf` on the command line) and
@@ -77,6 +78,8 @@ pub enum GalleryEvent {
     Open { id: NoteId, query: String },
     /// These notes went to the trash; the window offers to undo it.
     Trashed(Vec<NoteId>),
+    /// A change failed; the message says why, for a toast.
+    Failed(String),
 }
 
 /// Which notes the gallery shows: chosen in the chip row or the folder popover.
@@ -971,30 +974,71 @@ impl GalleryView {
             .map(|note| (note.id.clone(), note.pinned))
             .collect();
         let pin = !notes.iter().all(|(_, pinned)| *pinned);
-        for (id, _) in notes {
-            self.library
-                .update(cx, |library, cx| library.set_pinned(&id, pin, cx))
-                .detach();
-        }
+        let changes = notes
+            .iter()
+            .map(|(id, _)| {
+                self.library
+                    .update(cx, |library, cx| library.set_pinned(id, pin, cx))
+            })
+            .collect();
+        let message = if pin {
+            tr("Could not pin the note: {}")
+        } else {
+            tr("Could not unpin the note: {}")
+        };
+        Self::report(changes, message, cx);
     }
 
     pub fn move_selection_to(&mut self, folder: &str, cx: &mut Context<Self>) {
-        for id in self.selection_ids() {
-            self.library
-                .update(cx, |library, cx| library.move_to(&id, folder, cx))
-                .detach();
-        }
+        let changes = self
+            .selection_ids()
+            .iter()
+            .map(|id| {
+                self.library
+                    .update(cx, |library, cx| library.move_to(id, folder, cx))
+            })
+            .collect();
+        Self::report(changes, tr("Could not move the note: {}"), cx);
     }
 
     pub fn duplicate_selection(&mut self, cx: &mut Context<Self>) {
-        for id in self.selection_ids() {
-            self.library
-                .update(cx, |library, cx| library.duplicate(&id, cx))
-                .detach();
-        }
+        let changes = self
+            .selection_ids()
+            .iter()
+            .map(|id| {
+                self.library
+                    .update(cx, |library, cx| library.duplicate(id, cx))
+            })
+            .collect();
+        Self::report(changes, tr("Could not duplicate the note: {}"), cx);
     }
 
-    /// Moves the selected notes to the trash; the window offers to undo it.
+    /// Waits for `changes` and, if one failed, says why in a toast: `message` with
+    /// the reason for `{}`. The Library has looked at the note's file again by then,
+    /// so the gallery shows it as it is.
+    fn report(
+        changes: Vec<Task<sheaf_core::Result<NoteMeta>>>,
+        message: String,
+        cx: &mut Context<Self>,
+    ) {
+        cx.spawn(async move |this, cx| {
+            let mut failed = None;
+            for change in changes {
+                if let Err(err) = change.await {
+                    log::error!("cannot change a note: {err}");
+                    failed.get_or_insert(err.to_string());
+                }
+            }
+            if let Some(reason) = failed {
+                let message = message.replace("{}", &reason);
+                let _ = this.update(cx, |_, cx| cx.emit(GalleryEvent::Failed(message)));
+            }
+        })
+        .detach();
+    }
+
+    /// Moves the selected notes to the trash; the window offers to undo it. If one
+    /// could not go, a toast says why instead: an Undo would hide that.
     pub fn trash_selection(&mut self, cx: &mut Context<Self>) {
         let trashing: Vec<_> = self
             .selection_ids()
@@ -1006,15 +1050,24 @@ impl GalleryView {
         }
         cx.spawn(async move |this, cx| {
             let mut trashed = Vec::new();
+            let mut failed = None;
             for task in trashing {
                 match task.await {
                     Ok(meta) => trashed.push(meta.id),
-                    Err(err) => log::error!("cannot move a note to the trash: {err}"),
+                    Err(err) => {
+                        log::error!("cannot move a note to the trash: {err}");
+                        failed.get_or_insert(err.to_string());
+                    }
                 }
             }
-            if !trashed.is_empty() {
-                let _ = this.update(cx, |_, cx| cx.emit(GalleryEvent::Trashed(trashed)));
-            }
+            let event = match failed {
+                Some(reason) => {
+                    GalleryEvent::Failed(tr("Could not move to trash: {}").replace("{}", &reason))
+                }
+                None if trashed.is_empty() => return,
+                None => GalleryEvent::Trashed(trashed),
+            };
+            let _ = this.update(cx, |_, cx| cx.emit(event));
         })
         .detach();
     }

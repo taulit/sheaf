@@ -135,6 +135,15 @@ impl TestApp {
     fn route(&mut self) -> Route {
         self.main.read_with(self.cx, |main, cx| main.route(cx))
     }
+
+    fn toast(&mut self) -> Option<String> {
+        self.main.read_with(self.cx, |main, cx| {
+            main.toasts()
+                .read(cx)
+                .shown()
+                .map(|toast| toast.message.to_string())
+        })
+    }
 }
 
 // ---- Groups, sort, scope ------------------------------------------------------------
@@ -426,6 +435,50 @@ async fn delete_moves_the_selection_to_the_trash_and_undo_restores_it(cx: &mut T
     assert_eq!(app.titles().len(), 14);
     assert!(notes.files().contains(&"Privat/Lesestoff.md".to_owned()));
     assert!(notes.files().contains(&"Arbeit/Notch-Ideen.md".to_owned()));
+}
+
+type Change = fn(&mut GalleryView, &mut gpui::Context<GalleryView>);
+
+#[gpui::test]
+async fn a_change_that_fails_says_why_and_shows_the_note_as_it_is(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let mut app = open_app(&notes, cx);
+    let changes: [(&str, &str, Change, &str); 4] = [
+        (
+            "Privat/Lesestoff.md",
+            "Lesestoff",
+            |gallery, cx| gallery.toggle_pin(cx),
+            "Could not pin the note: ",
+        ),
+        (
+            "Arbeit/Notch-Ideen.md",
+            "Notch-Ideen",
+            |gallery, cx| gallery.move_selection_to("Work", cx),
+            "Could not move the note: ",
+        ),
+        (
+            "Privat/Einkauf.md",
+            "Einkauf",
+            |gallery, cx| gallery.duplicate_selection(cx),
+            "Could not duplicate the note: ",
+        ),
+        (
+            "Reading list.md",
+            "Reading list",
+            |gallery, cx| gallery.trash_selection(cx),
+            "Could not move to trash: ",
+        ),
+    ];
+    for (path, title, change, message) in changes {
+        // Deleted by another program, still listed.
+        std::fs::remove_file(notes.dir.join(path)).unwrap();
+        app.click(title, Modifiers::control());
+        app.update(change);
+        let toast = app.toast().unwrap_or_default();
+        assert!(toast.starts_with(message), "{title}: {toast:?}");
+        assert!(!app.titles().contains(&title.to_owned()), "{title} is gone");
+    }
+    assert_eq!(app.titles().len(), 10);
 }
 
 #[gpui::test]

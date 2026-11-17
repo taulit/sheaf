@@ -173,8 +173,8 @@ pub struct Touched {
 }
 
 impl Touched {
-    /// `meta` was written. `before` is the note it replaced with its path then, `None`
-    /// for a new note.
+    /// `meta` was written. `before` is the note it started from with its path then,
+    /// looked at again; `None` for a new note.
     pub fn wrote(&mut self, before: Option<(NoteId, String)>, meta: &NoteMeta) {
         if let Some((id, rel_path)) = before {
             self.removed(id, rel_path);
@@ -610,13 +610,14 @@ impl Library {
     /// Copies a note into a new one beside it and resolves to the copy.
     pub fn duplicate(&mut self, id: &NoteId, cx: &mut Context<Self>) -> Task<Result<NoteMeta>> {
         let target = id.clone();
-        self.write(None, Effect::Keep, cx, move |store| {
+        self.write(Some(id.clone()), Effect::Keep, cx, move |store| {
             store.duplicate(&target)
         })
     }
 
     /// Runs `change` on the background executor, brings the index in line and tells
-    /// the listeners. `id` is the note the change replaces or removes, if any.
+    /// the listeners. `id` is the note the change starts from, if any: if the change
+    /// fails, the index looks at its file again.
     fn write(
         &mut self,
         id: Option<NoteId>,
@@ -624,12 +625,27 @@ impl Library {
         cx: &mut Context<Self>,
         change: impl FnOnce(&NoteStore) -> Result<NoteMeta> + Send + 'static,
     ) -> Task<Result<NoteMeta>> {
+        let lists = self.lists();
         self.run(cx, move |store, touched| {
             let before = id.and_then(|id| {
-                let rel_path = store.path_of(&id).ok()?;
+                // A file deleted elsewhere has its path only in the index.
+                let rel_path = match store.path_of(&id) {
+                    Ok(rel_path) => rel_path,
+                    Err(_) => lists.get(&id).ok()??.rel_path,
+                };
                 Some((id, rel_path))
             });
-            let meta = change(store)?;
+            let meta = match change(store) {
+                Ok(meta) => meta,
+                Err(err) => {
+                    // The file may not be what the lists show, such as deleted
+                    // elsewhere: they take it as it is.
+                    if let Some((id, rel_path)) = before {
+                        touched.note(id, rel_path);
+                    }
+                    return Err(err);
+                }
+            };
             match effect {
                 Effect::Keep => touched.wrote(before, &meta),
                 Effect::Remove => {
