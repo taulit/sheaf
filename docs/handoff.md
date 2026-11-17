@@ -15,22 +15,19 @@ Written 2026-11-17 for whoever continues without the session's context. Read
 
 ## Running
 
-S2 is in review: https://github.com/taulit/sheaf/pull/4 (against `main`; CI fails until the
-secret `EDITOR_DEPLOY_KEY` exists). S3 runs on `phase/s3-features` (branched from S2):
-the editor is at `v0.0.3` (rendered Markdown) and the S2 leftovers are fixed there.
+Nothing. All three S3 work packages are merged into `phase/s3-features` **locally**:
+the Visor module (`061a76a`), quick note, trash, smart folders and templates
+(`e584815`), export, settings, backlinks and attachments (`9c840d5`), then integrated
+and polished (`1d60611..`). Gate on 2026-11-17: fmt and clippy clean, all workspace
+tests pass, `cargo deny check` ok, `scripts/test-visor-module.sh` 22 of 22, screenshots
+regenerated and looked at, a sample PDF checked. See `docs/STATUS.md` "What works (S3)"
+and "Open".
 
-Three child agents work in their own worktrees, branched from `phase/s3-features`, and
-push their branches (`git branch -r | grep t3/`) after every commit:
+The pushes are pending because of the lost GitHub login (below): `phase/s3-features`
+is ahead of origin. S2 is still in review: https://github.com/taulit/sheaf/pull/4.
 
-- WP-B: quick note, trash view, smart folders, templates.
-- WP-C: export (Markdown, PDF with `krilla`, print), settings window, backlinks, attachments.
-- WP-D: the Visor module in `visor-module/` (Visor has the tag `api-v1`).
-
-Next: merge the three branches into `phase/s3-features` (shared files `app/window.rs`,
-`app/actions.rs`, `app/library.rs`, `tests/screenshots.rs`, `po/` will conflict; keep
-both sides, regenerate `po/` and the screenshots), run the gate, one `bug-review` over
-`git diff phase/s2-app...phase/s3-features`, fix, then the S3 PR against `main` (after
-#4 is merged; until then against `phase/s2-app` is wrong: wait or rebase).
+Next: after the login is back, push `phase/s3-features`; one `bug-review` over `git diff
+phase/s2-app...phase/s3-features`, fix; then the S3 PR against `main` once #4 is merged.
 
 ## Second and third S2 review: no blocking finding left
 
