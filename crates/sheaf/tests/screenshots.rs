@@ -27,8 +27,12 @@ use gpui::{
     linear_color_stop, linear_gradient, point, px, rgb, size,
 };
 use gpui_component::{ActiveTheme as _, Root, Theme};
+use gpui_markdown_editor::Command;
+use sheaf::app::actions::{OpenCommandPalette, ShowShortcuts};
 use sheaf::app::assets::Assets;
 use sheaf::app::chrome::AssumeClientDecorations;
+use sheaf::app::library::{Library, LibraryEvent};
+use sheaf::app::note::Popover;
 use sheaf::app::theme::size::WINDOW_RADIUS;
 use sheaf::app::window::{self, MainWindow};
 use sheaf_core::Sort;
@@ -86,6 +90,7 @@ struct Stage {
     cx: HeadlessAppContext,
     window: AnyWindowHandle,
     main: Entity<MainWindow>,
+    library: Entity<Library>,
 }
 
 impl Stage {
@@ -106,7 +111,14 @@ impl Stage {
 
 type Scene = fn(&mut Stage);
 
-const SCENES: &[(&str, Scene)] = &[("gallery", gallery), ("note", note)];
+const SCENES: &[(&str, Scene)] = &[
+    ("gallery", gallery),
+    ("note", note),
+    ("note-menu", note_menu),
+    ("note-conflict", note_conflict),
+    ("palette", palette),
+    ("shortcuts", shortcuts),
+];
 
 /// The start view with the seeded notes.
 fn gallery(_: &mut Stage) {}
@@ -123,6 +135,56 @@ fn note(stage: &mut Stage) {
     });
     let id = listing.expect("the fixture has the note");
     stage.update(|main, window, cx| main.open_note(id, String::new(), window, cx));
+}
+
+/// The note with the menu of its header open.
+fn note_menu(stage: &mut Stage) {
+    note(stage);
+    stage.update(|main, _, cx| {
+        let note = main.note().expect("the note is open").clone();
+        note.update(cx, |note, cx| note.set_popover(Some(Popover::Menu), cx));
+    });
+}
+
+/// The note after another program changed it while it had unsaved edits.
+fn note_conflict(stage: &mut Stage) {
+    note(stage);
+    let library = stage.library.clone();
+    let notes_dir = stage
+        .cx
+        .update(|cx| library.read(cx).notes_dir().to_owned());
+    stage.update(|main, window, cx| {
+        let editor = main
+            .note()
+            .expect("the note is open")
+            .read(cx)
+            .editor()
+            .clone();
+        editor.update(cx, |editor, cx| {
+            editor.command(Command::InsertText("Neu: ".into()), window, cx);
+        });
+    });
+    let path = notes_dir.join("Arbeit/Ausschreibung – offene Fragen.md");
+    let text = std::fs::read_to_string(&path).expect("the fixture has the note");
+    std::fs::write(
+        &path,
+        text.replace("Abgabe am Freitag", "Abgabe am Donnerstag"),
+    )
+    .expect("the note is writable");
+    stage.update(|main, _, cx| {
+        let id = main.note().expect("the note is open").read(cx).id().clone();
+        library.update(cx, |_, cx| cx.emit(LibraryEvent::Changed { ids: vec![id] }));
+    });
+}
+
+/// The command palette over the gallery.
+fn palette(stage: &mut Stage) {
+    stage.update(|_, window, cx| window.dispatch_action(Box::new(OpenCommandPalette), cx));
+}
+
+/// The list of keyboard shortcuts over the gallery.
+fn shortcuts(stage: &mut Stage) {
+    stage.update(|_, window, cx| window.dispatch_action(Box::new(ShowShortcuts), cx));
 }
 
 #[test]
@@ -181,6 +243,7 @@ fn capture(name: &str, dark: bool, scene: Scene) {
         cx,
         window: window.into(),
         main: main.expect("the window was built"),
+        library: library.clone(),
     };
     // The lists are there before any scene looks at them.
     let listed = stage
