@@ -23,6 +23,7 @@ pub(super) const GRID_SIDE: f32 = 24.;
 
 impl Render for GalleryView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.covers.next_frame();
         if let Some(text) = self.pending_text.take() {
             self.search
                 .update(cx, |state, cx| state.set_value(text, window, cx));

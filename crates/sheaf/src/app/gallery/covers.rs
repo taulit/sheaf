@@ -1,7 +1,8 @@
 //! The cover images of cards and list rows. A cover is decoded off the UI thread and
 //! scaled down to what a card draws at most, then kept in a small cache of the most
-//! recently drawn ones, by path. A cover that is drawn is looked at again on disk
-//! every few seconds: a replaced file shows its new image.
+//! recently drawn ones, by path: twice as many as the last frame drew, a few screens
+//! at least, and never one the last frame drew. A cover that is drawn is looked at
+//! again on disk every few seconds: a replaced file shows its new image.
 //!
 //! [`Covers`] is the cache itself; the gallery drives it (`GalleryView::cover`) and
 //! drops the images that fall out of it from the GPU.
@@ -14,8 +15,8 @@ use gpui::RenderImage;
 use image::imageops::FilterType;
 use image::{Frame, ImageReader};
 
-/// How many covers are kept: a few screens of cards.
-pub const CAPACITY: usize = 48;
+/// How many covers are kept at least: a few screens of cards.
+pub const MIN_CAPACITY: usize = 48;
 /// How often a cover that is drawn is looked at again on disk.
 pub const RECHECK: Duration = Duration::from_secs(2);
 /// The size a cover is decoded at, at most, in device pixels: twice what a card draws,
@@ -42,17 +43,28 @@ struct Entry {
     image: Option<Arc<RenderImage>>,
     busy: bool,
     checked: Instant,
+    /// The frame that last drew it.
+    drawn: u64,
 }
 
 /// The decoded covers, the least recently drawn first.
 #[derive(Debug, Default)]
 pub struct Covers {
     entries: Vec<Entry>,
+    /// Counts the frames; see [`next_frame`](Self::next_frame).
+    frame: u64,
 }
 
 impl Covers {
+    /// A new frame starts drawing: the covers [`get`](Self::get) asks for from now on
+    /// are the ones it draws.
+    pub fn next_frame(&mut self) {
+        self.frame += 1;
+    }
+
     /// The cover at `path` as last decoded, and what to do for it. Counts as drawn.
     pub fn get(&mut self, path: &Path, now: Instant) -> (Option<Arc<RenderImage>>, Wanted) {
+        let frame = self.frame;
         let Some(index) = self.entries.iter().position(|entry| entry.path == path) else {
             self.entries.push(Entry {
                 path: path.to_owned(),
@@ -60,10 +72,12 @@ impl Covers {
                 image: None,
                 busy: true,
                 checked: now,
+                drawn: frame,
             });
             return (None, Wanted::Load);
         };
         let mut entry = self.entries.remove(index);
+        entry.drawn = frame;
         let wanted = if !entry.busy && now.duration_since(entry.checked) >= RECHECK {
             entry.busy = true;
             entry.checked = now;
@@ -93,8 +107,19 @@ impl Covers {
             }
             None => dropped.extend(image),
         }
-        while self.entries.len() > CAPACITY {
-            let Some(index) = self.entries.iter().position(|entry| !entry.busy) else {
+        let frame = self.frame;
+        let drawn = self
+            .entries
+            .iter()
+            .filter(|entry| entry.drawn == frame)
+            .count();
+        let capacity = (2 * drawn).max(MIN_CAPACITY);
+        while self.entries.len() > capacity {
+            let Some(index) = self
+                .entries
+                .iter()
+                .position(|entry| !entry.busy && entry.drawn != frame)
+            else {
                 break;
             };
             dropped.extend(self.entries.remove(index).image);
@@ -173,18 +198,43 @@ mod tests {
         let mut covers = Covers::default();
         let now = Instant::now();
         let path = |index: usize| PathBuf::from(format!("/covers/{index}.png"));
-        for index in 0..CAPACITY + 10 {
+        for index in 0..MIN_CAPACITY + 10 {
+            // A frame of its own for each card, as while scrolling.
+            covers.next_frame();
             assert_eq!(covers.get(&path(index), now), (None, Wanted::Load));
             // Drawn again while it loads: no second load.
             assert_eq!(covers.get(&path(index), now).1, Wanted::Nothing);
-            let dropped = covers.loaded(&path(index), None, Some(image()));
-            assert_eq!(dropped.len(), usize::from(index >= CAPACITY));
-            assert!(covers.entries.len() <= CAPACITY);
             // The first one stays drawn, so it stays.
+            covers.get(&path(0), now);
+            let dropped = covers.loaded(&path(index), None, Some(image()));
+            assert_eq!(dropped.len(), usize::from(index >= MIN_CAPACITY));
+            assert!(covers.entries.len() <= MIN_CAPACITY);
             assert!(covers.get(&path(0), now).0.is_some());
         }
-        assert_eq!(covers.entries.len(), CAPACITY);
+        assert_eq!(covers.entries.len(), MIN_CAPACITY);
         assert!(covers.get(&path(1), now).0.is_none(), "fell out");
+    }
+
+    #[test]
+    fn more_covers_on_screen_than_the_minimum_settle() {
+        let mut covers = Covers::default();
+        let now = Instant::now();
+        let path = |index: usize| PathBuf::from(format!("/covers/{index}.png"));
+        let on_screen = MIN_CAPACITY + 8;
+        for frame in 0..5 {
+            covers.next_frame();
+            let wanted: Vec<usize> = (0..on_screen)
+                .filter(|index| covers.get(&path(*index), now).1 == Wanted::Load)
+                .collect();
+            assert_eq!(wanted.is_empty(), frame > 0, "frame {frame}: {wanted:?}");
+            for index in wanted {
+                assert!(
+                    covers.loaded(&path(index), None, Some(image())).is_empty(),
+                    "a cover on screen is never dropped"
+                );
+            }
+        }
+        assert!((0..on_screen).all(|index| covers.get(&path(index), now).0.is_some()));
     }
 
     #[test]
