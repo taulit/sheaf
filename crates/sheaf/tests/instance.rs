@@ -215,3 +215,57 @@ fn without_a_bus_the_launch_is_the_only_instance() {
     assert!(connection.is_none());
     assert!(requests.is_empty());
 }
+
+/// GNOME Shell's list of extensions, with these ones on.
+struct FakeShell {
+    on: Vec<&'static str>,
+}
+
+#[zbus::interface(name = "org.gnome.Shell.Extensions")]
+impl FakeShell {
+    fn get_extension_info(
+        &self,
+        uuid: &str,
+    ) -> std::collections::HashMap<String, zbus::OwnedVariant> {
+        if !uuid.contains('@') {
+            return std::collections::HashMap::new();
+        }
+        let state = if self.on.contains(&uuid) { 1.0 } else { 2.0 };
+        let value = zbus::OwnedVariant::try_from(zbus::Variant::from(state)).unwrap();
+        std::collections::HashMap::from([("state".to_owned(), value)])
+    }
+}
+
+#[test]
+fn the_shortcut_is_left_to_visor_only_with_visor_and_its_module_on() {
+    let Some(bus) = PrivateBus::start() else {
+        return;
+    };
+    let ask = |on: Option<Vec<&'static str>>| {
+        zbus::block_on(async {
+            let app = zbus::connection::Builder::address(bus.address.as_str())
+                .build()
+                .await
+                .unwrap();
+            let _shell = match on {
+                Some(on) => Some(
+                    zbus::connection::Builder::address(bus.address.as_str())
+                        .name("org.gnome.Shell")
+                        .serve_at("/org/gnome/Shell", FakeShell { on })
+                        .build()
+                        .await
+                        .unwrap(),
+                ),
+                None => None,
+            };
+            sheaf::app::shortcut::visor_supplies_it(&app).await
+        })
+    };
+    assert!(!ask(None), "no GNOME Shell");
+    assert!(!ask(Some(vec![])));
+    assert!(!ask(Some(vec!["visor@taulit.github.io"])));
+    assert!(ask(Some(vec![
+        "visor@taulit.github.io",
+        "sheaf-visor@taulit.github.io"
+    ])));
+}

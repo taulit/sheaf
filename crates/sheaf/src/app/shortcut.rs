@@ -9,6 +9,10 @@
 //!
 //! Where the portal is missing or the user declines, the fallback is a GNOME custom
 //! shortcut running `sheaf --quick` (Settings, Keyboard, Custom Shortcuts).
+//!
+//! With Visor and its Notes module on, Visor supplies the shortcut (its own keys, then
+//! "note") and the portal is left alone (`docs/verified.md` §1, decision 6). GNOME
+//! Shell tells which extensions are on through `org.gnome.Shell.Extensions`.
 
 use std::collections::HashMap;
 
@@ -16,6 +20,7 @@ use ashpd::desktop::CreateSessionOptions;
 use ashpd::desktop::global_shortcuts::{BindShortcutsOptions, GlobalShortcuts, NewShortcut};
 use async_channel::Sender;
 use futures_util::StreamExt as _;
+use gpui::Global;
 use sheaf_core::i18n::tr;
 use zbus::{Connection, OwnedVariant};
 
@@ -24,11 +29,71 @@ const QUICK_NOTE: &str = "quick-note";
 /// What the app proposes; the user may pick other keys.
 const TRIGGER: &str = "CTRL+SHIFT+n";
 
-/// Binds the Quick Note shortcut on `connection` and sends the activation token, if
-/// any, of each press to `presses`. Returns when the portal is missing, the shortcut
-/// was not bound, or nobody listens any more. Blocks for as long as the user takes to
-/// answer GNOME's dialog, so it runs on a thread of its own.
-pub async fn listen(connection: Connection, presses: Sender<Option<String>>) -> ashpd::Result<()> {
+/// The extensions that make Visor supply the shortcut: Visor and its Notes module.
+const VISOR: [&str; 2] = ["visor@taulit.github.io", "sheaf-visor@taulit.github.io"];
+/// `ExtensionState.ACTIVE` of GNOME Shell (`ENABLED` before GNOME 45).
+const ACTIVE: f64 = 1.;
+
+/// Set once Visor turned out to supply the shortcut; the settings say so then.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct FromVisor;
+
+impl Global for FromVisor {}
+
+/// What the shortcut thread tells the app.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Message {
+    /// Visor supplies the shortcut, so it was not bound.
+    FromVisor,
+    /// It was pressed, with the activation token if any.
+    Pressed(Option<String>),
+}
+
+/// Whether Visor and its Notes module are on in the GNOME Shell of `connection`. No
+/// shell, or an answer that does not say, is `false`.
+pub async fn visor_supplies_it(connection: &Connection) -> bool {
+    for uuid in VISOR {
+        let reply = connection
+            .call_method(
+                Some("org.gnome.Shell"),
+                "/org/gnome/Shell",
+                Some("org.gnome.Shell.Extensions"),
+                "GetExtensionInfo",
+                &(uuid,),
+            )
+            .await;
+        let info =
+            reply.and_then(|reply| reply.body().deserialize::<HashMap<String, OwnedVariant>>());
+        match info {
+            Ok(info) if is_active(&info) => {}
+            Ok(_) => return false,
+            Err(err) => {
+                log::debug!("cannot ask GNOME Shell about {uuid}: {err}");
+                return false;
+            }
+        }
+    }
+    true
+}
+
+/// Whether the `GetExtensionInfo` answer of an extension says it is on; an unknown
+/// extension's answer is empty.
+fn is_active(info: &HashMap<String, OwnedVariant>) -> bool {
+    info.get("state")
+        .and_then(|state| f64::try_from(state).ok())
+        .is_some_and(|state| state == ACTIVE)
+}
+
+/// Binds the Quick Note shortcut on `connection`, unless Visor supplies it, and sends
+/// what happens to `messages`. Returns when Visor supplies it, the portal is missing,
+/// the shortcut was not bound, or nobody listens any more. Blocks for as long as the
+/// user takes to answer GNOME's dialog, so it runs on a thread of its own.
+pub async fn listen(connection: Connection, messages: Sender<Message>) -> ashpd::Result<()> {
+    if visor_supplies_it(&connection).await {
+        log::info!("Visor supplies the Quick Note shortcut");
+        let _ = messages.send(Message::FromVisor).await;
+        return Ok(());
+    }
     let portal = GlobalShortcuts::with_connection(connection).await?;
     let session = portal
         .create_session(CreateSessionOptions::default())
@@ -55,8 +120,8 @@ pub async fn listen(connection: Connection, presses: Sender<Option<String>>) -> 
         if press.shortcut_id() != QUICK_NOTE {
             continue;
         }
-        if presses
-            .send(activation_token(press.options()))
+        if messages
+            .send(Message::Pressed(activation_token(press.options())))
             .await
             .is_err()
         {
@@ -88,6 +153,18 @@ mod tests {
                 ((*key).to_owned(), value)
             })
             .collect()
+    }
+
+    #[test]
+    fn an_extension_is_on_in_state_one() {
+        let info = |state: Variant<'static>| {
+            let value = OwnedVariant::try_from(state).expect("no file descriptors");
+            HashMap::from([("state".to_owned(), value)])
+        };
+        assert!(is_active(&info(Variant::from(1.0_f64))));
+        assert!(!is_active(&info(Variant::from(2.0_f64))));
+        assert!(!is_active(&info(Variant::from("1"))));
+        assert!(!is_active(&HashMap::new()));
     }
 
     #[test]
