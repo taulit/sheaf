@@ -62,7 +62,7 @@ use jiff::Timestamp;
 use sheaf_core::config::{FolderView, Sort as SortOrder, View};
 use sheaf_core::i18n::tr;
 use sheaf_core::query::{self, ItemKind};
-use sheaf_core::{Filter, FolderConfig, NoteId, NoteMeta, Snippet, Sort};
+use sheaf_core::{Filter, FolderConfig, NoteId, NoteMeta, Snippet};
 
 use super::actions::{
     ClearSearch, OpenSelected, Search, SelectLeft, SelectNext, SelectPrevious, SelectRight, Trash,
@@ -638,9 +638,9 @@ impl GalleryView {
         let listing: Task<sheaf_core::Result<Listing>> = if text.is_empty() {
             let sort = self.sort();
             let now = library.now();
-            let notes = library.notes(filters, index_sort(sort), cx);
+            let notes = library.notes(filters, sort, cx);
             cx.background_spawn(async move {
-                let (notes, sections) = layout::group(notes.await?, index_sort(sort), &now);
+                let (notes, sections) = layout::group(notes.await?, sort, &now);
                 Ok(Listing {
                     notes,
                     sections,
@@ -1254,14 +1254,6 @@ fn searchable_text(text: &str) -> String {
         .map(|item| &text[item.span.clone()])
         .collect::<Vec<_>>()
         .join(" ")
-}
-
-fn index_sort(sort: SortOrder) -> Sort {
-    match sort {
-        SortOrder::Modified => Sort::Modified,
-        SortOrder::Created => Sort::Created,
-        SortOrder::Title => Sort::Title,
-    }
 }
 
 impl GalleryView {

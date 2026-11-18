@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
 use crate::i18n::tr;
+pub use crate::index::Sort;
 use crate::model::NoteId;
 use crate::store::fsops;
 
@@ -114,15 +115,6 @@ pub struct FolderView {
     pub view: View,
     #[serde(flatten)]
     pub other: toml::Table,
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Sort {
-    #[default]
-    Modified,
-    Created,
-    Title,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

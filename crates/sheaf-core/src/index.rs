@@ -15,6 +15,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use jiff::{SignedDuration, Timestamp, ZonedDateTime};
+use serde::{Deserialize, Serialize};
 use tantivy::indexer::IndexWriterOptions;
 use tantivy::postings::TermInfo;
 use tantivy::query::{AllQuery, BooleanQuery, EnableScoring, Query, RangeQuery, TermQuery, Weight};
@@ -461,10 +462,12 @@ fn link_key(target: &str) -> String {
     target.trim().nfc().collect::<String>().to_lowercase()
 }
 
-/// How a listing is ordered.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+/// How a listing is ordered; also what the settings store as `sort`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Sort {
     /// Most recently modified first.
+    #[default]
     Modified,
     /// Most recently created first.
     Created,
