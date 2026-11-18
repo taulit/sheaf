@@ -3,6 +3,8 @@
 use jiff::ZonedDateTime;
 use sheaf_core::i18n::tr;
 
+use crate::app::gallery::dates::month_name;
+
 /// The day, the month by name, the year and the time of `time`, in the language of
 /// the app.
 pub fn long_date_time(time: &ZonedDateTime) -> String {
@@ -13,23 +15,6 @@ pub fn long_date_time(time: &ZonedDateTime) -> String {
         .replace("{month}", &month_name(time.month()))
         .replace("{year}", &time.year().to_string())
         .replace("{time}", &time.strftime("%H:%M").to_string())
-}
-
-fn month_name(month: i8) -> String {
-    match month {
-        1 => tr("January"),
-        2 => tr("February"),
-        3 => tr("March"),
-        4 => tr("April"),
-        5 => tr("May"),
-        6 => tr("June"),
-        7 => tr("July"),
-        8 => tr("August"),
-        9 => tr("September"),
-        10 => tr("October"),
-        11 => tr("November"),
-        _ => tr("December"),
-    }
 }
 
 #[cfg(test)]
