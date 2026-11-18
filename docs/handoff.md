@@ -22,15 +22,22 @@ measured and all met (`scripts/budgets.sh`, table in `docs/STATUS.md`), end-to-e
 scenarios automated (`scripts/e2e.sh`), packaging merged (`build-aux/`, metainfo,
 release workflow, README, `docs/release-checklist.md`), editor at `v0.1.0`.
 
-Three read-only review agents run in this checkout (2026-11-18): "S4 gate: bug review"
-(diff `phase/s3-features...phase/s4-release`), "S4 gate: spec review" (whole app against
-plan 03/04/05) and "S4 gate: simplicity review" (whole code base).
+The three S4 reviews are done (2026-11-18): bug review 0 blocking (1 major: shell
+injection through the tag name in `release.yml`; 3 minor), spec review 16 deviations not
+known before, simplicity review 18 proposals (13 low risk). A child agent ("S4 gate: fix
+review findings") works through them in this checkout, one commit and push per item:
+A bug findings 1-3, B plan gaps 4-12 (default notes folder fixed at first start, conflict
+badge, Export in the card menu, tag pinning in the app, swipe back, skip the shortcut
+portal when Visor is installed, smart-folder icon, folder rename/delete, CLI messages
+through gettext), C low-risk simplifications 13-17. Decided not to do: the `≡` menu,
+saving the window position, TypeScript for the Visor module, CLI writes through the
+service, removing the overlay of own writes or the key-wise config writer.
 
 ## Next
 
-1. Collect the three reports; fix blocking and major bug findings and the spec findings
-   that are plan requirements for 1.0; apply only the low-risk simplifications; one
-   narrow re-check of the fixes.
+1. After the fixes: translations for the eight further languages of the plan README
+   („Übersetzungen“: es, fr, pt_BR, it, pl, ru, zh_CN, ja) into `po/` and
+   `visor-module/po/` (Sonnet), then one narrow re-check of the fix commits.
 2. Gate: fmt, clippy, tests, deny, Visor tests, `scripts/budgets.sh`, `scripts/e2e.sh`,
    `scripts/screenshot.sh` (copy the untracked `docs/screenshots/gnome-search-light.png`
    aside first: the shell check scripts overwrite it).
