@@ -34,7 +34,7 @@ Sheaf is not released yet. Version 0.1.0 is being prepared: see
 - Notes in the GNOME overview, through a search provider.
 - Recently Deleted, attachments, backlinks, export to Markdown and PDF, printing.
 - A command line for scripts and AI agents, with JSON output.
-- English and German.
+- English, German, Spanish, French, Brazilian Portuguese, Italian, Polish, Russian, Simplified Chinese and Japanese (the translations other than German are machine-assisted and not yet reviewed by native speakers).
 
 ## Install
 
