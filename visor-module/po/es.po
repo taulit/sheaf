@@ -1,0 +1,99 @@
+# Spanish translation for sheaf-visor.
+# Copyright (C) 2026 The Sheaf contributors
+# This file is distributed under the same license as the sheaf-visor package.
+# Machine-assisted translation, not reviewed by a native speaker.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: sheaf-visor\n"
+"Report-Msgid-Bugs-To: https://github.com/taulit/sheaf/issues\n"
+"POT-Creation-Date: 2026-11-18 03:56+0100\n"
+"PO-Revision-Date: 2026-11-18 12:00+0100\n"
+"Last-Translator: Automatically generated\n"
+"Language-Team: Spanish\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: lib/command.js:27 lib/notes-module.js:79
+msgid "Quick note"
+msgstr "Nota rápida"
+
+#: lib/command.js:28
+msgid "Opens a small window"
+msgstr "Abre una ventana pequeña"
+
+#: lib/command.js:35
+msgid "New note in Quick Notes"
+msgstr "Nueva nota en Notas rápidas"
+
+#: lib/command.js:36
+msgid "Ctrl+Enter opens it"
+msgstr "Ctrl+Intro la abre"
+
+#: lib/notes-module.js:26
+msgid "Notes"
+msgstr "Notas"
+
+#: lib/notes-module.js:37
+msgid "note Buy milk"
+msgstr "note Comprar leche"
+
+#: lib/notes-module.js:75
+msgid "Open in Notes"
+msgstr "Abrir en Notas"
+
+#: lib/notes-module.js:90
+msgid "New note …"
+msgstr "Nueva nota …"
+
+#: lib/notes-module.js:154 lib/notes-module.js:282
+msgid "Notes is not installed"
+msgstr "Notas no está instalada"
+
+#: lib/notes-module.js:156 lib/notes-module.js:283
+msgid "Get it on Flathub"
+msgstr "Obtener en Flathub"
+
+#: lib/notes-module.js:160
+msgid "Could not load the notes"
+msgstr "No se pudieron cargar las notas"
+
+#: lib/notes-module.js:164
+msgid "Recent"
+msgstr "Recientes"
+
+#: lib/notes-module.js:165
+msgid "No notes yet"
+msgstr "Aún no hay notas"
+
+#: lib/notes-module.js:210 lib/notes-module.js:257
+msgid "Could not save the note"
+msgstr "No se pudo guardar la nota"
+
+#: lib/notes-module.js:227 lib/notes-module.js:244
+msgid "Could not open Notes"
+msgstr "No se pudo abrir Notas"
+
+#: lib/notes-module.js:254
+msgid "Saved to Quick Notes"
+msgstr "Guardada en Notas rápidas"
+
+#: lib/notes.js:22
+msgid "Untitled"
+msgstr "Sin título"
+
+#: lib/time.js:26
+msgid "Now"
+msgstr "Ahora"
+
+#: lib/time.js:27
+#, javascript-format
+msgid "%d min"
+msgstr "%d min"
+
+#: lib/time.js:34
+msgid "Yesterday"
+msgstr "Ayer"

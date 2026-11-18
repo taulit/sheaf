@@ -1,0 +1,1143 @@
+# Japanese translation for sheaf.
+# Copyright (C) 2026 The Sheaf contributors
+# This file is distributed under the same license as the sheaf package.
+# Machine-assisted translation, not reviewed by a native speaker.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: sheaf\n"
+"Report-Msgid-Bugs-To: https://github.com/taulit/sheaf/issues\n"
+"POT-Creation-Date: 2026-11-18 03:56+0100\n"
+"PO-Revision-Date: 2026-11-18 12:00+0100\n"
+"Last-Translator: Automatically generated\n"
+"Language-Team: Japanese\n"
+"Language: ja\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: crates/sheaf-core/src/config.rs:156
+msgid "Quick Notes"
+msgstr "クイックメモ"
+
+#: crates/sheaf-core/src/error.rs:40
+#, rust-format
+msgid "not found: {}"
+msgstr "見つかりません: {}"
+
+#: crates/sheaf-core/src/error.rs:41
+#, rust-format
+msgid "ambiguous reference: {}"
+msgstr "参照があいまいです: {}"
+
+#: crates/sheaf-core/src/error.rs:42
+#, rust-format
+msgid "invalid input: {}"
+msgstr "入力が無効です: {}"
+
+#: crates/sheaf-core/src/error.rs:43
+#, rust-format
+msgid "already exists: {}"
+msgstr "すでに存在します: {}"
+
+#: crates/sheaf-core/src/error.rs:44
+#, rust-format
+msgid "changed on disk: {}"
+msgstr "ディスク上で変更されました: {}"
+
+#: crates/sheaf-core/src/error.rs:45
+#, rust-format
+msgid "configuration: {}"
+msgstr "設定: {}"
+
+#: crates/sheaf-core/src/error.rs:46
+#, rust-format
+msgid "search index: {}"
+msgstr "検索インデックス: {}"
+
+#: crates/sheaf-core/src/i18n.rs:51 crates/sheaf-core/src/store/fsops.rs:173
+#: crates/sheaf-searchd/src/library.rs:189
+#: crates/sheaf/src/app/gallery/cards.rs:631
+#: crates/sheaf/src/app/gallery/trash.rs:364
+#: crates/sheaf/src/app/note/export.rs:85
+#: crates/sheaf/src/app/overlays/palette.rs:164
+#: crates/sheaf/src/cli/output.rs:183
+msgid "Untitled"
+msgstr "無題"
+
+#: crates/sheaf-core/src/i18n.rs:52 crates/sheaf-core/src/i18n.rs:53
+#, rust-format
+msgid "{} note"
+msgid_plural "{} notes"
+msgstr[0] "{} 件のメモ"
+
+#: crates/sheaf-core/src/paths.rs:77 crates/sheaf/src/app/gallery/dates.rs:55
+#: crates/sheaf/src/app/note/header.rs:96
+#: crates/sheaf/src/app/note/header.rs:252
+#: crates/sheaf/src/app/overlays/palette.rs:203
+#: crates/sheaf/src/app/quick.rs:511 crates/sheaf/src/app/window.rs:764
+msgid "Notes"
+msgstr "メモ"
+
+#: crates/sheaf-core/src/store/write.rs:216
+msgid "conflict"
+msgstr "競合"
+
+#. TRANSLATORS: the date that replaces {{date}} in a note template. Keep the words
+#. in braces; German: "{day}.{month}.{year}".
+#: crates/sheaf-core/src/templates.rs:104
+#, rust-format
+msgid "{year}-{month}-{day}"
+msgstr "{year}-{month}-{day}"
+
+#: crates/sheaf/src/app/actions.rs:170
+#: crates/sheaf/src/app/gallery/render.rs:151
+#: crates/sheaf/src/app/gallery/render.rs:409
+#: crates/sheaf/src/app/gallery/templates.rs:92
+msgid "New Note"
+msgstr "新規メモ"
+
+#: crates/sheaf/src/app/actions.rs:171
+#: crates/sheaf/src/app/overlays/shortcuts.rs:31
+#: crates/sheaf/src/app/quick.rs:110 crates/sheaf/src/app/quick.rs:485
+#: crates/sheaf/src/app/settings/view.rs:558
+#: crates/sheaf/src/app/shortcut.rs:102
+msgid "Quick Note"
+msgstr "クイックメモ"
+
+#: crates/sheaf/src/app/actions.rs:172
+msgid "New Note from Template…"
+msgstr "テンプレートから新規メモ…"
+
+#: crates/sheaf/src/app/actions.rs:173 crates/sheaf/src/app/gallery/mod.rs:264
+msgid "Search"
+msgstr "検索"
+
+#: crates/sheaf/src/app/actions.rs:174
+msgid "Pin or Unpin"
+msgstr "ピン留めまたは解除"
+
+#: crates/sheaf/src/app/actions.rs:175
+msgid "Move to Trash"
+msgstr "ゴミ箱に移動"
+
+#: crates/sheaf/src/app/actions.rs:176
+msgid "Toggle View"
+msgstr "表示を切り替え"
+
+#: crates/sheaf/src/app/actions.rs:177
+msgid "Sort Notes"
+msgstr "メモを並べ替え"
+
+#: crates/sheaf/src/app/actions.rs:178
+msgid "Show Folders"
+msgstr "フォルダーを表示"
+
+#: crates/sheaf/src/app/actions.rs:181
+msgid "Save Search as Smart Folder"
+msgstr "検索をスマートフォルダーとして保存"
+
+#: crates/sheaf/src/app/actions.rs:183
+msgid "Back to Notes"
+msgstr "メモに戻る"
+
+#: crates/sheaf/src/app/actions.rs:184
+#: crates/sheaf/src/app/overlays/shortcuts.rs:149
+#: crates/sheaf/src/app/settings/view.rs:635
+msgid "Keyboard Shortcuts"
+msgstr "キーボードショートカット"
+
+#: crates/sheaf/src/app/actions.rs:185
+#: crates/sheaf/src/app/settings/view.rs:649
+#: crates/sheaf/src/app/settings/view.rs:690
+msgid "Settings"
+msgstr "設定"
+
+#: crates/sheaf/src/app/actions.rs:186
+msgid "Close Window"
+msgstr "ウィンドウを閉じる"
+
+#: crates/sheaf/src/app/actions.rs:187 crates/sheaf/src/app/note/header.rs:148
+msgid "Export as Markdown…"
+msgstr "Markdown としてエクスポート…"
+
+#: crates/sheaf/src/app/actions.rs:188 crates/sheaf/src/app/note/header.rs:153
+msgid "Export as PDF…"
+msgstr "PDF としてエクスポート…"
+
+#: crates/sheaf/src/app/actions.rs:189 crates/sheaf/src/app/note/header.rs:158
+msgid "Print…"
+msgstr "印刷…"
+
+#: crates/sheaf/src/app/actions.rs:190 crates/sheaf/src/app/note/header.rs:186
+msgid "Attach File…"
+msgstr "ファイルを添付…"
+
+#: crates/sheaf/src/app/actions.rs:191
+msgid "Command Palette"
+msgstr "コマンドパレット"
+
+#: crates/sheaf/src/app/actions.rs:192
+msgid "Open Selected Note"
+msgstr "選択したメモを開く"
+
+#: crates/sheaf/src/app/actions.rs:193
+msgid "Select Next Note"
+msgstr "次のメモを選択"
+
+#: crates/sheaf/src/app/actions.rs:194
+msgid "Select Previous Note"
+msgstr "前のメモを選択"
+
+#: crates/sheaf/src/app/actions.rs:195
+msgid "Select Note on the Left"
+msgstr "左のメモを選択"
+
+#: crates/sheaf/src/app/actions.rs:196
+msgid "Select Note on the Right"
+msgstr "右のメモを選択"
+
+#: crates/sheaf/src/app/actions.rs:197
+msgid "Clear Search"
+msgstr "検索をクリア"
+
+#: crates/sheaf/src/app/actions.rs:198
+msgid "Close Quick Note"
+msgstr "クイックメモを閉じる"
+
+#: crates/sheaf/src/app/actions.rs:199
+msgid "Open Quick Note in Notes"
+msgstr "クイックメモをメモで開く"
+
+#: crates/sheaf/src/app/actions.rs:200
+msgid "Paste"
+msgstr "貼り付け"
+
+#: crates/sheaf/src/app/chrome.rs:296
+msgid "Close"
+msgstr "閉じる"
+
+#: crates/sheaf/src/app/gallery/cards.rs:515
+#: crates/sheaf/src/app/gallery/tags.rs:190
+#: crates/sheaf/src/app/note/header.rs:52
+msgid "Pin"
+msgstr "ピン留め"
+
+#: crates/sheaf/src/app/gallery/cards.rs:515
+#: crates/sheaf/src/app/gallery/tags.rs:190
+#: crates/sheaf/src/app/note/header.rs:52
+msgid "Unpin"
+msgstr "ピン留めを解除"
+
+#: crates/sheaf/src/app/gallery/cards.rs:518
+msgid "Move To"
+msgstr "移動先"
+
+#: crates/sheaf/src/app/gallery/cards.rs:521 crates/sheaf/src/app/quick.rs:573
+msgid "Top Level"
+msgstr "最上位"
+
+#: crates/sheaf/src/app/gallery/cards.rs:532
+msgid "Duplicate"
+msgstr "複製"
+
+#: crates/sheaf/src/app/gallery/cards.rs:535
+msgid "Export"
+msgstr "エクスポート"
+
+#: crates/sheaf/src/app/gallery/cards.rs:537
+msgid "Markdown…"
+msgstr "Markdown…"
+
+#: crates/sheaf/src/app/gallery/cards.rs:538
+msgid "PDF…"
+msgstr "PDF…"
+
+#: crates/sheaf/src/app/gallery/cards.rs:550
+#: crates/sheaf/src/app/gallery/smart.rs:378
+#: crates/sheaf/src/app/note/header.rs:192
+msgid "Delete"
+msgstr "削除"
+
+#: crates/sheaf/src/app/gallery/cards.rs:626
+msgid "Conflict"
+msgstr "競合"
+
+#: crates/sheaf/src/app/gallery/chips.rs:59
+msgid "Checklist"
+msgstr "チェックリスト"
+
+#: crates/sheaf/src/app/gallery/chips.rs:60
+msgid "Image"
+msgstr "画像"
+
+#: crates/sheaf/src/app/gallery/chips.rs:61
+msgid "Table"
+msgstr "表"
+
+#: crates/sheaf/src/app/gallery/chips.rs:62
+msgid "Attachment"
+msgstr "添付ファイル"
+
+#: crates/sheaf/src/app/gallery/chips.rs:63
+msgid "Open Tasks"
+msgstr "未完了のタスク"
+
+#: crates/sheaf/src/app/gallery/chips.rs:64
+#: crates/sheaf/src/app/gallery/dates.rs:45
+msgid "Today"
+msgstr "今日"
+
+#: crates/sheaf/src/app/gallery/chips.rs:65
+msgid "This Week"
+msgstr "今週"
+
+#: crates/sheaf/src/app/gallery/chips.rs:66
+msgid "This Month"
+msgstr "今月"
+
+#: crates/sheaf/src/app/gallery/chips.rs:67
+#: crates/sheaf/src/app/gallery/dates.rs:44
+msgid "Pinned"
+msgstr "ピン留め済み"
+
+#: crates/sheaf/src/app/gallery/dates.rs:46
+#: crates/sheaf/src/app/gallery/dates.rs:94
+msgid "Yesterday"
+msgstr "昨日"
+
+#: crates/sheaf/src/app/gallery/dates.rs:47
+msgid "Previous 7 Days"
+msgstr "過去 7 日間"
+
+#: crates/sheaf/src/app/gallery/dates.rs:48
+msgid "Previous 30 Days"
+msgstr "過去 30 日間"
+
+#. TRANSLATORS: a heading of the gallery, such as "October 2026".
+#: crates/sheaf/src/app/gallery/dates.rs:51
+#, rust-format
+msgid "{month} {year}"
+msgstr "{year}年{month}"
+
+#. TRANSLATORS: strftime format of a time of day today, as on a card.
+#: crates/sheaf/src/app/gallery/dates.rs:93
+msgid "%H:%M"
+msgstr "%H:%M"
+
+#. TRANSLATORS: strftime format of a date in this year, as on a card.
+#. Use numbers only (%m, %d) if month names would stay English.
+#: crates/sheaf/src/app/gallery/dates.rs:102
+msgid "%b %-d"
+msgstr "%-m月%-d日"
+
+#. TRANSLATORS: strftime format of a date in another year, as on a card.
+#: crates/sheaf/src/app/gallery/dates.rs:109
+msgid "%b %-d, %Y"
+msgstr "%Y年%-m月%-d日"
+
+#: crates/sheaf/src/app/gallery/dates.rs:123
+msgid "January"
+msgstr "1月"
+
+#: crates/sheaf/src/app/gallery/dates.rs:124
+msgid "February"
+msgstr "2月"
+
+#: crates/sheaf/src/app/gallery/dates.rs:125
+msgid "March"
+msgstr "3月"
+
+#: crates/sheaf/src/app/gallery/dates.rs:126
+msgid "April"
+msgstr "4月"
+
+#: crates/sheaf/src/app/gallery/dates.rs:127
+msgid "May"
+msgstr "5月"
+
+#: crates/sheaf/src/app/gallery/dates.rs:128
+msgid "June"
+msgstr "6月"
+
+#: crates/sheaf/src/app/gallery/dates.rs:129
+msgid "July"
+msgstr "7月"
+
+#: crates/sheaf/src/app/gallery/dates.rs:130
+msgid "August"
+msgstr "8月"
+
+#: crates/sheaf/src/app/gallery/dates.rs:131
+msgid "September"
+msgstr "9月"
+
+#: crates/sheaf/src/app/gallery/dates.rs:132
+msgid "October"
+msgstr "10月"
+
+#: crates/sheaf/src/app/gallery/dates.rs:133
+msgid "November"
+msgstr "11月"
+
+#: crates/sheaf/src/app/gallery/dates.rs:134
+msgid "December"
+msgstr "12月"
+
+#: crates/sheaf/src/app/gallery/dates.rs:141
+msgid "Monday"
+msgstr "月曜日"
+
+#: crates/sheaf/src/app/gallery/dates.rs:142
+msgid "Tuesday"
+msgstr "火曜日"
+
+#: crates/sheaf/src/app/gallery/dates.rs:143
+msgid "Wednesday"
+msgstr "水曜日"
+
+#: crates/sheaf/src/app/gallery/dates.rs:144
+msgid "Thursday"
+msgstr "木曜日"
+
+#: crates/sheaf/src/app/gallery/dates.rs:145
+msgid "Friday"
+msgstr "金曜日"
+
+#: crates/sheaf/src/app/gallery/dates.rs:146
+msgid "Saturday"
+msgstr "土曜日"
+
+#: crates/sheaf/src/app/gallery/dates.rs:147
+msgid "Sunday"
+msgstr "日曜日"
+
+#: crates/sheaf/src/app/gallery/folders.rs:74
+#, rust-format
+msgid "Could not rename the folder: {}"
+msgstr "フォルダーの名前を変更できませんでした: {}"
+
+#: crates/sheaf/src/app/gallery/folders.rs:108
+#, rust-format
+msgid "Could not delete the folder: {}"
+msgstr "フォルダーを削除できませんでした: {}"
+
+#: crates/sheaf/src/app/gallery/folders.rs:121
+#: crates/sheaf/src/app/gallery/render.rs:590
+msgid "Folder Name"
+msgstr "フォルダー名"
+
+#: crates/sheaf/src/app/gallery/folders.rs:149
+#: crates/sheaf/src/app/gallery/smart.rs:370
+msgid "Rename…"
+msgstr "名前を変更…"
+
+#: crates/sheaf/src/app/gallery/folders.rs:156
+msgid "Delete…"
+msgstr "削除…"
+
+#: crates/sheaf/src/app/gallery/mod.rs:139
+#: crates/sheaf/src/app/gallery/render.rs:478
+msgid "All Notes"
+msgstr "すべてのメモ"
+
+#: crates/sheaf/src/app/gallery/mod.rs:142
+#: crates/sheaf/src/app/gallery/render.rs:526
+msgid "Recently Deleted"
+msgstr "最近削除した項目"
+
+#: crates/sheaf/src/app/gallery/mod.rs:582
+#, rust-format
+msgid "Could not read the folder settings: {}"
+msgstr "フォルダーの設定を読み込めませんでした: {}"
+
+#: crates/sheaf/src/app/gallery/mod.rs:612
+#, rust-format
+msgid "Could not save the folder settings: {}"
+msgstr "フォルダーの設定を保存できませんでした: {}"
+
+#: crates/sheaf/src/app/gallery/mod.rs:1104
+#: crates/sheaf/src/app/note/mod.rs:698
+#, rust-format
+msgid "Could not pin the note: {}"
+msgstr "メモをピン留めできませんでした: {}"
+
+#: crates/sheaf/src/app/gallery/mod.rs:1106
+#: crates/sheaf/src/app/note/mod.rs:700
+#, rust-format
+msgid "Could not unpin the note: {}"
+msgstr "メモのピン留めを解除できませんでした: {}"
+
+#: crates/sheaf/src/app/gallery/mod.rs:1120
+#: crates/sheaf/src/app/note/mod.rs:703
+#, rust-format
+msgid "Could not move the note: {}"
+msgstr "メモを移動できませんでした: {}"
+
+#: crates/sheaf/src/app/gallery/mod.rs:1132
+#, rust-format
+msgid "Could not duplicate the note: {}"
+msgstr "メモを複製できませんでした: {}"
+
+#: crates/sheaf/src/app/gallery/mod.rs:1215
+#: crates/sheaf/src/app/note/mod.rs:670
+#, rust-format
+msgid "Could not move to trash: {}"
+msgstr "ゴミ箱に移動できませんでした: {}"
+
+#: crates/sheaf/src/app/gallery/preview.rs:116
+msgid "No additional text"
+msgstr "追加のテキストなし"
+
+#: crates/sheaf/src/app/gallery/render.rs:108
+msgid "Folders"
+msgstr "フォルダー"
+
+#: crates/sheaf/src/app/gallery/render.rs:120
+#: crates/sheaf/src/app/gallery/trash.rs:467
+msgid "Empty Trash"
+msgstr "ゴミ箱を空にする"
+
+#: crates/sheaf/src/app/gallery/render.rs:131
+msgid "Sort"
+msgstr "並べ替え"
+
+#: crates/sheaf/src/app/gallery/render.rs:137
+#: crates/sheaf/src/app/overlays/shortcuts.rs:29
+#: crates/sheaf/src/app/settings/view.rs:546
+msgid "Gallery"
+msgstr "ギャラリー"
+
+#: crates/sheaf/src/app/gallery/render.rs:143
+msgid "List"
+msgstr "リスト"
+
+#: crates/sheaf/src/app/gallery/render.rs:156
+msgid "New Note from Template"
+msgstr "テンプレートから新規メモ"
+
+#: crates/sheaf/src/app/gallery/render.rs:244
+msgid "All"
+msgstr "すべて"
+
+#: crates/sheaf/src/app/gallery/render.rs:383
+msgid "No results"
+msgstr "結果なし"
+
+#: crates/sheaf/src/app/gallery/render.rs:385
+#, rust-format
+msgid "No results for “{}”"
+msgstr "「{}」の結果はありません"
+
+#: crates/sheaf/src/app/gallery/render.rs:388
+msgid "No notes yet"
+msgstr "メモはまだありません"
+
+#: crates/sheaf/src/app/gallery/render.rs:389
+msgid "No notes in this folder"
+msgstr "このフォルダーにメモはありません"
+
+#: crates/sheaf/src/app/gallery/render.rs:390
+msgid "No notes with this tag"
+msgstr "このタグのメモはありません"
+
+#: crates/sheaf/src/app/gallery/render.rs:391
+msgid "No recently deleted notes"
+msgstr "最近削除したメモはありません"
+
+#: crates/sheaf/src/app/gallery/render.rs:392
+msgid "No notes in this smart folder"
+msgstr "このスマートフォルダーにメモはありません"
+
+#: crates/sheaf/src/app/gallery/render.rs:399
+msgid "Search Without Filters"
+msgstr "フィルターなしで検索"
+
+#: crates/sheaf/src/app/gallery/render.rs:553
+msgid "New Folder"
+msgstr "新規フォルダー"
+
+#: crates/sheaf/src/app/gallery/render.rs:610
+#: crates/sheaf/src/app/settings/view.rs:433
+msgid "Date Edited"
+msgstr "編集日"
+
+#: crates/sheaf/src/app/gallery/render.rs:611
+#: crates/sheaf/src/app/settings/view.rs:434
+msgid "Date Created"
+msgstr "作成日"
+
+#: crates/sheaf/src/app/gallery/render.rs:612
+#: crates/sheaf/src/app/settings/view.rs:435
+msgid "Title"
+msgstr "タイトル"
+
+#: crates/sheaf/src/app/gallery/render.rs:625
+msgid "Sort By"
+msgstr "並べ替えの基準"
+
+#: crates/sheaf/src/app/gallery/smart.rs:250
+msgid "Smart Folder Name"
+msgstr "スマートフォルダー名"
+
+#: crates/sheaf/src/app/gallery/smart.rs:418
+#: crates/sheaf/src/app/gallery/smart.rs:425
+msgid "New Smart Folder"
+msgstr "新規スマートフォルダー"
+
+#: crates/sheaf/src/app/gallery/tags.rs:98
+msgid "Tags"
+msgstr "タグ"
+
+#: crates/sheaf/src/app/gallery/templates.rs:63
+#: crates/sheaf/src/app/note/template.rs:158
+#, rust-format
+msgid "Could not open the templates: {}"
+msgstr "テンプレートを開けませんでした: {}"
+
+#: crates/sheaf/src/app/gallery/templates.rs:105
+#: crates/sheaf/src/app/note/template.rs:189
+msgid "Edit Templates…"
+msgstr "テンプレートを編集…"
+
+#: crates/sheaf/src/app/gallery/trash.rs:77
+#, rust-format
+msgid "{} day left"
+msgid_plural "{} days left"
+msgstr[0] "残り {} 日"
+
+#: crates/sheaf/src/app/gallery/trash.rs:209
+#, rust-format
+msgid "Could not open the note: {}"
+msgstr "メモを開けませんでした: {}"
+
+#: crates/sheaf/src/app/gallery/trash.rs:260
+#, rust-format
+msgid "Could not restore the note: {}"
+msgstr "メモを復元できませんでした: {}"
+
+#: crates/sheaf/src/app/gallery/trash.rs:264
+#, rust-format
+msgid "Note restored"
+msgid_plural "{} notes restored"
+msgstr[0] "{} 件のメモを復元しました"
+
+#: crates/sheaf/src/app/gallery/trash.rs:338
+#, rust-format
+msgid "Could not delete the note: {}"
+msgstr "メモを削除できませんでした: {}"
+
+#: crates/sheaf/src/app/gallery/trash.rs:358
+#, rust-format
+msgid "Deleted for good in {} day"
+msgid_plural "Deleted for good in {} days"
+msgstr[0] "{} 日後に完全に削除されます"
+
+#: crates/sheaf/src/app/gallery/trash.rs:393
+#: crates/sheaf/src/app/gallery/trash.rs:462
+#: crates/sheaf/src/app/gallery/trash.rs:588
+msgid "Delete Permanently"
+msgstr "完全に削除"
+
+#: crates/sheaf/src/app/gallery/trash.rs:400
+#: crates/sheaf/src/app/gallery/trash.rs:583
+msgid "Restore"
+msgstr "復元"
+
+#: crates/sheaf/src/app/gallery/trash.rs:427
+msgid "Back"
+msgstr "戻る"
+
+#: crates/sheaf/src/app/gallery/trash.rs:451
+msgid "This cannot be undone."
+msgstr "この操作は取り消せません。"
+
+#: crates/sheaf/src/app/gallery/trash.rs:457
+#, rust-format
+msgid "Delete this note permanently?"
+msgid_plural "Delete {} notes permanently?"
+msgstr[0] "{} 件のメモを完全に削除しますか?"
+
+#: crates/sheaf/src/app/gallery/trash.rs:466
+msgid "Delete all notes in the trash permanently?"
+msgstr "ゴミ箱内のすべてのメモを完全に削除しますか?"
+
+#: crates/sheaf/src/app/gallery/trash.rs:470
+msgid "Its notes move to Recently Deleted."
+msgstr "フォルダー内のメモは「最近削除した項目」に移動されます。"
+
+#: crates/sheaf/src/app/gallery/trash.rs:473
+#, rust-format
+msgid "Delete the folder “{}”?"
+msgstr "フォルダー「{}」を削除しますか?"
+
+#: crates/sheaf/src/app/gallery/trash.rs:474
+msgid "Delete Folder"
+msgstr "フォルダーを削除"
+
+#: crates/sheaf/src/app/gallery/trash.rs:502
+msgid "Cancel"
+msgstr "キャンセル"
+
+#: crates/sheaf/src/app/mod.rs:77
+msgid "the running app does not answer"
+msgstr "実行中のアプリが応答しません"
+
+#: crates/sheaf/src/app/mod.rs:82
+msgid "cannot open a window: neither WAYLAND_DISPLAY nor DISPLAY is set"
+msgstr "ウィンドウを開けません: WAYLAND_DISPLAY も DISPLAY も設定されていません"
+
+#: crates/sheaf/src/app/note/attach.rs:57
+msgid "Pasted Image"
+msgstr "貼り付けた画像"
+
+#: crates/sheaf/src/app/note/attach.rs:108
+msgid "Attach File"
+msgstr "ファイルを添付"
+
+#: crates/sheaf/src/app/note/attach.rs:114
+#: crates/sheaf/src/app/note/attach.rs:151 crates/sheaf/src/app/note/mod.rs:704
+#, rust-format
+msgid "Could not attach: {}"
+msgstr "添付できませんでした: {}"
+
+#: crates/sheaf/src/app/note/backlinks.rs:78
+msgid "Linked from"
+msgstr "リンク元"
+
+#: crates/sheaf/src/app/note/backlinks.rs:81
+#, rust-format
+msgid "{} note links here"
+msgid_plural "{} notes link here"
+msgstr[0] "{} 件のメモがここにリンクしています"
+
+#. TRANSLATORS: a date with its time, such as "16 November 2026, 10:12". Keep the
+#. words in braces; German: "{day}. {month} {year} um {time}".
+#: crates/sheaf/src/app/note/date.rs:13
+#, rust-format
+msgid "{day} {month} {year}, {time}"
+msgstr "{year}年{month}{day}日 {time}"
+
+#: crates/sheaf/src/app/note/export.rs:116
+msgid "Export as Markdown"
+msgstr "Markdown としてエクスポート"
+
+#: crates/sheaf/src/app/note/export.rs:117
+msgid "Export as PDF"
+msgstr "PDF としてエクスポート"
+
+#: crates/sheaf/src/app/note/export.rs:140
+msgid "Markdown"
+msgstr "Markdown"
+
+#: crates/sheaf/src/app/note/export.rs:144
+msgid "PDF"
+msgstr "PDF"
+
+#: crates/sheaf/src/app/note/export.rs:183
+msgid "Exported"
+msgstr "エクスポートしました"
+
+#: crates/sheaf/src/app/note/export.rs:183 crates/sheaf/src/app/quick.rs:556
+msgid "Open"
+msgstr "開く"
+
+#: crates/sheaf/src/app/note/export.rs:189
+#, rust-format
+msgid "Could not export: {}"
+msgstr "エクスポートできませんでした: {}"
+
+#: crates/sheaf/src/app/note/export.rs:318
+#, rust-format
+msgid "Could not print: {}"
+msgstr "印刷できませんでした: {}"
+
+#: crates/sheaf/src/app/note/export.rs:319
+msgid "Open as PDF"
+msgstr "PDF として開く"
+
+#: crates/sheaf/src/app/note/header.rs:59
+msgid "Share"
+msgstr "共有"
+
+#: crates/sheaf/src/app/note/header.rs:66
+msgid "More"
+msgstr "その他"
+
+#: crates/sheaf/src/app/note/header.rs:143
+msgid "Copy as Markdown"
+msgstr "Markdown としてコピー"
+
+#: crates/sheaf/src/app/note/header.rs:171
+#: crates/sheaf/src/app/note/header.rs:236
+msgid "Info"
+msgstr "情報"
+
+#: crates/sheaf/src/app/note/header.rs:176
+msgid "Show in Files"
+msgstr "ファイルで表示"
+
+#: crates/sheaf/src/app/note/header.rs:181
+#: crates/sheaf/src/app/note/header.rs:269
+msgid "Move to…"
+msgstr "移動先…"
+
+#: crates/sheaf/src/app/note/header.rs:233
+#, rust-format
+msgid "{} word"
+msgid_plural "{} words"
+msgstr[0] "{} 語"
+
+#: crates/sheaf/src/app/note/header.rs:238
+msgid "Words"
+msgstr "語数"
+
+#: crates/sheaf/src/app/note/header.rs:239
+msgid "Created"
+msgstr "作成日時"
+
+#: crates/sheaf/src/app/note/header.rs:240
+msgid "Modified"
+msgstr "更新日時"
+
+#: crates/sheaf/src/app/note/header.rs:241
+msgid "Path"
+msgstr "パス"
+
+#: crates/sheaf/src/app/note/header.rs:288
+msgid "File changed on disk"
+msgstr "ファイルがディスク上で変更されました"
+
+#: crates/sheaf/src/app/note/header.rs:290
+msgid "Reload"
+msgstr "再読み込み"
+
+#: crates/sheaf/src/app/note/header.rs:293
+msgid "Keep Mine"
+msgstr "自分の内容を保持"
+
+#: crates/sheaf/src/app/note/header.rs:299
+msgid "The note was deleted elsewhere"
+msgstr "メモは別の場所で削除されました"
+
+#: crates/sheaf/src/app/note/header.rs:301
+msgid "Save as New Note"
+msgstr "新規メモとして保存"
+
+#: crates/sheaf/src/app/note/header.rs:307
+#, rust-format
+msgid "Could not save: {}"
+msgstr "保存できませんでした: {}"
+
+#: crates/sheaf/src/app/note/header.rs:309
+msgid "Try Again"
+msgstr "再試行"
+
+#: crates/sheaf/src/app/note/mod.rs:493
+msgid "Copied as Markdown"
+msgstr "Markdown としてコピーしました"
+
+#: crates/sheaf/src/app/note/mod.rs:948 crates/sheaf/src/app/quick.rs:517
+msgid "Saved"
+msgstr "保存しました"
+
+#: crates/sheaf/src/app/note/mod.rs:996
+msgid "Conflict copy from syncing: move what you need into the original, then delete it."
+msgstr "同期による競合コピーです。必要な内容を元のメモに移してから、このコピーを削除してください。"
+
+#: crates/sheaf/src/app/note/template.rs:41
+msgid "Template"
+msgstr "テンプレート"
+
+#: crates/sheaf/src/app/note/template.rs:45
+msgid "Insert a note template"
+msgstr "メモのテンプレートを挿入"
+
+#: crates/sheaf/src/app/note/template.rs:112
+#, rust-format
+msgid "Could not insert the template: {}"
+msgstr "テンプレートを挿入できませんでした: {}"
+
+#: crates/sheaf/src/app/note/worker.rs:455
+msgid "the file changed elsewhere"
+msgstr "ファイルが別の場所で変更されました"
+
+#: crates/sheaf/src/app/note/worker.rs:460
+msgid "the file was deleted elsewhere"
+msgstr "ファイルが別の場所で削除されました"
+
+#: crates/sheaf/src/app/note/worker.rs:486
+#, rust-format
+msgid "not copied as the note was being left: {}"
+msgstr "メモを離れたため、コピーされませんでした: {}"
+
+#: crates/sheaf/src/app/note/worker.rs:517
+msgid "not a file"
+msgstr "ファイルではありません"
+
+#: crates/sheaf/src/app/overlays/mod.rs:196
+msgid "Ctrl"
+msgstr "Ctrl"
+
+#: crates/sheaf/src/app/overlays/mod.rs:199
+msgid "Alt"
+msgstr "Alt"
+
+#: crates/sheaf/src/app/overlays/mod.rs:202
+msgid "Shift"
+msgstr "Shift"
+
+#: crates/sheaf/src/app/overlays/mod.rs:205
+msgid "Super"
+msgstr "Super"
+
+#: crates/sheaf/src/app/overlays/mod.rs:216
+msgid "Esc"
+msgstr "Esc"
+
+#: crates/sheaf/src/app/overlays/mod.rs:217
+msgid "Del"
+msgstr "Del"
+
+#: crates/sheaf/src/app/overlays/mod.rs:218
+msgid "Backspace"
+msgstr "Backspace"
+
+#: crates/sheaf/src/app/overlays/mod.rs:219
+msgid "Enter"
+msgstr "Enter"
+
+#: crates/sheaf/src/app/overlays/mod.rs:220
+msgid "Space"
+msgstr "スペース"
+
+#: crates/sheaf/src/app/overlays/mod.rs:221
+msgid "Tab"
+msgstr "Tab"
+
+#. TRANSLATORS: an entry of the command palette that opens the note with this title.
+#: crates/sheaf/src/app/overlays/palette.rs:169
+#, rust-format
+msgid "Open note: {title}"
+msgstr "メモを開く: {title}"
+
+#: crates/sheaf/src/app/overlays/palette.rs:202
+msgid "Commands"
+msgstr "コマンド"
+
+#: crates/sheaf/src/app/overlays/palette.rs:204
+msgid "Search commands and notes"
+msgstr "コマンドとメモを検索"
+
+#: crates/sheaf/src/app/overlays/shortcuts.rs:28
+msgid "General"
+msgstr "一般"
+
+#: crates/sheaf/src/app/overlays/shortcuts.rs:30
+msgid "Note"
+msgstr "メモ"
+
+#: crates/sheaf/src/app/quick.rs:268
+#, rust-format
+msgid "Could not use the folder “{folder}”, the note is at the top: {reason}"
+msgstr "フォルダー「{folder}」を使用できなかったため、メモは最上位に置かれます: {reason}"
+
+#: crates/sheaf/src/app/quick.rs:278 crates/sheaf/src/app/window.rs:329
+#, rust-format
+msgid "Could not create a note: {}"
+msgstr "メモを作成できませんでした: {}"
+
+#: crates/sheaf/src/app/quick.rs:384
+msgid "Could not save the note"
+msgstr "メモを保存できませんでした"
+
+#: crates/sheaf/src/app/quick.rs:514
+#, rust-format
+msgid "Not saved: {}"
+msgstr "未保存: {}"
+
+#: crates/sheaf/src/app/quick.rs:515
+msgid "Changed elsewhere"
+msgstr "別の場所で変更されました"
+
+#: crates/sheaf/src/app/quick.rs:516
+msgid "Deleted elsewhere"
+msgstr "別の場所で削除されました"
+
+#: crates/sheaf/src/app/quick.rs:561
+msgid "Done"
+msgstr "完了"
+
+#: crates/sheaf/src/app/settings/view.rs:144
+msgid "Choose Notes Folder"
+msgstr "メモフォルダーを選択"
+
+#: crates/sheaf/src/app/settings/view.rs:208
+msgid "Choose a folder inside the notes folder, without “..” or a leading dot"
+msgstr "メモフォルダー内のフォルダーを選択してください。「..」や先頭のドットは使えません"
+
+#: crates/sheaf/src/app/settings/view.rs:272
+#, rust-format
+msgid "Could not save the settings: {}"
+msgstr "設定を保存できませんでした: {}"
+
+#: crates/sheaf/src/app/settings/view.rs:441
+msgid "Never"
+msgstr "なし"
+
+#: crates/sheaf/src/app/settings/view.rs:443
+#, rust-format
+msgid "{} min"
+msgstr "{} 分"
+
+#: crates/sheaf/src/app/settings/view.rs:457
+msgid "Change…"
+msgstr "変更…"
+
+#: crates/sheaf/src/app/settings/view.rs:483
+msgid "System"
+msgstr "システム"
+
+#: crates/sheaf/src/app/settings/view.rs:484
+msgid "Serif"
+msgstr "セリフ"
+
+#: crates/sheaf/src/app/settings/view.rs:485
+msgid "Mono"
+msgstr "等幅"
+
+#: crates/sheaf/src/app/settings/view.rs:494
+msgid "Narrow"
+msgstr "狭い"
+
+#: crates/sheaf/src/app/settings/view.rs:495
+msgid "Medium"
+msgstr "標準"
+
+#: crates/sheaf/src/app/settings/view.rs:496
+msgid "Wide"
+msgstr "広い"
+
+#: crates/sheaf/src/app/settings/view.rs:536
+msgid "Notes Folder"
+msgstr "メモフォルダー"
+
+#: crates/sheaf/src/app/settings/view.rs:539
+msgid "Notes are plain Markdown files in this folder"
+msgstr "メモはこのフォルダー内のプレーンな Markdown ファイルです"
+
+#: crates/sheaf/src/app/settings/view.rs:548
+msgid "Sort Notes By"
+msgstr "メモの並べ替えの基準"
+
+#: crates/sheaf/src/app/settings/view.rs:550
+msgid "Folders sorted differently in the gallery keep their order"
+msgstr "ギャラリーで別の順序に並べたフォルダーは、その順序を保ちます"
+
+#: crates/sheaf/src/app/settings/view.rs:561
+msgid "Folder"
+msgstr "フォルダー"
+
+#: crates/sheaf/src/app/settings/view.rs:562
+msgid "Where new quick notes are stored"
+msgstr "新しいクイックメモの保存先"
+
+#: crates/sheaf/src/app/settings/view.rs:567
+msgid "Continue the Last Quick Note"
+msgstr "直前のクイックメモを続ける"
+
+#: crates/sheaf/src/app/settings/view.rs:569
+msgid "A quick note this recent is continued instead of starting a new one"
+msgstr "これほど新しいクイックメモは、新規作成せずに続きから編集します"
+
+#: crates/sheaf/src/app/settings/view.rs:576
+#: crates/sheaf/src/app/settings/view.rs:583
+msgid "Shortcut from Anywhere"
+msgstr "どこからでも使えるショートカット"
+
+#: crates/sheaf/src/app/settings/view.rs:577
+msgid "Visor supplies it: open Visor and type “note”"
+msgstr "Visor が提供します: Visor を開いて「note」と入力してください"
+
+#: crates/sheaf/src/app/settings/view.rs:585
+msgid "While Notes runs. Otherwise add a custom shortcut for “sheaf --quick” in GNOME Settings, Keyboard"
+msgstr "「メモ」の実行中のみ有効です。それ以外の場合は、GNOME の設定の「キーボード」で「sheaf --quick」のカスタムショートカットを追加してください"
+
+#: crates/sheaf/src/app/settings/view.rs:603
+msgid "Editor"
+msgstr "エディター"
+
+#: crates/sheaf/src/app/settings/view.rs:605
+msgid "Font"
+msgstr "フォント"
+
+#: crates/sheaf/src/app/settings/view.rs:606
+msgid "Line Width"
+msgstr "行の幅"
+
+#: crates/sheaf/src/app/window.rs:152
+msgid "Recovered unsaved notes"
+msgstr "未保存のメモを復元しました"
+
+#: crates/sheaf/src/app/window.rs:153
+msgid "Open Folder"
+msgstr "フォルダーを開く"
+
+#: crates/sheaf/src/app/window.rs:374
+#, rust-format
+msgid "Could not open Quick Note: {}"
+msgstr "クイックメモを開けませんでした: {}"
+
+#: crates/sheaf/src/app/window.rs:396
+#, rust-format
+msgid "Note moved to trash"
+msgid_plural "{} notes moved to trash"
+msgstr[0] "{} 件のメモをゴミ箱に移動しました"
+
+#: crates/sheaf/src/app/window.rs:399
+msgid "Undo"
+msgstr "元に戻す"
+
+#: crates/sheaf/src/app/window.rs:606
+#, rust-format
+msgid "Could not open the notes folder: {}"
+msgstr "メモフォルダーを開けませんでした: {}"
+
+#: crates/sheaf/src/cli/commands/app.rs:25
+msgid "sheaf-searchd cannot be reached or found"
+msgstr "sheaf-searchd に接続できないか、見つかりません"
+
+#: crates/sheaf/src/cli/commands/mod.rs:76
+msgid "no text given: pass TEXT or pipe it on stdin"
+msgstr "テキストが指定されていません: TEXT を渡すか、stdin から入力してください"
+
+#: crates/sheaf/src/cli/commands/read.rs:140
+msgid "not a date, use YYYY-MM-DD or RFC 3339:"
+msgstr "日付ではありません。YYYY-MM-DD または RFC 3339 を使用してください:"
+
+#: crates/sheaf/src/cli/commands/write.rs:28
+msgid "the note would be empty"
+msgstr "メモが空になります"
+
+#: crates/sheaf/src/cli/commands/write.rs:64
+msgid "neither $VISUAL nor $EDITOR is set"
+msgstr "$VISUAL も $EDITOR も設定されていません"
+
+#: crates/sheaf/src/cli/dbus.rs:65
+#, rust-format
+msgid "the app does not answer: {}"
+msgstr "アプリが応答しません: {}"
+
+#: crates/sheaf/src/cli/help.rs:23
+#, rust-format
+msgid "unknown command: {}"
+msgstr "不明なコマンド: {}"
+
+#: crates/sheaf/src/cli/mod.rs:61
+msgid "--new and --quick start the app and take no command"
+msgstr "--new と --quick はアプリを起動し、コマンドは受け付けません"
+
+#: crates/sheaf/src/cli/mod.rs:66
+msgid "--json needs a command; run `sheaf help` for the commands"
+msgstr "--json にはコマンドが必要です。コマンドは `sheaf help` で確認できます"
