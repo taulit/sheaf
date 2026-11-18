@@ -15,7 +15,7 @@ use std::sync::OnceLock;
 use gpui::{App, AppContext as _, Context, Global};
 use jiff::tz::TimeZone;
 use sheaf_core::Note;
-use sheaf_core::i18n::tr;
+use sheaf_core::i18n::{ntr, tr};
 use sheaf_export::{FontFile, Fonts, Options, PageSetup};
 
 use super::{NoteEvent, NoteView, date};
@@ -68,8 +68,12 @@ impl Source {
     }
 }
 
+/// How long the title part of an export file name may be, in bytes: file names end
+/// at 255 bytes, and a number and the extension may follow.
+const STEM_BYTES: usize = 200;
+
 /// A file name for `title` with `extension`, without the characters file systems
-/// refuse.
+/// refuse and short enough for them.
 fn file_name(title: &str, extension: &str) -> String {
     let stem: String = title
         .chars()
@@ -79,8 +83,15 @@ fn file_name(title: &str, extension: &str) -> String {
             c => c,
         })
         .collect();
-    let stem = stem.split_whitespace().collect::<Vec<_>>().join(" ");
-    let stem = stem.trim_start_matches('.');
+    let mut stem = stem.split_whitespace().collect::<Vec<_>>().join(" ");
+    if stem.len() > STEM_BYTES {
+        let end = (0..=STEM_BYTES)
+            .rev()
+            .find(|&end| stem.is_char_boundary(end))
+            .unwrap_or(0);
+        stem.truncate(end);
+    }
+    let stem = stem.trim_end().trim_start_matches('.');
     let stem = if stem.is_empty() {
         tr("Untitled")
     } else {
@@ -126,14 +137,30 @@ impl Format {
     }
 }
 
+/// Where an export went.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Exported {
+    /// The file, or the folder of several notes.
+    All(PathBuf),
+    /// Into `folder`, but `failed` of the notes could not be written; `reason` says
+    /// why for the first of them.
+    Partly {
+        folder: PathBuf,
+        written: usize,
+        failed: usize,
+        reason: String,
+    },
+}
+
 /// Exports `sources`: one into the file the save dialog names, several into the
 /// folder the folder dialog names, each under its title. Blocks until the user has
 /// answered. Returns where the export went, or `None` if the dialog was cancelled.
+/// One note that cannot be written does not stop the others.
 pub fn run(
     sources: &[Source],
     format: Format,
     dialogs: &Dialogs,
-) -> Result<Option<PathBuf>, String> {
+) -> Result<Option<Exported>, String> {
     if let [source] = sources {
         let filter = match format {
             Format::Markdown => Filter {
@@ -150,16 +177,35 @@ pub fn run(
             return Ok(None);
         };
         write(&path, &format.bytes(source)?)?;
-        return Ok(Some(path));
+        return Ok(Some(Exported::All(path)));
     }
     let Some(folder) = dialogs.choose_folder(&format.title())? else {
         return Ok(None);
     };
+    export_into(&folder, sources, format).map(Some)
+}
+
+/// Writes each of `sources` into `folder` under a free name.
+fn export_into(folder: &Path, sources: &[Source], format: Format) -> Result<Exported, String> {
+    let mut failures = Vec::new();
     for source in sources {
-        let path = free_path(&folder, &source.title, format.extension());
-        write(&path, &format.bytes(source)?)?;
+        let path = free_path(folder, &source.title, format.extension());
+        if let Err(reason) = format.bytes(source).and_then(|bytes| write(&path, &bytes)) {
+            log::error!("cannot export {}: {reason}", source.title);
+            failures.push(reason);
+        }
     }
-    Ok(Some(folder))
+    let written = sources.len() - failures.len();
+    match failures.into_iter().next() {
+        None => Ok(Exported::All(folder.to_owned())),
+        Some(reason) if written == 0 => Err(reason),
+        Some(reason) => Ok(Exported::Partly {
+            folder: folder.to_owned(),
+            written,
+            failed: sources.len() - written,
+            reason,
+        }),
+    }
 }
 
 /// A path in `folder` for `title` that no file has yet: ` 2`, ` 3`, … on a collision.
@@ -177,12 +223,29 @@ fn free_path(folder: &Path, title: &str, extension: &str) -> PathBuf {
 
 /// How an export went, for a toast: "Exported" with "Open", or why it failed. A
 /// cancelled dialog says nothing.
-pub fn toast(exported: Result<Option<PathBuf>, String>) -> Option<Toast> {
+pub fn toast(exported: Result<Option<Exported>, String>) -> Option<Toast> {
+    let open = |message: String, path: PathBuf| {
+        Toast::new(message).action(tr("Open"), move |_, cx| cx.open_with_system(&path))
+    };
     match exported {
         Ok(None) => None,
-        Ok(Some(path)) => Some(Toast::new(tr("Exported")).action(tr("Open"), move |_, cx| {
-            cx.open_with_system(&path);
-        })),
+        Ok(Some(Exported::All(path))) => Some(open(tr("Exported"), path)),
+        Ok(Some(Exported::Partly {
+            folder,
+            written,
+            failed,
+            reason,
+        })) => {
+            let message = ntr(
+                "{written} exported, {failed} failed: {reason}",
+                "{written} exported, {failed} failed: {reason}",
+                u32::try_from(failed).unwrap_or(u32::MAX),
+            )
+            .replace("{written}", &written.to_string())
+            .replace("{failed}", &failed.to_string())
+            .replace("{reason}", &reason);
+            Some(open(message, folder))
+        }
         Err(reason) => {
             log::error!("cannot export: {reason}");
             Some(Toast::new(
@@ -361,6 +424,44 @@ mod tests {
         fs::write(folder.join("Reise 2.md"), "").unwrap();
         assert_eq!(free_path(folder, "Reise", "md"), folder.join("Reise 3.md"));
         assert_eq!(free_path(folder, "Reise", "pdf"), folder.join("Reise.pdf"));
+    }
+
+    #[test]
+    fn a_long_title_is_cut_to_a_file_name_that_fits() {
+        let name = file_name(&"Überlänge ".repeat(30), "pdf");
+        assert!(name.len() <= STEM_BYTES + 4, "{} bytes", name.len());
+        assert!(name.starts_with("Überlänge Überlänge") && name.ends_with(".pdf"));
+        assert_eq!(
+            file_name(&"ä".repeat(200), "md"),
+            format!("{}.md", "ä".repeat(100))
+        );
+    }
+
+    #[test]
+    fn several_notes_export_past_one_that_cannot_be_written() {
+        let folder = tempfile::tempdir().unwrap();
+        let source = |title: &str| Source {
+            title: title.to_owned(),
+            body: format!("{title}\n"),
+            folder: folder.path().to_owned(),
+            date: None,
+        };
+        let sources = [source("Eins"), source("Zwei"), source("Drei")];
+        // A link to nowhere is a free name that cannot be written.
+        std::os::unix::fs::symlink("fehlt/x", folder.path().join("Zwei.md")).unwrap();
+        let Ok(Exported::Partly {
+            written,
+            failed,
+            reason,
+            ..
+        }) = export_into(folder.path(), &sources, Format::Markdown)
+        else {
+            panic!("not a partial export");
+        };
+        assert_eq!((written, failed), (2, 1));
+        assert!(reason.contains("Zwei.md"), "{reason}");
+        assert!(folder.path().join("Eins.md").is_file());
+        assert!(folder.path().join("Drei.md").is_file());
     }
 
     #[test]
