@@ -8,7 +8,7 @@ Other sessions read only this file. Updated at the end of every phase.
 | S1 Core, searchd, CLI | merged | [#2](https://github.com/taulit/sheaf/pull/2), [#3](https://github.com/taulit/sheaf/pull/3) |
 | S2 App | merged | [#4](https://github.com/taulit/sheaf/pull/4) |
 | S3 Features | gate green, in review | `phase/s3-features` |
-| S4 Release | editor `v0.1.0`, every budget met, end-to-end scenarios pass | `phase/s4-release` |
+| S4 Release | review fixes done (2026-11-18), every budget met, end-to-end scenarios pass | `phase/s4-release` |
 
 ## What works (S1)
 
@@ -64,19 +64,42 @@ Other sessions read only this file. Updated at the end of every phase.
   ignored: screenshots, run by `scripts/screenshot.sh`), `cargo deny check` ok, Visor
   module 23 of 23.
 
+## What works (S4 review fixes, 2026-11-18)
+
+- Release workflow: the tag reaches shell only through `env`, the version must be strict
+  semver, only the draft-release job may write.
+- `sheaf-searchd` rebuilds an index removed while it was idle, and restarts for its malloc
+  tunables at most once (`SHEAF_SEARCHD_RESTARTED`).
+- The default notes folder is recorded in `config.toml` on first run (an existing
+  `Notes`/`Notizen` is taken), so a language change keeps it.
+- Sync conflict copies have a badge on card and row and a hint in the note view.
+- Card menu: Export (Markdown…, PDF…; several notes into a chosen folder).
+- Folder popover: tags with counts and a pin each (pinned tag chips have Unpin), Rename… and
+  Delete… on folders (notes to the trash with Undo; view, Quick Notes folder and smart-folder
+  searches follow a rename), New Folder / New Smart Folder stay in view.
+- Smart folders get one of ten GNOME symbols, chosen under the name field (`icon`).
+- Two-finger swipe to the right on the touchpad goes back from a note.
+- With Visor and its Notes module active, the GlobalShortcuts portal is left alone and the
+  settings say so.
+- CLI messages and core errors are translated; clap's help texts stay English.
+- Gate on 2026-11-18: fmt and clippy clean, 476 tests passed (5 ignored: screenshots, run
+  by `scripts/screenshot.sh`), `cargo deny check` ok, Visor module 23 of 23, budgets all
+  pass, `scripts/e2e.sh` 5 and 6 pass, `check-install` and `check-release 0.1.0` ok, German
+  complete (251 messages).
+
 ## Budgets
 
-Measured on 2026-11-18 with `scripts/budgets.sh` (release build, `--locked`, commit `a94a84e`;
+Measured on 2026-11-18 with `scripts/budgets.sh` (release build, `--locked`, commit `dcb7512`;
 `sheaf-searchd` with its profile `service`), Intel Core i5-11400F, 12 threads, 31 GB, Manjaro, Linux
 6.18. How each number is taken: `docs/testing.md`, "Budgets".
 
 | Budget (05 §1) | Target | Measured | |
 |---|---|---|---|
-| Cold start to the gallery, 1,000 notes | < 250 ms | 167 ms to the frame with every miniature, 119 ms to the first cards (median of 8 warm starts; first start 178 ms) | pass |
-| Memory, 1,000 notes, gallery open | < 120 MB RSS | 66.7 MB RSS, 60.9 MB PSS | pass |
-| Search p95, 10,000 notes | < 30 ms | 5.8 ms | pass |
-| Gallery scrolling, 10,000 notes | 60 fps | CPU frame p50 3.5 ms, p95 10.2 ms, max 21.5 ms, 4 of 600 over 16.7 ms | pass |
-| `sheaf-searchd` idle | < 15 MB | 12.1 MB RSS with 1,000 notes, 13.4 MB with 10,000 (PSS 7.3 and 8.7 MB) | pass |
+| Cold start to the gallery, 1,000 notes | < 250 ms | 167 ms to the frame with every miniature, 115 ms to the first cards (median of 8 warm starts; first start 172 ms) | pass |
+| Memory, 1,000 notes, gallery open | < 120 MB RSS | 67.0 MB RSS, 61.2 MB PSS | pass |
+| Search p95, 10,000 notes | < 30 ms | 6.2 ms | pass |
+| Gallery scrolling, 10,000 notes | 60 fps | CPU frame p50 3.4 ms, p95 10.7 ms, max 21.1 ms, 1 of 600 over 16.7 ms | pass |
+| `sheaf-searchd` idle | < 15 MB | 12.3 MB RSS with 1,000 notes, 13.4 MB with 10,000 (PSS 7.6 and 8.7 MB) | pass |
 
 - The start and memory are measured on the headless platform: no Wayland connection, GPU device,
   shaders or presenting, and no GPU memory. Scrolling is CPU time per frame, not frames on screen.
@@ -117,6 +140,13 @@ None yet.
 - `rust-version` is 1.95 (the editor's MSRV), above the 1.92 that `krilla` needs.
 - S3 is pushed. Its `bug-review` found 12 issues, all fixed on 2026-11-17
   (`a8c46c4..21290e9`); a narrow re-review of the fixes and the S3 PR are next.
+- After the S4 review fixes: the eight further languages of the plan README and a narrow
+  re-check of the fix commits (`8aee14a..HEAD`) are next. Folder rename gives notes without a
+  Sheaf id new provisional ids (path-derived), so their per-note view state (column widths,
+  folds) does not follow. Visor detection is read from source (`org.gnome.Shell.Extensions`),
+  not tried with a real Visor. The swipe is tested with synthetic events only; its distance
+  (140 px) and the pause that ends a gesture (180 ms) need a try on a real touchpad. Nothing in
+  the note text scrolls sideways today; if the editor gets that, the swipe has to leave it alone.
 - Not built from plan 03 §9: the Print portal is not probed beforehand (Print shows
   always; the fallback comes after a failure). Images do not show in the read-only
   trashed note (gpui-component's `TextView`, since the editor has no read-only mode).
