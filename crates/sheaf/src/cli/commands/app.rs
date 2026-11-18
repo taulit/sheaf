@@ -20,7 +20,7 @@ pub fn quick(ctx: &Ctx) -> Result {
 }
 
 pub fn reindex(ctx: &Ctx) -> Result {
-    if !dbus::reindex_service(&ctx.notes_dir) {
+    if !dbus::ask_service(&ctx.notes_dir, dbus::Ask::Reindex) {
         let searchd = crate::searchd::binary().ok_or_else(|| {
             CliError::ServiceUnavailable(tr("sheaf-searchd cannot be reached or found"))
         })?;

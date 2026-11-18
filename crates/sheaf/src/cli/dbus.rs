@@ -20,29 +20,29 @@ async fn connect() -> zbus::Result<Connection> {
     Builder::session().method_timeout(TIMEOUT).build().await
 }
 
-/// Waits until the service's index reflects the notes folder. `false` if there is no
-/// service for this folder, in which case the caller reads the folder itself.
-pub fn sync_service(notes_dir: &Path) -> bool {
-    let synced = async {
-        let conn = connect().await?;
-        match service_for(&conn, notes_dir).await? {
-            Some(service) => service.sync().await.map(|()| true),
-            None => Ok(false),
-        }
-    };
-    zbus::block_on(synced).unwrap_or(false)
+/// What [`ask_service`] asks for.
+pub enum Ask {
+    /// Wait until the index reflects the notes folder.
+    Sync,
+    /// Rebuild the index.
+    Reindex,
 }
 
-/// Asks the service for this folder to rebuild its index. `false` if there is none.
-pub fn reindex_service(notes_dir: &Path) -> bool {
-    let reindexed = async {
+/// Whether there is a service for `notes_dir` and it did what was asked. Without one
+/// the caller reads the folder itself.
+pub fn ask_service(notes_dir: &Path, ask: Ask) -> bool {
+    let asked = async {
         let conn = connect().await?;
-        match service_for(&conn, notes_dir).await? {
-            Some(service) => service.reindex().await.map(|()| true),
-            None => Ok(false),
+        let Some(service) = service_for(&conn, notes_dir).await? else {
+            return Ok(false);
+        };
+        match ask {
+            Ask::Sync => service.sync().await,
+            Ask::Reindex => service.reindex().await,
         }
+        .map(|()| true)
     };
-    zbus::block_on(reindexed).unwrap_or(false)
+    zbus::block_on(asked).unwrap_or(false)
 }
 
 pub fn open_note(id: &str) -> Result {

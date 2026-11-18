@@ -21,7 +21,7 @@ use crate::cli::output::{
 /// A reader for `search`, `list`, `tags` and `folders`: the on-disk index when the
 /// service for this folder is up to date, else an index built in memory from the files.
 fn reader(ctx: &Ctx) -> Result<Reader> {
-    if dbus::sync_service(&ctx.notes_dir)
+    if dbus::ask_service(&ctx.notes_dir, dbus::Ask::Sync)
         && let Ok(Some(index)) = ctx
             .env
             .index_dir(&ctx.notes_dir)
