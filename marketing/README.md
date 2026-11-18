@@ -22,7 +22,7 @@ cargo build --release --workspace
 cd marketing/video
 pnpm install
 pnpm record                  # public/recording-light.mp4 + scene times (record/record.sh dark for dark)
-pnpm render                  # out/sheaf-demo.mp4, 1920x1080, ~43 s, no sound
+pnpm render                  # out/sheaf-demo.mp4, 1920x1080, ~54 s, no sound
 pnpm render:square           # out/sheaf-demo-square.mp4, 1080x1080
 pnpm gif                     # docs/screenshots/sheaf-demo.gif for the README
 pnpm og                      # site/public/og.png
@@ -31,7 +31,8 @@ pnpm studio                  # edit cuts, zooms and captions in the browser
 
 Recording needs GNOME Shell 50, PipeWire and WirePlumber, GNOME Console and ffmpeg;
 ImageMagick only for the site screenshots below. Captions, cuts and
-camera moves are in [video/src/Demo.tsx](video/src/Demo.tsx); they follow the scene times
+framings are in [video/src/Demo.tsx](video/src/Demo.tsx): one fixed framing per scene,
+cross-fades between scenes, no zooming inside a scene. They follow the scene times
 in `public/recording-light.json`, so a new recording needs no edits there.
 
 Site screenshots come from the stills the recording writes:

@@ -1,6 +1,5 @@
 import {
   AbsoluteFill,
-  Easing,
   Img,
   interpolate,
   OffthreadVideo,
@@ -25,103 +24,76 @@ const sec = (ms: number) => ms / 1000;
 const f = (s: number) => Math.round(s * FPS);
 
 type Cam = { x: number; y: number; zoom: number };
-/** `sq` moves the camera for the square cut, which sees less width. */
-type Key = { at: number; cam: Cam; sq?: Partial<Cam> };
 
-/** A part of the recording, from `from` to `to` seconds, with camera keyframes in seconds from `from`. */
-type Shot = { from: number; to: number; keys: Key[]; caption?: Caption[] };
+/**
+ * A part of the recording, from `from` to `to` seconds, seen through one fixed
+ * camera. The camera only changes at a cut, never inside a shot. `sq` places it
+ * for the square cut, which sees less width.
+ */
+type Shot = { from: number; to: number; cam: Cam; sq?: Partial<Cam>; caption?: Caption[] };
 type Caption = { at: number; until?: number; title: string; sub?: string; place?: 'bottom-left' | 'bottom-right' | 'left' };
 
 // Points are in recording pixels. The Sheaf window spans x 340-2540, y 122-1562.
-const WIDE: Cam = { x: 1440, y: 830, zoom: 1.0 };
 const WINDOW: Cam = { x: 1440, y: 805, zoom: 1.13 };
-const SQ_LEFT = { x: 1100 };
+const NOTE: Cam = { x: 1240, y: 700, zoom: 1.7 };
+const SEARCH: Cam = { x: 1240, y: 640, zoom: 1.4 };
+const CONSOLE: Cam = { x: 1220, y: 845, zoom: 1.35 };
 
 const shots: Shot[] = [
   {
-    from: sec(marks.gallery) - 0.2,
-    to: sec(marks.open) + 0.2,
-    keys: [
-      { at: 0, cam: WIDE },
-      { at: 1.6, cam: WINDOW, sq: SQ_LEFT },
-      { at: 3.6, cam: { x: 1180, y: 700, zoom: 1.45 }, sq: { x: 1000 } },
-    ],
-    caption: [{ at: 0.4, title: 'Your notes as a gallery of cards', sub: 'Fast, native notes for GNOME' }],
+    from: sec(marks.gallery) + 0.3,
+    to: sec(marks.opened),
+    cam: WINDOW,
+    sq: { x: 1110, zoom: 1.0 },
+    caption: [{ at: 0.5, title: 'Your notes as a gallery of cards', sub: 'Fast, native notes for GNOME' }],
   },
   {
-    from: sec(marks.open) + 0.2,
-    to: sec(marks.back) + 0.1,
-    keys: [
-      { at: 0, cam: WINDOW },
-      { at: 1.1, cam: { x: 1150, y: 690, zoom: 1.9 } },
-      { at: 4.0, cam: { x: 1180, y: 700, zoom: 2.15 } },
-      { at: 9.0, cam: { x: 1180, y: 700, zoom: 2.15 } },
-    ],
-    caption: [{ at: 0.8, title: 'Edit right in place', sub: 'Checklists, tables, links. Saved as you type.', place: 'bottom-right' }],
+    from: sec(marks.opened),
+    to: sec(marks.back) + 0.2,
+    cam: NOTE,
+    sq: { x: 1150, zoom: 1.5 },
+    caption: [{ at: 0.6, title: 'Edit right in place', sub: 'Checklists, tables, links. Saved as you type.', place: 'bottom-right' }],
   },
   {
-    from: sec(marks.back) + 0.1,
-    to: sec(marks.clear) - 0.1,
-    keys: [
-      { at: 0, cam: WINDOW },
-      { at: 1.4, cam: { x: 1150, y: 600, zoom: 1.6 }, sq: { x: 1050, zoom: 1.4 } },
-      { at: 11, cam: { x: 1150, y: 640, zoom: 1.55 }, sq: { x: 1050, zoom: 1.4 } },
-    ],
+    from: sec(marks.search) - 0.6,
+    to: sec(marks.clear),
+    cam: SEARCH,
+    sq: { x: 1030 },
     caption: [
-      { at: 1.3, until: sec(marks.filter) - sec(marks.back) - 0.1, title: 'Search that forgives typos', sub: 'Results with every key' },
-      { at: sec(marks.filter) - sec(marks.back) + 1.8, title: '#tags and filters, in milliseconds', sub: '~6 ms with 10,000 notes' },
+      { at: 0.6, until: sec(marks.filter) - sec(marks.search) + 0.4, title: 'Search that forgives typos', sub: 'Results with every key' },
+      { at: sec(marks.filter) - sec(marks.search) + 3.2, title: '#tags and filters, in milliseconds', sub: '~6 ms with 10,000 notes' },
     ],
   },
   {
-    from: sec(marks.files) + 0.3,
+    from: sec(marks.ls) - 0.8,
     to: sec(marks.end) + 0.3,
-    keys: [
-      { at: 0, cam: WINDOW },
-      { at: 1.4, cam: { x: 1200, y: 845, zoom: 1.35 }, sq: { x: 1340, zoom: 1.2 } },
-      { at: 5.0, cam: { x: 1200, y: 845, zoom: 1.35 }, sq: { x: 1340, zoom: 1.2 } },
-      { at: 6.2, cam: { x: 1220, y: 860, zoom: 1.42 }, sq: { x: 1340, zoom: 1.25 } },
-    ],
+    cam: CONSOLE,
+    sq: { x: 1340, zoom: 1.2 },
     caption: [{ at: 0.6, title: 'Every note is a plain Markdown file', sub: 'Sync it, grep it, open it in any editor.', place: 'left' }],
   },
 ];
 
-const INTRO = f(2.4);
-const OUTRO = f(3.8);
-const FADE = 8;
+const INTRO = f(2.6);
+const OUTRO = f(4);
+// Shots overlap by this much and cross-fade.
+const FADE = 14;
 
 const shotFrames = (s: Shot) => f(s.to - s.from);
-const shotsDuration = shots.reduce((sum, s) => sum + shotFrames(s), 0);
-export const demoDuration = INTRO + shotsDuration + OUTRO;
+const sequenceLength = (list: Shot[]) => list.reduce((sum, s) => sum + shotFrames(s), 0) - FADE * (list.length - 1);
+const shotsDuration = sequenceLength(shots);
+export const demoDuration = INTRO + shotsDuration + OUTRO - FADE;
 
-const camAt = (input: Key[], t: number, square: boolean): Cam => {
-  // The square cut zooms half as far and may sit elsewhere.
-  const keys = input.map((k) => {
-    if (!square) return k;
-    const c = { ...k.cam, ...k.sq };
-    return { ...k, cam: { ...c, zoom: 1 + (c.zoom - 1) * 0.5 } };
-  });
-  if (t <= keys[0].at) return keys[0].cam;
-  for (let i = 1; i < keys.length; i++) {
-    const a = keys[i - 1];
-    const b = keys[i];
-    if (t <= b.at) {
-      const p = interpolate(t, [a.at, b.at], [0, 1], { easing: Easing.inOut(Easing.cubic) });
-      return {
-        x: a.cam.x + (b.cam.x - a.cam.x) * p,
-        y: a.cam.y + (b.cam.y - a.cam.y) * p,
-        zoom: a.cam.zoom + (b.cam.zoom - a.cam.zoom) * p,
-      };
-    }
-  }
-  return keys[keys.length - 1].cam;
+const camFor = (shot: Shot, square: boolean): Cam => {
+  if (!square) return shot.cam;
+  const c = { ...shot.cam, ...shot.sq };
+  return { ...c, zoom: 1 + (c.zoom - 1) * 0.5 };
 };
 
-/** Shows the recording through a moving camera, filling the frame. */
+/** Shows the recording through the shot's fixed camera, filling the frame. */
 const Footage: React.FC<{ shot: Shot }> = ({ shot }) => {
-  const frame = useCurrentFrame();
   const { width, height } = useVideoConfig();
   const square = width / height < 1.2;
-  const cam = camAt(shot.keys, frame / FPS, square);
+  const cam = camFor(shot, square);
   // Zoom 1 shows the whole recording height.
   const base = Math.max(width / REC_W, height / REC_H) * (square ? 1.08 : 1);
   const s = base * cam.zoom;
@@ -260,13 +232,14 @@ const Shots: React.FC<{ list: Shot[]; captions: boolean }> = ({ list, captions }
         const d = shotFrames(shot);
         const el = (
           <Sequence key={i} from={start} durationInFrames={d}>
-            <Fade duration={d}>
+            {/* Each shot fades in over the previous one; only the last fades out. */}
+            <Fade duration={d} fadeIn={i > 0} fadeOut={false}>
               <Footage shot={shot} />
-              {captions ? shot.caption?.map((c) => <CaptionView key={c.title} caption={c} end={d} />) : null}
+              {captions ? shot.caption?.map((c) => <CaptionView key={c.title} caption={c} end={d - FADE} />) : null}
             </Fade>
           </Sequence>
         );
-        start += d;
+        start += d - FADE;
         return el;
       })}
     </>
@@ -275,40 +248,31 @@ const Shots: React.FC<{ list: Shot[]; captions: boolean }> = ({ list, captions }
 
 export const Demo: React.FC = () => (
   <AbsoluteFill style={{ backgroundColor: '#0b2459' }}>
+    <Sequence from={INTRO - FADE} durationInFrames={shotsDuration}>
+      <Shots list={shots} captions />
+    </Sequence>
     <Sequence durationInFrames={INTRO}>
       <Title lines={['Sheaf', 'Fast, native notes for GNOME']} duration={INTRO} />
     </Sequence>
-    <Sequence from={INTRO} durationInFrames={shotsDuration}>
-      <Shots list={shots} captions />
-    </Sequence>
-    <Sequence from={INTRO + shotsDuration} durationInFrames={OUTRO}>
-      <Title
-        lines={['Sheaf', 'Plain Markdown. Native speed.']}
-        small={['Free and open source · GPL-3.0', 'github.com/taulit/sheaf']}
-        duration={OUTRO + FADE}
-      />
+    <Sequence from={INTRO - FADE + shotsDuration - FADE} durationInFrames={OUTRO}>
+      <Fade duration={OUTRO} fadeOut={false}>
+        <Title
+          lines={['Sheaf', 'Plain Markdown. Native speed.']}
+          small={['Free and open source · GPL-3.0', 'github.com/taulit/sheaf']}
+          duration={OUTRO + FADE}
+        />
+      </Fade>
     </Sequence>
   </AbsoluteFill>
 );
 
-// The GIF: gallery, typo search, then editing, without captions or title cards.
+// The GIF: gallery and opening a note, editing it, then the typo search. No captions.
 const gifShots: Shot[] = [
-  { ...shots[0], to: shots[0].from + 2.6, keys: [{ at: 0, cam: WINDOW }] },
-  {
-    from: sec(marks.typo) - 0.3,
-    to: sec(marks.filter) - 0.2,
-    keys: [{ at: 0, cam: { x: 1150, y: 640, zoom: 1.45 } }],
-  },
-  {
-    from: sec(marks.open) + 0.2,
-    to: sec(marks.back) - 0.6,
-    keys: [
-      { at: 0, cam: WINDOW },
-      { at: 1.1, cam: { x: 1170, y: 700, zoom: 1.8 } },
-    ],
-  },
+  { from: sec(marks.open) - 2.2, to: sec(marks.opened), cam: WINDOW },
+  { from: sec(marks.check) - 0.4, to: sec(marks.type) + 5.6, cam: NOTE },
+  { from: sec(marks.search) - 0.3, to: sec(marks.filter) - 0.5, cam: SEARCH },
 ];
-export const gifDuration = gifShots.reduce((sum, s) => sum + shotFrames(s), 0);
+export const gifDuration = sequenceLength(gifShots);
 
 export const Gif: React.FC = () => (
   <AbsoluteFill style={{ backgroundColor: '#0b2459' }}>

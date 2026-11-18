@@ -67,58 +67,60 @@ done
 shell_eval "Main.overview.visible" | grep -q false || { echo "overview still open" >&2; exit 1; }
 printf '{\n' >"$marks"; sep=''
 
+# Calm pacing: slow pointer moves, a pause after every action so the viewer sees
+# what changed. The video holds one camera framing per scene.
 mark gallery
-sleep 1.5
+sleep 2.5
 shell_shot "$DEMO_OUT/stills/gallery-$DEMO_SCHEME.png"
-run "demo.move(560, 420, 900)"
-sleep 0.4
-run "demo.move(320, 342, 700)"
-sleep 0.5
+run "demo.move(700, 300, 1400)"
+sleep 1.0
+run "demo.move(320, 342, 1400)"
+sleep 0.8
 mark open
 run "demo.click(320, 342, 200)"
-sleep 1.2
+sleep 2.0
+mark opened
 shell_shot "$DEMO_OUT/stills/note-$DEMO_SCHEME.png"
-mark check
-run "demo.click(428, 295, 700)"
 sleep 0.8
+mark check
+run "demo.click(428, 295, 1200)"
+sleep 1.8
 mark type
-run "demo.click(608, 326, 500)"
+run "demo.click(608, 326, 1000)"
 run "demo.key('End')"
 run "demo.key('Return')"
-run "demo.type('Ask GNOME users for feedback', 75)"
-sleep 1.5
+sleep 0.4
+run "demo.type('Ask GNOME users for feedback', 110)"
+sleep 2.5
 shell_shot "$DEMO_OUT/stills/edit-$DEMO_SCHEME.png"
 mark back
 run "demo.key('Escape')"
-sleep 1.2
+sleep 2.2
 mark search
-run "demo.move(1000, 600, 500)"
-run "demo.type('ramen', 110)"
-sleep 1.4
-mark typo
-run "demo.key('a', ['Control'])"
-run "demo.type('banan bred', 110)"
-sleep 1.6
+run "demo.move(1000, 600, 800)"
+run "demo.type('banan bred', 160)"
+sleep 3.0
 shell_shot "$DEMO_OUT/stills/search-$DEMO_SCHEME.png"
 mark filter
 run "demo.key('a', ['Control'])"
-run "demo.type('#recipes has:table', 90)"
-sleep 1.8
+run "demo.type('#recipes has:checklist', 120)"
+sleep 3.2
 mark clear
 run "demo.key('Escape')"
-sleep 1.0
+sleep 1.5
 mark files
 SHELL=/bin/bash kgx -- bash >"$HOME/kgx.log" 2>&1 &
 shell_wait_for "$windows.some(w => w.get_wm_class() === 'org.gnome.Console')" 15
 # Console shows its size for a moment after it opens; wait until that is gone.
-sleep 2.2
-run "demo.type('ls *', 90)"
+sleep 2.4
+mark ls
+run "demo.type('ls *', 140)"
 run "demo.key('Return')"
-sleep 2.6
+sleep 3.0
 mark cat
-run "demo.type('cat Work/Launch*', 80)"
+run "demo.type('cat Work/Launch*', 110)"
 run "demo.key('Return')"
-sleep 3.2
+sleep 4.5
 shell_shot "$DEMO_OUT/stills/files-$DEMO_SCHEME.png"
 mark end
 sleep 0.5

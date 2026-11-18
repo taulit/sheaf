@@ -1,14 +1,15 @@
 {
-  "gallery": 1880,
-  "open": 6494,
-  "check": 8640,
-  "type": 10352,
-  "back": 15808,
-  "search": 17116,
-  "typo": 19685,
-  "filter": 23367,
-  "clear": 27238,
-  "files": 28345,
-  "cat": 34647,
-  "end": 40217
+  "gallery": 1897,
+  "open": 9582,
+  "opened": 12003,
+  "check": 13275,
+  "type": 16512,
+  "back": 25316,
+  "search": 27635,
+  "filter": 33875,
+  "clear": 40455,
+  "files": 42070,
+  "ls": 45209,
+  "cat": 49015,
+  "end": 56209
 }
