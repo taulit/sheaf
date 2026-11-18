@@ -10,7 +10,7 @@ use gpui::{
 use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::menu::{PopupMenu, PopupMenuItem};
 use sheaf_core::FolderConfig;
-use sheaf_core::i18n::tr;
+use sheaf_core::i18n::{ntr, tr};
 
 use super::trash::Confirm;
 use super::{GalleryEvent, GalleryView, Scope};
@@ -31,6 +31,17 @@ fn renamed_path(folder: &str, name: &str) -> String {
         Some((parent, _)) => format!("{parent}/{name}"),
         None => name.to_owned(),
     }
+}
+
+/// "3 files stayed in the folder", for a toast.
+fn kept_message(kept: usize) -> String {
+    let count = u32::try_from(kept).unwrap_or(u32::MAX);
+    ntr(
+        "{} file stayed in the folder",
+        "{} files stayed in the folder",
+        count,
+    )
+    .replace("{}", &count.to_string())
 }
 
 impl GalleryView {
@@ -56,7 +67,17 @@ impl GalleryView {
         cx.spawn(async move |this, cx| {
             let renamed = renaming.await;
             let _ = this.update(cx, |this, cx| match renamed {
-                Ok(()) => {
+                Ok(unreadable) => {
+                    if unreadable > 0 {
+                        let count = u32::try_from(unreadable).unwrap_or(u32::MAX);
+                        let message = ntr(
+                            "Renamed; {} note could not be read and is missing from search",
+                            "Renamed; {} notes could not be read and are missing from search",
+                            count,
+                        )
+                        .replace("{}", &count.to_string());
+                        cx.emit(GalleryEvent::Notice(message));
+                    }
                     let (old, new) = (from.clone(), to.clone());
                     this.change_config(
                         move |config: &mut FolderConfig| config.rename_folder(&old, &new),
@@ -98,10 +119,11 @@ impl GalleryView {
         }
         cx.spawn(async move |this, cx| {
             let event = match deleting.await {
-                Ok(trashed) if trashed.is_empty() => return,
-                Ok(trashed) => {
-                    GalleryEvent::Trashed(trashed.into_iter().map(|meta| meta.id).collect())
-                }
+                Ok(deleted) if deleted.trashed.is_empty() => return,
+                Ok(deleted) => GalleryEvent::Trashed {
+                    ids: deleted.trashed.into_iter().map(|meta| meta.id).collect(),
+                    kept: (deleted.kept > 0).then(|| kept_message(deleted.kept)),
+                },
                 Err(err) => {
                     log::error!("cannot delete the folder: {err}");
                     GalleryEvent::Failed(

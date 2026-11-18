@@ -88,8 +88,12 @@ const ROW_HEIGHT_HINT: f32 = 270.;
 pub enum GalleryEvent {
     /// Open this note; `query` is the search it was found with, or empty.
     Open { id: NoteId, query: String },
-    /// These notes went to the trash; the window offers to undo it.
-    Trashed(Vec<NoteId>),
+    /// These notes went to the trash; the window offers to undo it. `kept` is what
+    /// the toast adds, such as the files that stayed in a deleted folder.
+    Trashed {
+        ids: Vec<NoteId>,
+        kept: Option<String>,
+    },
     /// A change failed; the message says why, for a toast.
     Failed(String),
     /// A change worth telling, such as notes restored, for a toast.
@@ -1215,7 +1219,10 @@ impl GalleryView {
                     GalleryEvent::Failed(tr("Could not move to trash: {}").replace("{}", &reason))
                 }
                 None if trashed.is_empty() => return,
-                None => GalleryEvent::Trashed(trashed),
+                None => GalleryEvent::Trashed {
+                    ids: trashed,
+                    kept: None,
+                },
             };
             let _ = this.update(cx, |_, cx| cx.emit(event));
         })

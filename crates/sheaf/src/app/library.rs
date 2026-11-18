@@ -207,6 +207,15 @@ impl Touched {
     }
 }
 
+/// What [`Library::delete_folder`] did.
+#[derive(Debug)]
+pub struct DeletedFolder {
+    /// The notes now in the trash.
+    pub trashed: Vec<NoteMeta>,
+    /// The files that stayed in the folder, which stays with them.
+    pub kept: usize,
+}
+
 pub struct Library {
     store: Arc<NoteStore>,
     reader: Reader,
@@ -554,50 +563,61 @@ impl Library {
         })
     }
 
-    /// Renames or moves the folder `from` to `to` with every note in it.
+    /// Renames or moves the folder `from` to `to` with every note in it. Once the
+    /// folder is renamed, that is done: resolves to the number of notes in it that
+    /// could not be read and so are not indexed under the new path.
     pub fn rename_folder(
         &mut self,
         from: &str,
         to: &str,
         cx: &mut Context<Self>,
-    ) -> Task<Result<()>> {
+    ) -> Task<Result<usize>> {
         let (from, to) = (from.to_owned(), to.to_owned());
         self.run(cx, move |store, touched| {
             for rel_path in paths_in(store, &from)? {
                 touched.paths.push(rel_path);
             }
             store.rename_folder(&from, &to)?;
-            for rel_path in paths_in(store, &to)? {
-                let id = store.load(&rel_path)?.meta.id;
-                touched.note(id, rel_path);
+            let moved = paths_in(store, &to).unwrap_or_else(|err| {
+                log::warn!("cannot list the renamed folder: {err}");
+                Vec::new()
+            });
+            let mut unreadable = 0;
+            for rel_path in moved {
+                match store.load(&rel_path) {
+                    Ok(note) => touched.note(note.meta.id, rel_path),
+                    Err(err) => {
+                        log::warn!("cannot read {rel_path}: {err}");
+                        unreadable += 1;
+                    }
+                }
             }
-            Ok(())
+            Ok(unreadable)
         })
     }
 
     /// Moves every note in `folder` to the trash and removes the folder, unless files
-    /// that are not notes are left in it. Resolves to the trashed notes.
+    /// are left in it: files that are not notes, or notes that could not be read.
     pub fn delete_folder(
         &mut self,
         folder: &str,
         cx: &mut Context<Self>,
-    ) -> Task<Result<Vec<NoteMeta>>> {
+    ) -> Task<Result<DeletedFolder>> {
         let folder = folder.to_owned();
         let now = self.now().timestamp();
         self.run(cx, move |store, touched| {
             let paths = paths_in(store, &folder)?;
-            let trashed = store.delete_folder(&folder, now);
-            // The notes trashed before a failure are gone from the folder too.
+            let trashed = store.delete_folder(&folder, now)?;
             for rel_path in paths {
                 if !store.root().join(&rel_path).exists() {
                     touched.paths.push(rel_path);
                 }
             }
-            let trashed = trashed?;
             for meta in &trashed {
                 touched.tell(meta.id.clone());
             }
-            Ok(trashed)
+            let kept = count_files(&store.root().join(&folder));
+            Ok(DeletedFolder { trashed, kept })
         })
     }
 
@@ -776,6 +796,20 @@ fn paths_in(store: &NoteStore, folder: &str) -> Result<Vec<String>> {
         .map(|entry| entry.rel_path)
         .filter(|rel_path| rel_path.starts_with(&inside))
         .collect())
+}
+
+/// The files under `dir`, in its folders too; none if it is gone.
+fn count_files(dir: &Path) -> usize {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return 0;
+    };
+    entries
+        .flatten()
+        .map(|entry| match entry.file_type() {
+            Ok(kind) if kind.is_dir() => count_files(&entry.path()),
+            _ => 1,
+        })
+        .sum()
 }
 
 /// What a task of the Library resolves to when the app closed before it ran.

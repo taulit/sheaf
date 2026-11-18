@@ -255,8 +255,8 @@ impl NoteStore {
 
     /// Moves every note in the folder to the trash and removes the folder.
     ///
-    /// Returns the trashed notes. Files that are not notes are never deleted; if any
-    /// remain, the folder stays.
+    /// Returns the trashed notes. Files that are not notes are never deleted, nor are
+    /// notes that cannot be read or trashed; if any remain, the folder stays.
     pub fn delete_folder(&self, folder: &str, now: Timestamp) -> Result<Vec<NoteMeta>> {
         let folder = named_folder(folder)?;
         let dir = self.abs(&folder);
@@ -267,8 +267,13 @@ impl NoteStore {
         let mut trashed = Vec::new();
         for entry in self.walk()? {
             if entry.rel_path.starts_with(&inside) {
-                let note = self.load(&entry.rel_path)?;
-                trashed.push(self.trash_note(note, now)?);
+                match self
+                    .load(&entry.rel_path)
+                    .and_then(|note| self.trash_note(note, now))
+                {
+                    Ok(meta) => trashed.push(meta),
+                    Err(err) => log::warn!("{} stays in its folder: {err}", entry.rel_path),
+                }
             }
         }
         remove_empty_dirs(&dir)?;

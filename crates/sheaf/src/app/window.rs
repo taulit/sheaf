@@ -391,10 +391,13 @@ impl MainWindow {
     }
 
     /// Tells that `ids` went to the trash, with an Undo that puts them back.
-    fn offer_undo(&mut self, ids: Vec<NoteId>, cx: &mut Context<Self>) {
+    fn offer_undo(&mut self, ids: Vec<NoteId>, kept: Option<&str>, cx: &mut Context<Self>) {
         let count = u32::try_from(ids.len()).unwrap_or(u32::MAX);
-        let message = ntr("Note moved to trash", "{} notes moved to trash", count)
+        let mut message = ntr("Note moved to trash", "{} notes moved to trash", count)
             .replace("{}", &count.to_string());
+        if let Some(kept) = kept {
+            message = format!("{message} · {kept}");
+        }
         let library = self.library.clone();
         let toast = Toast::new(message).action(tr("Undo"), move |_, cx| {
             for id in &ids {
@@ -434,7 +437,7 @@ impl MainWindow {
             NoteEvent::Search(query) => self.search_in_gallery(Some(query), window, cx),
             NoteEvent::Trashed(trashed) => {
                 self.back(window, cx);
-                self.offer_undo(vec![trashed.id.clone()], cx);
+                self.offer_undo(vec![trashed.id.clone()], None, cx);
             }
             NoteEvent::Toast(toast) => self.toast(toast.clone(), cx),
         }
@@ -549,7 +552,9 @@ impl MainWindow {
             GalleryEvent::Open { id, query } => {
                 self.open_note(id.clone(), query.clone(), window, cx);
             }
-            GalleryEvent::Trashed(ids) => self.offer_undo(ids.clone(), cx),
+            GalleryEvent::Trashed { ids, kept } => {
+                self.offer_undo(ids.clone(), kept.as_deref(), cx);
+            }
             GalleryEvent::Failed(message) | GalleryEvent::Notice(message) => {
                 self.toast(Toast::new(message.clone()), cx);
             }

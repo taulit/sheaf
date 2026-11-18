@@ -809,3 +809,54 @@ async fn a_deleted_folder_asks_and_its_notes_go_to_the_trash(cx: &mut TestAppCon
     let toast = app.toast().unwrap();
     assert!(toast.ends_with("moved to trash"), "{toast}");
 }
+
+#[gpui::test]
+async fn a_folder_with_an_unreadable_note_is_renamed_and_its_settings_follow(
+    cx: &mut TestAppContext,
+) {
+    let notes = Notes::seeded();
+    notes.write(
+        ".sheaf/config.toml",
+        "[folders.Arbeit]\nview = \"list\"\n\n[[smart_folders]]\nname = \"Offen\"\nquery = \"folder:/Arbeit open:\"\n",
+    );
+    std::fs::write(notes.dir.join("Arbeit/Café.md"), b"Caf\xe9\n").unwrap();
+    let mut app = open_app(&notes, cx);
+    app.update(|gallery, cx| gallery.set_scope(Scope::Folder("Arbeit".into()), cx));
+    app.update(|gallery, cx| gallery.rename_folder("Arbeit", "Büro", cx));
+
+    assert!(notes.dir.join("Büro/Café.md").is_file());
+    assert_eq!(
+        app.read(|gallery| gallery.scope().clone()),
+        Scope::Folder("Büro".into())
+    );
+    let config = FolderConfig::load(&notes.dir).unwrap();
+    assert!(config.folders.contains_key("Büro"));
+    assert_eq!(config.smart_folders[0].query, "folder:/Büro open:");
+    let toast = app.toast().unwrap();
+    assert!(
+        toast.starts_with("Renamed; 1 note could not be read"),
+        "{toast}"
+    );
+}
+
+#[gpui::test]
+async fn a_deleted_folder_keeps_an_unreadable_note_and_offers_undo(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    std::fs::write(notes.dir.join("Arbeit/Café.md"), b"Caf\xe9\n").unwrap();
+    let mut app = open_app(&notes, cx);
+    app.update(|gallery, cx| gallery.ask_delete_folder("Arbeit", cx));
+    app.update(|gallery, cx| gallery.confirm(cx));
+
+    assert_eq!(
+        notes
+            .files()
+            .into_iter()
+            .filter(|file| file.starts_with("Arbeit/"))
+            .collect::<Vec<_>>(),
+        ["Arbeit/Café.md"]
+    );
+    assert_eq!(
+        app.toast().unwrap(),
+        "3 notes moved to trash · 1 file stayed in the folder"
+    );
+}
