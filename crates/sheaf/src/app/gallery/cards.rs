@@ -24,6 +24,7 @@ use super::preview::{Line, Preview};
 use super::render::{GRID_SIDE, ring};
 use super::{GalleryView, Scope};
 use crate::app::assets::{IconName, icon};
+use crate::app::note::export::Format;
 use crate::app::theme::{ActiveTokens as _, Tokens, motion, size};
 
 /// The list view is a column of this width at most, as rows across a wide window
@@ -489,7 +490,7 @@ impl GalleryView {
     }
 }
 
-/// Pin, move, duplicate and delete what is selected.
+/// Pin, move, duplicate, export and delete what is selected.
 fn note_menu(
     menu: PopupMenu,
     gallery: &WeakEntity<GalleryView>,
@@ -509,7 +510,7 @@ fn note_menu(
             let _ = gallery.update(cx, |gallery, cx| run(gallery, window, cx));
         }
     };
-    let mover = gallery.clone();
+    let (mover, exporter) = (gallery.clone(), gallery.clone());
     menu.item(
         PopupMenuItem::new(if pinned { tr("Unpin") } else { tr("Pin") })
             .on_click(act(|gallery, _, cx| gallery.toggle_pin(cx))),
@@ -531,6 +532,19 @@ fn note_menu(
         PopupMenuItem::new(tr("Duplicate"))
             .on_click(act(|gallery, _, cx| gallery.duplicate_selection(cx))),
     )
+    .submenu(tr("Export"), window, cx, move |menu, _, _| {
+        [
+            (tr("Markdown…"), Format::Markdown),
+            (tr("PDF…"), Format::Pdf),
+        ]
+        .into_iter()
+        .fold(menu, |menu, (label, format)| {
+            let exporter = exporter.clone();
+            menu.item(PopupMenuItem::new(label).on_click(move |_, _, cx| {
+                let _ = exporter.update(cx, |gallery, cx| gallery.export_selection(format, cx));
+            }))
+        })
+    })
     .separator()
     .item(
         PopupMenuItem::new(tr("Delete"))

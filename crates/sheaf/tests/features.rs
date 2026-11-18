@@ -14,6 +14,7 @@ use gpui::{Entity, TestAppContext, VisualTestContext};
 use sheaf::app::dialogs::{Dialogs, Scripted};
 use sheaf::app::instance::Request;
 use sheaf::app::library::Library;
+use sheaf::app::note::export::Format;
 use sheaf::app::note::{NoteView, Upload};
 use sheaf::app::window::{self, MainWindow};
 use sheaf_core::NoteId;
@@ -121,7 +122,7 @@ async fn export_as_pdf_writes_the_chosen_file(cx: &mut TestAppContext) {
     let target = notes.scratch("Ausschreibung.pdf");
     app.save_to(target.clone());
 
-    app.note_do(|note, _, cx| note.export_pdf(cx));
+    app.note_do(|note, _, cx| note.export(Format::Pdf, cx));
 
     let pdf = std::fs::read(&target).unwrap();
     assert!(pdf.starts_with(b"%PDF-"));
@@ -143,7 +144,7 @@ async fn export_as_markdown_leaves_out_the_frontmatter(cx: &mut TestAppContext) 
     let target = notes.scratch("Einkauf.md");
     app.save_to(target.clone());
 
-    app.note_do(|note, _, cx| note.export_markdown(cx));
+    app.note_do(|note, _, cx| note.export(Format::Markdown, cx));
 
     let copy = std::fs::read_to_string(&target).unwrap();
     assert!(copy.starts_with("Einkauf\n\n- [ ] Milch"), "{copy}");
@@ -155,7 +156,7 @@ async fn a_cancelled_export_writes_and_says_nothing(cx: &mut TestAppContext) {
     let notes = Notes::seeded();
     let mut app = open_app(&notes, cx);
     app.open("Einkauf");
-    app.note_do(|note, _, cx| note.export_pdf(cx));
+    app.note_do(|note, _, cx| note.export(Format::Pdf, cx));
     app.note_do(|note, _, cx| note.print(cx));
     assert_eq!(app.toast(), None);
     assert!(app.dialogs.printed.lock().unwrap().is_empty());
@@ -167,10 +168,66 @@ async fn an_export_that_fails_says_why(cx: &mut TestAppContext) {
     let mut app = open_app(&notes, cx);
     app.open("Einkauf");
     app.save_to(notes.scratch("missing/folder/Einkauf.pdf"));
-    app.note_do(|note, _, cx| note.export_pdf(cx));
+    app.note_do(|note, _, cx| note.export(Format::Pdf, cx));
     let (message, button) = app.toast().unwrap();
     assert!(message.starts_with("Could not export: "), "{message}");
     assert_eq!(button, None);
+}
+
+#[gpui::test]
+async fn the_gallery_exports_one_note_to_a_file_and_several_to_a_folder(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let mut app = open_app(&notes, cx);
+    let gallery = app.main.read_with(app.cx, |main, _| main.gallery().clone());
+    let index_of = |app: &mut TestApp, title: &str| {
+        gallery.read_with(app.cx, |gallery, _| {
+            gallery
+                .notes()
+                .iter()
+                .position(|note| note.title == title)
+                .unwrap()
+        })
+    };
+    let einkauf = index_of(&mut app, "Einkauf");
+    gallery.update(app.cx, |gallery, cx| {
+        gallery.click(einkauf, gpui::Modifiers::default(), cx);
+    });
+    let target = notes.scratch("Einkauf.pdf");
+    app.save_to(target.clone());
+    gallery.update(app.cx, |gallery, cx| {
+        gallery.export_selection(Format::Pdf, cx)
+    });
+    app.cx.run_until_parked();
+    assert!(std::fs::read(&target).unwrap().starts_with(b"%PDF-"));
+    assert_eq!(
+        app.toast(),
+        Some(("Exported".to_owned(), Some("Open".to_owned())))
+    );
+
+    let shakshuka = index_of(&mut app, "Shakshuka");
+    gallery.update(app.cx, |gallery, cx| {
+        gallery.click(shakshuka, gpui::Modifiers::control(), cx);
+    });
+    let folder = notes.scratch("export");
+    std::fs::create_dir_all(&folder).unwrap();
+    std::fs::write(folder.join("Einkauf.md"), "already there").unwrap();
+    app.dialogs
+        .folders
+        .lock()
+        .unwrap()
+        .push_back(folder.clone());
+    gallery.update(app.cx, |gallery, cx| {
+        gallery.export_selection(Format::Markdown, cx);
+    });
+    app.cx.run_until_parked();
+    let read = |name: &str| std::fs::read_to_string(folder.join(name)).unwrap();
+    assert_eq!(read("Einkauf.md"), "already there");
+    assert!(read("Einkauf 2.md").starts_with("Einkauf\n\n- [ ] Milch"));
+    assert!(read("Shakshuka.md").starts_with("Shakshuka\n"));
+    assert_eq!(
+        *app.dialogs.asked.lock().unwrap(),
+        ["Export as PDF".to_owned(), "Export as Markdown".to_owned()]
+    );
 }
 
 #[gpui::test]

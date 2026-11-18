@@ -556,6 +556,7 @@ impl MainWindow {
             GalleryEvent::NewFromTemplate(name) => {
                 self.create_note(Some(name.clone()), window, cx);
             }
+            GalleryEvent::Toast(toast) => self.toast(toast.clone(), cx),
         }
     }
 

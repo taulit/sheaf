@@ -35,7 +35,7 @@
 pub(crate) mod attach;
 mod backlinks;
 mod date;
-mod export;
+pub mod export;
 pub use export::ViewerFiles;
 pub(crate) mod files;
 mod header;
@@ -70,6 +70,7 @@ use super::overlays::Toast;
 use super::settings::{self, Settings};
 use super::state::Recovery;
 use super::theme::ActiveTokens as _;
+use export::Format;
 use setup::{Lookup, SharedLookup};
 pub use worker::Upload;
 use worker::{Change, Job, Leave, Queued, Report, Shared};
@@ -961,8 +962,8 @@ impl Render for NoteView {
                 }
             }))
             .on_action(cx.listener(|this, _: &Trash, _, cx| this.trash(cx)))
-            .on_action(cx.listener(|this, _: &ExportMarkdown, _, cx| this.export_markdown(cx)))
-            .on_action(cx.listener(|this, _: &ExportPdf, _, cx| this.export_pdf(cx)))
+            .on_action(cx.listener(|this, _: &ExportMarkdown, _, cx| this.export(Format::Markdown, cx)))
+            .on_action(cx.listener(|this, _: &ExportPdf, _, cx| this.export(Format::Pdf, cx)))
             .on_action(cx.listener(|this, _: &Print, _, cx| this.print(cx)))
             .on_action(cx.listener(|this, _: &AttachFile, window, cx| this.attach_file(window, cx)))
             .on_action(cx.listener(|this, _: &PasteAttachment, window, cx| this.paste(window, cx)))

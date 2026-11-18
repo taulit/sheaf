@@ -65,7 +65,10 @@ use sheaf_core::{Filter, FolderConfig, NoteId, NoteMeta, Snippet, Sort};
 use super::actions::{
     ClearSearch, OpenSelected, Search, SelectLeft, SelectNext, SelectPrevious, SelectRight, Trash,
 };
+use super::dialogs::dialogs;
 use super::library::{Folder, Library, LibraryEvent};
+use super::note::export::{self, Format, Source};
+use super::overlays::Toast;
 use super::trace;
 use covers::{Covers, Wanted};
 use layout::{Layout, Row, Section};
@@ -79,7 +82,7 @@ const SEARCH_DELAY: Duration = Duration::from_millis(30);
 /// What a row of cards is about to measure, for the list to estimate its length.
 const ROW_HEIGHT_HINT: f32 = 270.;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub enum GalleryEvent {
     /// Open this note; `query` is the search it was found with, or empty.
     Open { id: NoteId, query: String },
@@ -91,6 +94,8 @@ pub enum GalleryEvent {
     Notice(String),
     /// Create a note from this template and open it.
     NewFromTemplate(String),
+    /// Something to tell with an action, such as "Exported" with "Open".
+    Toast(Toast),
 }
 
 /// Which notes the gallery shows: chosen in the chip row or the folder popover.
@@ -1116,6 +1121,37 @@ impl GalleryView {
             })
             .collect();
         Self::report(changes, tr("Could not duplicate the note: {}"), cx);
+    }
+
+    /// "Export": the selected notes as their files are now, one into a file, several
+    /// into a folder, each chosen in the portal's dialog.
+    pub fn export_selection(&mut self, format: Format, cx: &mut Context<Self>) {
+        let library = self.library.read(cx);
+        let loads: Vec<_> = self
+            .selection_ids()
+            .iter()
+            .map(|id| library.load(id, cx))
+            .collect();
+        if loads.is_empty() {
+            return;
+        }
+        let notes_dir = library.notes_dir().to_owned();
+        let zone = library.now().time_zone().clone();
+        let dialogs = dialogs(cx);
+        let exported = cx.background_spawn(async move {
+            let mut sources = Vec::with_capacity(loads.len());
+            for load in loads {
+                let note = load.await.map_err(|err| err.to_string())?;
+                sources.push(Source::of(&note, &notes_dir, &zone));
+            }
+            export::run(&sources, format, &dialogs)
+        });
+        cx.spawn(async move |this, cx| {
+            if let Some(toast) = export::toast(exported.await) {
+                let _ = this.update(cx, |_, cx| cx.emit(GalleryEvent::Toast(toast)));
+            }
+        })
+        .detach();
     }
 
     /// Waits for `changes` and, if one failed, says why in a toast: `message` with
