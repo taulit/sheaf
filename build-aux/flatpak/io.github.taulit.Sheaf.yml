@@ -21,6 +21,10 @@ finish-args:
   # No --share=network, no --talk-name (portals are reachable without it) and no --own-name:
   # Flatpak grants io.github.taulit.Sheaf and io.github.taulit.Sheaf.* by itself, which
   # covers the search provider (and the Flathub linter rejects --own-name=<app id>).
+  # No --talk-name=org.gnome.Shell for the Visor check either: GetExtensionInfo is only on
+  # that name (org.gnome.Shell.Extensions is the Extensions app), and it would open all of
+  # the shell to the sandbox. So inside Flatpak the portal always binds the Quick Note
+  # shortcut, and the settings say so (docs/packaging.md).
 
 build-options:
   append-path: /usr/lib/sdk/rust-stable/bin

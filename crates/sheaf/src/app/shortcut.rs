@@ -76,6 +76,25 @@ pub async fn visor_supplies_it(connection: &Connection) -> bool {
     true
 }
 
+/// Whether the app runs inside Flatpak. There the sandbox keeps GNOME Shell out of
+/// reach, so Visor is never detected and the portal always binds the shortcut.
+pub fn in_flatpak() -> bool {
+    std::env::var_os("FLATPAK_ID").is_some()
+}
+
+/// What the settings say about the shortcut when Visor does not supply it.
+pub fn fallback_hint(in_flatpak: bool) -> String {
+    if in_flatpak {
+        tr(
+            "While Notes runs, through GNOME’s shortcut portal, also with Visor installed. Otherwise add a custom shortcut for “flatpak run io.github.taulit.Sheaf --quick” in GNOME Settings, Keyboard",
+        )
+    } else {
+        tr(
+            "While Notes runs. Otherwise add a custom shortcut for “sheaf --quick” in GNOME Settings, Keyboard",
+        )
+    }
+}
+
 /// Whether the `GetExtensionInfo` answer of an extension says it is on; an unknown
 /// extension's answer is empty.
 fn is_active(info: &HashMap<String, OwnedVariant>) -> bool {
@@ -144,6 +163,13 @@ mod tests {
     use zbus::Variant;
 
     use super::*;
+
+    #[test]
+    fn inside_flatpak_the_settings_say_the_portal_binds_the_shortcut() {
+        assert!(fallback_hint(true).contains("portal"));
+        assert!(fallback_hint(true).contains("flatpak run io.github.taulit.Sheaf --quick"));
+        assert!(fallback_hint(false).contains("“sheaf --quick”"));
+    }
 
     fn options(entries: &[(&str, Variant<'static>)]) -> HashMap<String, OwnedVariant> {
         entries

@@ -62,6 +62,17 @@ Permissions: Wayland, X11 as fallback, `--share=ipc`, `--device=dri`,
 `--filesystem=xdg-documents`. No network, no `--talk-name`, no `--own-name`
 (`docs/verified.md` sections 3 and 4).
 
+Visor inside Flatpak: Sheaf checks whether Visor supplies the Quick Note shortcut with
+`org.gnome.Shell.Extensions.GetExtensionInfo`. That interface is exported only by the bus
+name `org.gnome.Shell` at `/org/gnome/Shell` (checked with `gdbus introspect` on GNOME
+Shell 50.5); the bus name `org.gnome.Shell.Extensions` belongs to the Extensions app
+(`/usr/share/dbus-1/services/org.gnome.Shell.Extensions.service`), so it is no narrower
+way in. Flatpak's finish-args cannot limit a `--talk-name` to one interface, and
+`--talk-name=org.gnome.Shell` would open the whole shell to the sandbox, which Flathub
+asks to justify. The manifest leaves it out: inside Flatpak the check always says "no
+Visor", the shortcut is bound through the GlobalShortcuts portal, and the row "Shortcut from
+the settings says so.
+
 Sources: the app from its git tag, and `cargo-sources.json`, generated from `Cargo.lock`:
 
 ```sh
