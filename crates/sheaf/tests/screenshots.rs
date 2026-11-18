@@ -122,7 +122,12 @@ type Scene = fn(&mut Stage);
 enum Folder {
     Seeded,
     Empty,
+    /// Seeded, and a sync tool's conflict copy of "Einkauf".
+    Conflict,
 }
+
+/// The conflict copy of [`Folder::Conflict`].
+const CONFLICT_COPY: &str = "Privat/Einkauf.sync-conflict-20261116-121500-K4XQ2ZP.md";
 
 const SCENES: &[(&str, Folder, Scene)] = &[
     ("gallery", Folder::Seeded, gallery),
@@ -145,6 +150,11 @@ const SCENES: &[(&str, Folder, Scene)] = &[
     ("note-template", Folder::Seeded, note_template),
     ("note-image", Folder::Seeded, note_image),
     ("note-find", Folder::Seeded, note_find),
+    ("gallery-conflict", Folder::Conflict, gallery),
+    ("note-sync-conflict", Folder::Conflict, note_sync_conflict),
+    ("gallery-smart-symbol", Folder::Seeded, gallery_smart_symbol),
+    ("gallery-folder-menu", Folder::Seeded, gallery_folder_menu),
+    ("gallery-tags", Folder::Seeded, gallery_tags),
 ];
 
 /// The start view as it opens.
@@ -183,6 +193,92 @@ fn gallery_folders(stage: &mut Stage) {
             gallery.set_popover(Some(GalleryPopover::Folders), cx)
         });
     });
+}
+
+/// The conflict copy open, with the hint under its date.
+fn note_sync_conflict(stage: &mut Stage) {
+    let id = stage.cx.update(|cx| {
+        let gallery = stage.main.read(cx).gallery().read(cx);
+        let copy = gallery.notes().iter().find(|note| note.conflict);
+        copy.expect("the conflict copy is listed").id.clone()
+    });
+    stage.update(|main, window, cx| main.open_note(id, String::new(), window, cx));
+}
+
+/// The name field of a new smart folder with its symbols, one of them chosen.
+fn gallery_smart_symbol(stage: &mut Stage) {
+    stage.update(|main, window, cx| {
+        main.gallery().update(cx, |gallery, cx| {
+            gallery.set_query("#urlaub", cx);
+            gallery.ask_smart_folder_name(window, cx);
+            gallery.choose_smart_icon("emoji-travel-symbolic", cx);
+        });
+    });
+}
+
+/// The tags at the end of the folder popover, scrolled to, one pinned by its pin.
+fn gallery_tags(stage: &mut Stage) {
+    stage.update(|main, _, cx| {
+        main.gallery().update(cx, |gallery, cx| {
+            gallery.set_popover(Some(GalleryPopover::Folders), cx);
+            gallery.set_tag_pinned("garten", true, cx);
+        });
+    });
+    stage
+        .cx
+        .update_window(stage.window, |_, window, cx| window.draw(cx).clear(cx))
+        .expect("failed to draw");
+    let over_the_lists = point(px(MARGIN + 120.), px(MARGIN + 300.));
+    let scroll = gpui::PlatformInput::Scroll(gpui::ScrollEvent {
+        position: over_the_lists,
+        delta: gpui::ScrollDelta::Pixels(point(px(0.), px(-400.))),
+        ..Default::default()
+    });
+    stage
+        .cx
+        .update_window(stage.window, |_, window, cx| {
+            window.dispatch_event(scroll, cx);
+        })
+        .expect("the window is open");
+    stage.cx.run_until_parked();
+}
+
+/// The context menu of a folder in the folder popover.
+fn gallery_folder_menu(stage: &mut Stage) {
+    stage.update(|main, _, cx| {
+        main.gallery().update(cx, |gallery, cx| {
+            gallery.set_popover(Some(GalleryPopover::Folders), cx)
+        });
+    });
+    stage
+        .cx
+        .update_window(stage.window, |_, window, cx| window.draw(cx).clear(cx))
+        .expect("failed to draw");
+    // "Arbeit", the row under "All Notes": the window is inset by the wallpaper, the
+    // popover hangs under the header bar, and its rows are 34 px high.
+    let at = point(px(MARGIN + 60.), px(MARGIN + 47. - 4. + 7. + 34. + 17.));
+    for event in [
+        gpui::PlatformInput::MouseDown(gpui::MouseDownEvent {
+            button: gpui::MouseButton::Right,
+            position: at,
+            click_count: 1,
+            ..Default::default()
+        }),
+        gpui::PlatformInput::MouseUp(gpui::MouseUpEvent {
+            button: gpui::MouseButton::Right,
+            position: at,
+            click_count: 1,
+            ..Default::default()
+        }),
+    ] {
+        stage
+            .cx
+            .update_window(stage.window, |_, window, cx| {
+                window.dispatch_event(event, cx);
+            })
+            .expect("the window is open");
+        stage.cx.run_until_parked();
+    }
 }
 
 /// "Recently Deleted" with three notes deleted on different days.
@@ -553,6 +649,12 @@ fn capture(name: &str, dark: bool, folder: Folder, scene: Scene) {
     let notes = match folder {
         Folder::Seeded => Notes::seeded(),
         Folder::Empty => Notes::empty(),
+        Folder::Conflict => {
+            let notes = Notes::seeded();
+            let text = "Einkauf\n\n- [ ] Milch\n- [ ] Brot\n- [x] Kaffeebohnen\n";
+            notes.write_at(CONFLICT_COPY, text, 70);
+            notes
+        }
     };
     let (mut cx, library) = headless(dark, &notes);
 
@@ -578,7 +680,11 @@ fn capture(name: &str, dark: bool, folder: Folder, scene: Scene) {
     let listed = stage
         .cx
         .update(|cx| library.read(cx).notes(Vec::new(), Sort::Modified, cx));
-    let expected = if folder == Folder::Seeded { 14 } else { 0 };
+    let expected = match folder {
+        Folder::Seeded => 14,
+        Folder::Empty => 0,
+        Folder::Conflict => 15,
+    };
     assert_eq!(pollster(&stage.cx, listed).len(), expected);
 
     scene(&mut stage);

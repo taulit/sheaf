@@ -183,16 +183,8 @@ impl Notes {
     /// The folder with the notes of [`SEEDS`], last modified at fixed times.
     pub fn seeded() -> Self {
         let notes = Self::empty();
-        let now: Timestamp = NOW.parse().unwrap();
-        let now = SystemTime::UNIX_EPOCH + Duration::from_secs(now.as_second().unsigned_abs());
         for seed in SEEDS {
-            notes.write(seed.path, seed.text);
-            let modified = now - Duration::from_secs(seed.minutes_ago * 60);
-            let file = File::options()
-                .write(true)
-                .open(notes.dir.join(seed.path))
-                .unwrap();
-            file.set_modified(modified).unwrap();
+            notes.write_at(seed.path, seed.text, seed.minutes_ago);
         }
         for (path, bytes) in COVERS {
             fs::create_dir_all(notes.dir.join(path).parent().unwrap()).unwrap();
@@ -206,6 +198,19 @@ impl Notes {
         let path = self.dir.join(rel_path);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, text).unwrap();
+    }
+
+    /// Writes a file last modified `minutes_ago` before [`NOW`].
+    pub fn write_at(&self, rel_path: &str, text: &str, minutes_ago: u64) {
+        self.write(rel_path, text);
+        let now: Timestamp = NOW.parse().unwrap();
+        let now = SystemTime::UNIX_EPOCH + Duration::from_secs(now.as_second().unsigned_abs());
+        let file = File::options()
+            .write(true)
+            .open(self.dir.join(rel_path))
+            .unwrap();
+        file.set_modified(now - Duration::from_secs(minutes_ago * 60))
+            .unwrap();
     }
 
     pub fn read(&self, rel_path: &str) -> String {
