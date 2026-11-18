@@ -284,3 +284,71 @@ async fn a_quick_note_window_without_a_note_still_closes(cx: &mut TestAppContext
     again.end(Ending::Done);
     assert!(!again.is_open());
 }
+
+#[gpui::test]
+async fn a_file_dropped_on_a_quick_note_is_copied_into_its_attachments(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let quick = start(&notes, cx);
+    let mut window = quick.open(cx);
+    window.cx.simulate_input("Beleg");
+    let receipt = notes.scratch("Beleg.pdf");
+    std::fs::write(&receipt, b"pdf").unwrap();
+
+    let position = gpui::point(gpui::px(190.), gpui::px(150.));
+    let paths = gpui::ExternalPaths(vec![receipt].into());
+    // After typing GPUI counts nothing as hovered until the mouse moves.
+    window
+        .cx
+        .simulate_mouse_move(position, None, gpui::Modifiers::none());
+    window
+        .cx
+        .simulate_event(gpui::FileDropEvent::Entered { position, paths });
+    window
+        .cx
+        .simulate_event(gpui::FileDropEvent::Pending { position });
+    window
+        .cx
+        .simulate_event(gpui::FileDropEvent::Submit { position });
+    window.cx.run_until_parked();
+
+    let id = window.id();
+    let link = format!("_attachments/{id}/Beleg.pdf");
+    assert!(
+        window.text().contains(&format!("[Beleg.pdf]({link})")),
+        "{}",
+        window.text()
+    );
+    let folder = window.folder();
+    assert_eq!(
+        std::fs::read(notes.dir.join(folder).join(link)).unwrap(),
+        b"pdf"
+    );
+}
+
+#[gpui::test]
+async fn an_image_pasted_into_a_quick_note_becomes_an_attachment(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let quick = start(&notes, cx);
+    let mut window = quick.open(cx);
+    window.cx.simulate_input("Skizze");
+    let image = gpui::Image::from_bytes(gpui::ImageFormat::Png, b"png".to_vec());
+    window
+        .cx
+        .update(|_, cx| cx.write_to_clipboard(gpui::ClipboardItem::new_image(&image)));
+
+    window.cx.simulate_keystrokes("ctrl-v");
+    window.cx.run_until_parked();
+
+    let id = window.id();
+    let link = format!("_attachments/{id}/Pasted-Image.png");
+    assert!(
+        window.text().contains(&format!("]({link})")),
+        "{}",
+        window.text()
+    );
+    let folder = window.folder();
+    assert_eq!(
+        std::fs::read(notes.dir.join(folder).join(link)).unwrap(),
+        b"png"
+    );
+}

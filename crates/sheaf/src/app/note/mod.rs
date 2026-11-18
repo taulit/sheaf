@@ -32,7 +32,7 @@
 //! A save that fails shows a banner and is tried again with the next change, with "Try
 //! Again" and on leaving; leaving that fails keeps the view open.
 
-mod attach;
+pub(crate) mod attach;
 mod backlinks;
 mod date;
 mod export;
@@ -51,9 +51,8 @@ use std::time::Duration;
 use async_channel::Sender;
 use gpui::{
     AnimationExt as _, App, AppContext as _, ClipboardItem, Context, Entity, EventEmitter,
-    ExternalPaths, FocusHandle, Focusable, InteractiveElement as _, IntoElement,
-    ParentElement as _, Render, Styled as _, Subscription, Task, Window, div,
-    prelude::FluentBuilder as _, px,
+    FocusHandle, Focusable, InteractiveElement as _, IntoElement, ParentElement as _, Render,
+    Styled as _, Subscription, Task, Window, div, prelude::FluentBuilder as _, px,
 };
 use gpui_component::Theme;
 use gpui_markdown_editor::{DocMeta, EditorEvent, MarkdownEditor};
@@ -970,13 +969,13 @@ impl Render for NoteView {
             .child(
                 div()
                     .id("note-text")
+                    .relative()
                     .flex_1()
                     .min_h_0()
-                    .on_drop(cx.listener(|this, paths: &ExternalPaths, window, cx| {
-                        let files = paths.paths().iter().cloned().map(Upload::File).collect();
-                        this.attach(files, window, cx);
-                    }))
-                    .when(self.loaded, |area| area.child(self.editor.clone())),
+                    .when(self.loaded, |area| area.child(self.editor.clone()))
+                    .when(cx.has_active_drag(), |area| {
+                        area.child(attach::drop_layer(cx.entity()))
+                    }),
             )
             .children(self.backlinks_section(cx))
             .children(saved)

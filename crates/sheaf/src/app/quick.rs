@@ -42,12 +42,12 @@ use sheaf_core::i18n::tr;
 use sheaf_core::{CreateOptions, NoteId};
 use sheaf_searchd::api::APP_NAME;
 
-use super::actions::{self, QuickNoteDone, QuickNoteOpen};
+use super::actions::{self, PasteAttachment, QuickNoteDone, QuickNoteOpen};
 use super::assets::{IconName, icon};
 use super::chrome::pane;
 use super::instance::Request;
 use super::library::{Folder, Library};
-use super::note::{Banner, NoteEvent, NoteView, setup};
+use super::note::{Banner, NoteEvent, NoteView, attach, setup};
 use super::overlays::{self, MenuRow, Toast, ToastHost};
 use super::settings::Settings;
 use super::theme::ActiveTokens as _;
@@ -685,12 +685,22 @@ impl Render for QuickNoteView {
             .on_action(cx.listener(|this, _: &QuickNoteOpen, window, cx| {
                 this.end(Ending::Open, window, cx);
             }))
+            .on_action(cx.listener(|this, _: &PasteAttachment, window, cx| {
+                if let Some(note) = &this.note {
+                    note.update(cx, |note, cx| note.paste(window, cx));
+                }
+            }))
             .child(self.render_header(cx))
             .child(
                 div()
+                    .relative()
                     .flex_1()
                     .min_h_0()
-                    .when_some(editor, |body, editor| body.child(editor)),
+                    .when_some(editor, |body, editor| body.child(editor))
+                    .when_some(
+                        self.note.clone().filter(|_| cx.has_active_drag()),
+                        |body, note| body.child(attach::drop_layer(note)),
+                    ),
             )
             .child(self.render_footer(cx))
             .children(folder_menu)

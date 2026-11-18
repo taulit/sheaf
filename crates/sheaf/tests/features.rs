@@ -247,6 +247,77 @@ async fn a_dropped_file_is_copied_and_linked(cx: &mut TestAppContext) {
     );
 }
 
+/// Files dropped onto the text, as the platform reports them: the editor's own drop
+/// handling would link the dropped path instead of a copy.
+#[gpui::test]
+async fn files_dropped_onto_the_text_are_copied_into_the_attachments(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let mut app = open_app(&notes, cx);
+    app.open("Notch-Ideen");
+    let photo = notes.scratch("Foto.png");
+    std::fs::write(&photo, b"png").unwrap();
+    let report = notes.scratch("Bericht.pdf");
+    std::fs::write(&report, b"pdf").unwrap();
+
+    let position = gpui::point(gpui::px(500.), gpui::px(400.));
+    let paths = gpui::ExternalPaths(vec![photo, report].into());
+    app.cx
+        .simulate_event(gpui::FileDropEvent::Entered { position, paths });
+    app.cx
+        .simulate_event(gpui::FileDropEvent::Pending { position });
+    app.cx
+        .simulate_event(gpui::FileDropEvent::Submit { position });
+    app.cx.run_until_parked();
+
+    let id = "01JD3K8Z6Q4X7V9B2M5N8P0R03";
+    let folder = notes.dir.join("Arbeit/_attachments").join(id);
+    assert_eq!(std::fs::read(folder.join("Foto.png")).unwrap(), b"png");
+    assert_eq!(std::fs::read(folder.join("Bericht.pdf")).unwrap(), b"pdf");
+    let text = app.editor_text();
+    assert!(
+        text.contains(&format!("![Foto.png](_attachments/{id}/Foto.png)")),
+        "{text}"
+    );
+    assert!(
+        text.contains(&format!("[Bericht.pdf](_attachments/{id}/Bericht.pdf)")),
+        "{text}"
+    );
+    assert!(
+        !text.contains(notes.scratch("").to_str().unwrap()),
+        "{text}"
+    );
+}
+
+/// An image on the clipboard, pasted with Ctrl+V in the text.
+#[gpui::test]
+async fn a_pasted_image_lands_in_the_attachments_and_is_linked(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let mut app = open_app(&notes, cx);
+    app.open("Notch-Ideen");
+    let image = gpui::Image::from_bytes(gpui::ImageFormat::Png, b"png".to_vec());
+    app.cx
+        .update(|_, cx| cx.write_to_clipboard(gpui::ClipboardItem::new_image(&image)));
+
+    app.cx.simulate_keystrokes("ctrl-v");
+    app.cx.run_until_parked();
+
+    let id = "01JD3K8Z6Q4X7V9B2M5N8P0R03";
+    let folder = notes.dir.join("Arbeit/_attachments").join(id);
+    let stored: Vec<_> = std::fs::read_dir(&folder)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+        .collect();
+    assert_eq!(stored, ["Pasted-Image.png"]);
+    assert_eq!(std::fs::read(folder.join(&stored[0])).unwrap(), b"png");
+    let text = app.editor_text();
+    assert!(
+        text.contains(&format!(
+            "![Pasted Image.png](_attachments/{id}/Pasted-Image.png)"
+        )),
+        "{text}"
+    );
+}
+
 #[gpui::test]
 async fn a_second_attach_while_the_first_runs_links_both(cx: &mut TestAppContext) {
     let notes = Notes::seeded();
