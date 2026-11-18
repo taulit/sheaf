@@ -16,7 +16,7 @@ Written 2026-11-17 for whoever continues without the session's context. Read
 ## Running
 
 Nothing. S2 is merged (#4). S3 (https://github.com/taulit/sheaf/pull/5) and S4 (see
-`gh pr list`; it contains S3) are in review against `main`. PR checks are red because CI
+https://github.com/taulit/sheaf/pull/6; it contains S3) are in review against `main`. PR checks are red because CI
 cannot fetch the private editor; the gate was run locally on 2026-11-18 at the head of
 `phase/s4-release`: fmt, clippy, `cargo deny` clean, 487 tests passed, Visor tests 23 of
 23, `scripts/check-po.sh`, `check-install.sh`, `check-release.sh 0.1.0`, all budgets
