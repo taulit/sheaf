@@ -15,38 +15,22 @@ Written 2026-11-17 for whoever continues without the session's context. Read
 
 ## Running
 
-S2 is merged (#4). S3 is in review: https://github.com/taulit/sheaf/pull/5 (against
-`main`; its checks are red because CI cannot fetch the editor, see below).
-S4 on `phase/s4-release` (branched from `phase/s3-features`, everything pushed): budgets
-measured and all met (`scripts/budgets.sh`, table in `docs/STATUS.md`), end-to-end
-scenarios automated (`scripts/e2e.sh`), packaging merged (`build-aux/`, metainfo,
-release workflow, README, `docs/release-checklist.md`), editor at `v0.1.0`.
-
-The three S4 reviews are done (2026-11-18): bug review 0 blocking (1 major: shell
-injection through the tag name in `release.yml`; 3 minor), spec review 16 deviations not
-known before, simplicity review 18 proposals (13 low risk). A child agent ("S4 gate: fix
-review findings") works through them in this checkout, one commit and push per item:
-A bug findings 1-3, B plan gaps 4-12 (default notes folder fixed at first start, conflict
-badge, Export in the card menu, tag pinning in the app, swipe back, skip the shortcut
-portal when Visor is installed, smart-folder icon, folder rename/delete, CLI messages
-through gettext), C low-risk simplifications 13-17. Decided not to do: the `≡` menu,
-saving the window position, TypeScript for the Visor module, CLI writes through the
-service, removing the overlay of own writes or the key-wise config writer.
+Nothing. S2 is merged (#4). S3 (https://github.com/taulit/sheaf/pull/5) and S4 (see
+`gh pr list`; it contains S3) are in review against `main`. PR checks are red because CI
+cannot fetch the private editor; the gate was run locally on 2026-11-18 at the head of
+`phase/s4-release`: fmt, clippy, `cargo deny` clean, 487 tests passed, Visor tests 23 of
+23, `scripts/check-po.sh`, `check-install.sh`, `check-release.sh 0.1.0`, all budgets
+(`scripts/budgets.sh`) and both end-to-end scenarios (`scripts/e2e.sh`) pass.
 
 ## Next
 
-1. After the fixes: translations for the eight further languages of the plan README
-   („Übersetzungen“: es, fr, pt_BR, it, pl, ru, zh_CN, ja) into `po/` and
-   `visor-module/po/` (Sonnet), then one narrow re-check of the fix commits.
-2. Gate: fmt, clippy, tests, deny, Visor tests, `scripts/budgets.sh`, `scripts/e2e.sh`,
-   `scripts/screenshot.sh` (copy the untracked `docs/screenshots/gnome-search-light.png`
-   aside first: the shell check scripts overwrite it).
-3. S4 PR against `main` after #5 is merged (`main` gets squash merges: sync with
-   `git merge -s ours origin/main` only after checking that main's tree equals
-   `phase/s3-features`). Fill `docs/release-checklist.md` as the final report.
-4. Release blockers that need the user: both repositories are private (Flathub, AUR
-   users and CI cannot fetch them; metainfo screenshot URLs 404), `flatpak-builder` is not
-   installed (Flatpak build untested), the manual desktop checklist in `docs/testing.md`.
+Only release work that needs the user (details in `docs/release-checklist.md`):
+make the repositories public (Flathub, AUR users and CI cannot fetch them; metainfo
+screenshot URLs 404), build the Flatpak once (`flatpak-builder` is not installed here),
+run the manual desktop checklist in `docs/testing.md`, set the release date in metainfo
+and changelog, tag, AUR, Flathub, extension upload. The nine translations other than
+German were not read by native speakers. What the editor still lacks for Sheaf is listed
+in `docs/STATUS.md`; bump the editor tag when a newer one exists.
 
 ## Waiting for the user
 
