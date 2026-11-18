@@ -798,3 +798,34 @@ async fn shift_click_after_the_anchor_was_deleted_does_not_crash(cx: &mut TestAp
     app.click(&third, Modifiers::shift());
     assert_eq!(app.selected().as_deref(), Some(third.as_str()));
 }
+
+#[gpui::test]
+async fn tags_are_pinned_to_the_chips_from_the_folder_popover(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let mut app = open_app(&notes, cx);
+    app.update(|gallery, cx| gallery.set_popover(Some(Popover::Folders), cx));
+    let tags = app.read(|gallery| gallery.tags().to_vec());
+    assert!(
+        tags.iter()
+            .any(|(tag, notes)| tag == "urlaub" && *notes > 0),
+        "{tags:?}"
+    );
+    assert!(!app.read(|gallery| gallery.is_tag_pinned("urlaub")));
+
+    let pin = app.cx.debug_bounds("tag-pin-urlaub").expect("a pin");
+    app.cx.simulate_click(pin.center(), Modifiers::none());
+    app.settle();
+    assert!(app.read(|gallery| gallery.is_tag_pinned("urlaub")));
+    assert_eq!(
+        FolderConfig::load(&notes.dir).unwrap().pinned_tags,
+        ["ausschreibung", "rezepte", "urlaub"]
+    );
+    // The click pinned the tag without choosing it.
+    assert_eq!(app.read(|gallery| gallery.scope().clone()), Scope::All);
+
+    app.update(|gallery, cx| gallery.set_tag_pinned("Rezepte", false, cx));
+    assert_eq!(
+        FolderConfig::load(&notes.dir).unwrap().pinned_tags,
+        ["ausschreibung", "urlaub"]
+    );
+}

@@ -9,6 +9,7 @@ use gpui::{
     list, point, prelude::FluentBuilder as _, px, relative,
 };
 use gpui_component::input::{self as input, Input, InputEvent, InputState};
+use gpui_component::menu::ContextMenuExt as _;
 use sheaf_core::config::{Sort as SortOrder, View};
 use sheaf_core::i18n::tr;
 
@@ -257,12 +258,17 @@ impl GalleryView {
         if scopes.len() == 1 {
             return None;
         }
+        let gallery = cx.entity().downgrade();
         let chips = scopes
             .into_iter()
             .enumerate()
             .map(|(index, (scope, label))| {
                 let on = self.scope == scope;
-                div()
+                let pinned_tag = match &scope {
+                    Scope::Tag(tag) => Some(tag.clone()),
+                    _ => None,
+                };
+                let chip = div()
                     .id(("scope", index))
                     .flex()
                     .flex_none()
@@ -281,7 +287,17 @@ impl GalleryView {
                             .hover(|style| style.bg(tokens.selected))
                     })
                     .on_click(cx.listener(move |this, _, _, cx| this.set_scope(scope.clone(), cx)))
-                    .child(label)
+                    .child(label);
+                match pinned_tag {
+                    Some(tag) => {
+                        let gallery = gallery.clone();
+                        chip.context_menu(move |menu, _, _| {
+                            super::tags::pin_menu(menu, &gallery, &tag, true)
+                        })
+                        .into_any_element()
+                    }
+                    None => chip.into_any_element(),
+                }
             });
         let chips: Vec<_> = chips.collect();
         Some(
@@ -530,6 +546,7 @@ impl GalleryView {
                 .on_click(cx.listener(|this, _, window, cx| this.start_new_folder(window, cx)))
                 .into_any_element(),
         };
+        let tags = self.render_tag_rows(tokens, cx);
         let smart = self.render_smart_rows(tokens, cx);
         let new_smart_folder = self.render_new_smart_folder(tokens, cx);
         surface(tokens)
@@ -539,6 +556,9 @@ impl GalleryView {
             .max_h(px(520.))
             .overflow_y_scroll()
             .children(rows)
+            .when(!tags.is_empty(), |popover| {
+                popover.child(separator(tokens)).children(tags)
+            })
             .when(!smart.is_empty(), |popover| {
                 popover.child(separator(tokens)).children(smart)
             })

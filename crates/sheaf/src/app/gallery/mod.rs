@@ -42,6 +42,7 @@ pub mod layout;
 pub mod preview;
 mod render;
 pub mod smart;
+mod tags;
 mod templates;
 pub mod trash;
 
@@ -230,6 +231,7 @@ pub struct GalleryView {
     new_folder: Option<Entity<InputState>>,
     trash: trash::TrashState,
     smart: smart::SmartState,
+    tags: tags::TagsState,
     templates: templates::TemplatesState,
     generation: u64,
     focus_handle: FocusHandle,
@@ -291,6 +293,7 @@ impl GalleryView {
             new_folder: None,
             trash: trash::TrashState::default(),
             smart: smart::SmartState::default(),
+            tags: tags::TagsState::default(),
             templates: templates::TemplatesState::default(),
             generation: 0,
             focus_handle: cx.focus_handle(),
@@ -903,6 +906,7 @@ impl GalleryView {
     pub fn set_popover(&mut self, popover: Option<Popover>, cx: &mut Context<Self>) {
         if popover == Some(Popover::Folders) {
             self.count_trash(cx);
+            self.load_tags(cx);
         }
         if popover == Some(Popover::Templates) {
             self.load_templates(cx);
