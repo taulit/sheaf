@@ -1,0 +1,18 @@
+/* GNOME blue as the accent, matching the app. */
+:root {
+  --sl-color-accent-low: #0f2a4d;
+  --sl-color-accent: #3584e4;
+  --sl-color-accent-high: #b9d6fb;
+}
+:root[data-theme='light'] {
+  --sl-color-accent-low: #d6e7fc;
+  --sl-color-accent: #1c71d8;
+  --sl-color-accent-high: #0f3f7a;
+}
+
+.hero-media {
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgb(0 0 0 / 0.18);
+  width: 100%;
+  height: auto;
+}

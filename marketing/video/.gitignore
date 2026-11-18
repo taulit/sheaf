@@ -1,0 +1,5 @@
+node_modules/
+out/
+public/recording-*.raw.mp4
+public/stills/
+public/recording-dark.*
