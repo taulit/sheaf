@@ -65,6 +65,7 @@ icons! {
     Text => "text-x-generic",
     Trash => "user-trash",
     Undo => "edit-undo",
+    Warning => "dialog-warning",
 }
 
 /// The app icon in colour; draw it with `gpui::img(APP_ICON)`.

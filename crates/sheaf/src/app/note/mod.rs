@@ -63,6 +63,7 @@ use sheaf_core::{CreateOptions, Note, NoteId, NoteMeta, Sort};
 use super::actions::{
     self, AttachFile, Back, ExportMarkdown, ExportPdf, PasteAttachment, Print, Trash,
 };
+use super::assets::{IconName, icon};
 use super::chrome::pane;
 use super::library::{Folder, Library, LibraryEvent};
 use super::overlays::Toast;
@@ -931,6 +932,7 @@ impl Render for NoteView {
             let zone = self.library.read(cx).now().time_zone().clone();
             date::long_date_time(&meta.modified.to_zoned_datetime(zone))
         });
+        let conflict = self.meta.as_ref().is_some_and(|meta| meta.conflict);
         let saved = self.saved_shown.then(|| {
             div()
                 .absolute()
@@ -974,7 +976,22 @@ impl Render for NoteView {
                     .text_center()
                     .text_size(tokens.text(12.))
                     .text_color(tokens.faint)
-                    .child(date.unwrap_or_default()),
+                    .child(date.unwrap_or_default())
+                    .when(conflict, |line| {
+                        line.child(
+                            div()
+                                .debug_selector(|| "conflict-hint".into())
+                                .flex()
+                                .justify_center()
+                                .items_center()
+                                .gap(px(5.))
+                                .mt(px(4.))
+                                .child(icon(IconName::Warning, tokens.faint).size(px(12.)))
+                                .child(tr(
+                                    "Conflict copy from syncing: move what you need into the original, then delete it.",
+                                )),
+                        )
+                    }),
             )
             .child(
                 div()

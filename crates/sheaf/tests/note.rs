@@ -1150,3 +1150,28 @@ async fn a_note_found_for_an_earlier_query_opens_with_that_query(cx: &mut TestAp
         }
     );
 }
+
+#[gpui::test]
+async fn a_sync_conflict_copy_is_marked_in_the_gallery_and_the_note(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    notes.write(
+        "Privat/Einkauf.sync-conflict-20261116-132400-ABCDEFG.md",
+        "Einkauf\n\n- [ ] Milch\n- [ ] Brot\n",
+    );
+    let mut app = open_app(&notes, cx);
+    app.cx.update(|window, cx| window.draw(cx).clear(cx));
+    assert!(app.cx.debug_bounds("conflict-badge").is_some());
+    assert!(app.cx.debug_bounds("conflict-hint").is_none());
+
+    let copy = app
+        .listed()
+        .into_iter()
+        .find(|note| note.conflict)
+        .expect("the copy is listed");
+    app.request(Request::OpenNote {
+        id: copy.id.to_string(),
+        query: String::new(),
+    });
+    app.cx.update(|window, cx| window.draw(cx).clear(cx));
+    assert!(app.cx.debug_bounds("conflict-hint").is_some());
+}

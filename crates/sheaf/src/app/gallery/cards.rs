@@ -168,6 +168,15 @@ impl GalleryView {
                     linear_color_stop(tokens.card, 1.),
                 )),
         );
+        let card = card.when(note.conflict, |card| {
+            card.child(
+                div()
+                    .absolute()
+                    .top(px(8.))
+                    .right(px(8.))
+                    .child(conflict_badge(tokens)),
+            )
+        });
         let card = self.lift(card, &note, tokens);
 
         let title = match &marks {
@@ -361,6 +370,7 @@ impl GalleryView {
                                     .font_weight(FontWeight::BOLD)
                                     .child(title),
                             )
+                            .when(note.conflict, |line| line.child(conflict_badge(tokens)))
                             .when(note.pinned, |line| {
                                 line.child(icon(IconName::Pin, tokens.faint).size(px(12.)))
                             }),
@@ -580,6 +590,26 @@ fn highlighted(text: &str, ranges: &[Range<usize>], tokens: &Tokens) -> StyledTe
         .map(|range| (range.clone(), style))
         .collect::<Vec<_>>();
     StyledText::new(SharedString::from(text.to_owned())).with_highlights(highlights)
+}
+
+/// Marks a copy a sync tool made of a note changed in two places at once.
+fn conflict_badge(tokens: &Tokens) -> impl IntoElement {
+    div()
+        .debug_selector(|| "conflict-badge".into())
+        .flex()
+        .flex_none()
+        .items_center()
+        .gap(px(4.))
+        .h(px(20.))
+        .px(px(7.))
+        .rounded_full()
+        .bg(tokens.popover)
+        .shadow(vec![ring(tokens.hair, 1.)])
+        .text_size(tokens.text(11.))
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(tokens.muted)
+        .child(icon(IconName::Warning, tokens.muted).size(px(11.)))
+        .child(tr("Conflict"))
 }
 
 fn title_of(note: &NoteMeta) -> String {

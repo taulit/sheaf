@@ -12,6 +12,7 @@ text colour, so their own fill colour does not matter.
 
 | File | Adwaita name |
 |---|---|
+| `dialog-warning.svg` | `status/dialog-warning-symbolic` |
 | `document-edit.svg` | `actions/document-edit-symbolic` |
 | `document-print.svg` | `actions/document-print-symbolic` |
 | `document-save-as.svg` | `actions/document-save-as-symbolic` |
