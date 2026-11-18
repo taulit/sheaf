@@ -15,6 +15,8 @@ use sheaf_core::i18n::{ntr, tr};
 use super::trash::Confirm;
 use super::{GalleryEvent, GalleryView, Scope};
 use crate::app::assets::{IconName, icon};
+use crate::app::note::files;
+use crate::app::overlays::Toast;
 use crate::app::theme::Tokens;
 
 /// `folder` moved to `from`'s new path `to`, if it is `from` or inside it.
@@ -110,30 +112,52 @@ impl GalleryView {
     }
 
     /// Moves the notes of `folder` to the trash and removes it; the toast offers Undo.
+    /// If other files keep the folder, the toast says so and the gallery stays on it.
     pub(super) fn delete_folder(&mut self, folder: String, cx: &mut Context<Self>) {
         let deleting = self
             .library
             .update(cx, |library, cx| library.delete_folder(&folder, cx));
-        if let Scope::Folder(shown) = &self.scope
-            && moved(shown, &folder, &folder).is_some()
-        {
-            self.set_scope(Scope::All, cx);
-        }
+        let path = self.library.read(cx).notes_dir().join(&folder);
         cx.spawn(async move |this, cx| {
-            let event = match deleting.await {
-                Ok(deleted) if deleted.trashed.is_empty() => return,
-                Ok(deleted) => GalleryEvent::Trashed {
-                    ids: deleted.trashed.into_iter().map(|meta| meta.id).collect(),
-                    kept: (deleted.kept > 0).then(|| kept_message(deleted.kept)),
-                },
-                Err(err) => {
-                    log::error!("cannot delete the folder: {err}");
-                    GalleryEvent::Failed(
-                        tr("Could not delete the folder: {}").replace("{}", &err.to_string()),
-                    )
+            let deleted = deleting.await;
+            let _ = this.update(cx, |this, cx| {
+                let kept = deleted.as_ref().map_or(0, |deleted| deleted.kept);
+                if let Scope::Folder(shown) = &this.scope
+                    && moved(shown, &folder, &folder).is_some()
+                    && deleted.is_ok()
+                    && (kept == 0 || *shown != folder)
+                {
+                    this.set_scope(Scope::All, cx);
                 }
-            };
-            let _ = this.update(cx, |_, cx| cx.emit(event));
+                let event = match deleted {
+                    Ok(deleted) if deleted.trashed.is_empty() && kept == 0 => return,
+                    Ok(deleted) if deleted.trashed.is_empty() => {
+                        let count = u32::try_from(kept).unwrap_or(u32::MAX);
+                        let message = ntr(
+                            "The folder still holds {} other file and was kept",
+                            "The folder still holds {} other files and was kept",
+                            count,
+                        )
+                        .replace("{}", &count.to_string());
+                        GalleryEvent::Toast(
+                            Toast::new(message).action(tr("Show in Files"), move |_, cx| {
+                                files::show(path.clone(), cx)
+                            }),
+                        )
+                    }
+                    Ok(deleted) => GalleryEvent::Trashed {
+                        ids: deleted.trashed.into_iter().map(|meta| meta.id).collect(),
+                        kept: (kept > 0).then(|| kept_message(kept)),
+                    },
+                    Err(err) => {
+                        log::error!("cannot delete the folder: {err}");
+                        GalleryEvent::Failed(
+                            tr("Could not delete the folder: {}").replace("{}", &err.to_string()),
+                        )
+                    }
+                };
+                cx.emit(event);
+            });
         })
         .detach();
     }

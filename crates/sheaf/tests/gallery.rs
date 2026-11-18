@@ -860,3 +860,27 @@ async fn a_deleted_folder_keeps_an_unreadable_note_and_offers_undo(cx: &mut Test
         "3 notes moved to trash · 1 file stayed in the folder"
     );
 }
+
+#[gpui::test]
+async fn a_folder_kept_by_other_files_says_so_and_stays_shown(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    std::fs::create_dir(notes.dir.join("Leer")).unwrap();
+    std::fs::write(notes.dir.join("Leer/only.pdf"), b"%PDF").unwrap();
+    let mut app = open_app(&notes, cx);
+    app.update(|gallery, cx| gallery.set_scope(Scope::Folder("Leer".into()), cx));
+    app.update(|gallery, cx| gallery.ask_delete_folder("Leer", cx));
+    app.update(|gallery, cx| gallery.confirm(cx));
+
+    assert!(notes.dir.join("Leer/only.pdf").is_file());
+    assert_eq!(
+        app.read(|gallery| gallery.scope().clone()),
+        Scope::Folder("Leer".into())
+    );
+    assert_eq!(
+        app.toast_with_action(),
+        Some((
+            "The folder still holds 1 other file and was kept".to_owned(),
+            Some("Show in Files".to_owned())
+        ))
+    );
+}
