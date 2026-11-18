@@ -11,6 +11,7 @@ file records the decisions that span more than one crate. The plan it implements
 | `sheaf-core` | library | Notes folder (read, write, rename, trash, watch), index, search language. No D-Bus, no UI |
 | `sheaf-searchd` | binary | D-Bus service without a window. The only process that writes the index |
 | `sheaf` | binary | The GPUI app, and the CLI when called with a subcommand |
+| `sheaf-export` | library | PDF of a note: Markdown blocks, own line breaking, krilla. No UI |
 | `visor-module/` | GNOME extension | "Visor: Notes", talks to `sheaf-searchd` over D-Bus |
 
 ## Notes on disk
@@ -45,6 +46,7 @@ write returns. See `NoteId` in `crates/sheaf-core/src/model.rs`.
 | What | Where |
 |---|---|
 | Notes folder location | `$XDG_CONFIG_HOME/sheaf/config.toml` (`notes_dir`), overridden by `SHEAF_NOTES_DIR` or `--dir` |
+| App settings (default order, editor font and line width) | `$XDG_CONFIG_HOME/sheaf/config.toml` (`sort`, `[editor]`) |
 | Default notes folder | `$XDG_DOCUMENTS_DIR/Notes` (localised: `Notizen`), chosen on first run |
 | Per-folder state | `<notes>/.sheaf/config.toml`: smart folders, sort order, per-note view state |
 | Templates | `<notes>/.sheaf/templates/*.md` |

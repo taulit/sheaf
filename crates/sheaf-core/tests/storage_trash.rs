@@ -232,3 +232,169 @@ fn notes_expire_after_exactly_thirty_days() {
     assert_eq!(removed.len(), 2);
     assert!(store.list_trash().unwrap().is_empty());
 }
+
+#[test]
+fn attachments_another_note_links_to_stay_through_trash_and_purge() {
+    let (dir, store) = store();
+    let a = create_in(&store, "Fotos", "Urlaub\n");
+    let (a, foto) = store.add_attachment(&a.id, "foto.png", b"png").unwrap();
+    let (a, own) = store.add_attachment(&a.id, "notiz.txt", b"txt").unwrap();
+    store
+        .write_body(
+            &a.id,
+            &format!("Urlaub\n\n![Foto]({foto})\n[Notiz]({own})\n"),
+            &Default::default(),
+        )
+        .unwrap();
+    // Another note copied the image line; a third one names a similar file only.
+    create_in(&store, "Fotos", &format!("Album\n\n![Foto]({foto})\n"));
+    create_in(&store, "", &format!("Fast\n\n![x]({foto}.bak)\n"));
+    let at = |rel: &str| dir.path().join(rel);
+
+    store.trash(&a.id, time("2026-11-16T12:00:00Z")).unwrap();
+    assert!(
+        at("Fotos").join(&foto).is_file(),
+        "the album keeps its image"
+    );
+    assert!(!at("Fotos").join(&own).exists());
+    assert!(at(".trash").join(&own).is_file());
+
+    let restored = store.restore(&a.id).unwrap();
+    assert_eq!(restored.folder, "Fotos");
+    assert!(at("Fotos").join(&foto).is_file());
+    assert!(at("Fotos").join(&own).is_file(), "reunited");
+    assert!(!at(".trash/_attachments").exists());
+
+    store.trash(&a.id, time("2026-11-16T12:00:00Z")).unwrap();
+    store.purge(&a.id).unwrap();
+    assert_eq!(fs::read(at("Fotos").join(&foto)).unwrap(), b"png");
+    assert!(!at("Fotos").join(&own).exists());
+    assert!(!at(".trash/_attachments").exists());
+}
+
+#[test]
+fn purge_puts_back_a_file_a_note_links_to() {
+    let (dir, store) = store();
+    let a = create_in(&store, "", "Quelle\n");
+    let (a, _) = store.add_attachment(&a.id, "a.txt", b"a").unwrap();
+    // Put there by hand, with a space in its name.
+    let foto = format!("_attachments/{}/bild 1.png", a.id);
+    fs::write(dir.path().join(&foto), b"png").unwrap();
+    store.trash(&a.id, time("2026-11-16T12:00:00Z")).unwrap();
+    assert!(dir.path().join(".trash").join(&foto).is_file());
+    // Linked after the note went, with the space written as `%20`.
+    let linked = foto.replace(' ', "%20");
+    create_in(&store, "", &format!("Später\n\n![Bild]({linked})\n"));
+
+    store.purge(&a.id).unwrap();
+    assert_eq!(fs::read(dir.path().join(&foto)).unwrap(), b"png");
+    assert!(!dir.path().join(".trash/_attachments").exists());
+}
+
+#[test]
+fn links_count_as_the_app_resolves_them() {
+    let (dir, store) = store();
+    let a = create_in(&store, "", "Quelle\n");
+    let (a, _) = store.add_attachment(&a.id, "a.txt", b"a").unwrap();
+    let folder = format!("_attachments/{}", a.id);
+    let names = ["Übersicht-2026.pdf", "bild 1.png", "100%.txt", "code.txt"];
+    for name in names {
+        fs::write(dir.path().join(&folder).join(name), name).unwrap();
+    }
+    create_in(
+        &store,
+        "",
+        &format!(
+            "Nutzer\n\n[PDF]({folder}/%C3%9Cbersicht-2026.pdf)\n\
+             ![Bild](<./{folder}/bild 1.png>)\n[Prozent](./{folder}/100%25.txt)\n\n\
+             ```\n[Code]({folder}/code.txt)\n```\n"
+        ),
+    );
+
+    store.trash(&a.id, time("2026-11-16T12:00:00Z")).unwrap();
+    for name in &names[..3] {
+        assert!(dir.path().join(&folder).join(name).is_file(), "{name}");
+    }
+    assert!(
+        dir.path()
+            .join(".trash")
+            .join(&folder)
+            .join("code.txt")
+            .is_file()
+    );
+
+    store.purge(&a.id).unwrap();
+    for name in &names[..3] {
+        assert!(dir.path().join(&folder).join(name).is_file(), "{name}");
+    }
+    assert!(!dir.path().join(&folder).join("code.txt").exists());
+    assert!(!dir.path().join(".trash/_attachments").exists());
+}
+
+/// Two notes in `Fotos` that show the same image, which belongs to the first.
+fn shared_image(store: &NoteStore) -> (NoteMeta, NoteMeta, String) {
+    let a = create_in(store, "Fotos", "Album\n");
+    let (a, foto) = store.add_attachment(&a.id, "foto.png", b"png").unwrap();
+    store
+        .write_body(
+            &a.id,
+            &format!("Album\n\n![Foto]({foto})\n"),
+            &Default::default(),
+        )
+        .unwrap();
+    let b = create_in(store, "Fotos", &format!("Bilder\n\n![Foto]({foto})\n"));
+    (a, b, foto)
+}
+
+#[test]
+fn deleting_a_folder_takes_attachments_its_notes_share() {
+    let (dir, store) = store();
+    let (a, _, foto) = shared_image(&store);
+    let now = time("2026-11-16T12:00:00Z");
+
+    assert_eq!(store.delete_folder("Fotos", now).unwrap().len(), 2);
+    assert!(!dir.path().join("Fotos").exists());
+    assert!(dir.path().join(".trash").join(&foto).is_file());
+
+    let restored = store.restore(&a.id).unwrap();
+    assert!(dir.path().join(&restored.folder).join(&foto).is_file());
+}
+
+#[test]
+fn the_last_note_linking_a_kept_file_takes_it_along() {
+    let (dir, store) = store();
+    let (a, b, foto) = shared_image(&store);
+    let now = time("2026-11-16T12:00:00Z");
+    store.trash(&a.id, now).unwrap();
+    assert!(dir.path().join("Fotos").join(&foto).is_file());
+
+    store.trash(&b.id, now).unwrap();
+    assert!(dir.path().join(".trash").join(&foto).is_file());
+    assert!(store.delete_folder("Fotos", now).unwrap().is_empty());
+    assert!(!dir.path().join("Fotos").exists());
+
+    store.restore(&a.id).unwrap();
+    assert_eq!(
+        fs::read(dir.path().join("Fotos").join(&foto)).unwrap(),
+        b"png"
+    );
+}
+
+#[test]
+fn a_live_note_elsewhere_keeps_a_shared_file() {
+    let (dir, store) = store();
+    let (a, b, foto) = shared_image(&store);
+    let c = create_in(
+        &store,
+        "Andere",
+        &format!("Fremd\n\n![Foto](../Fotos/{foto})\n"),
+    );
+    let now = time("2026-11-16T12:00:00Z");
+    store.trash(&a.id, now).unwrap();
+    store.trash(&b.id, now).unwrap();
+    assert!(dir.path().join("Fotos").join(&foto).is_file());
+
+    store.purge(&a.id).unwrap();
+    assert!(dir.path().join("Fotos").join(&foto).is_file());
+    assert!(store.get(&c.id).is_ok());
+}

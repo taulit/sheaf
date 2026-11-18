@@ -18,6 +18,7 @@ use gpui_markdown_editor::EditorEvent;
 use sheaf::app::actions::{self, CloseWindow};
 use sheaf::app::instance::Request;
 use sheaf::app::library::{Library, LibraryEvent, LibraryMode};
+use sheaf::app::quick;
 use sheaf::app::state::{StateFile, WindowState};
 use sheaf::app::theme::{self, ActiveTokens as _, Appearance, Overrides};
 use sheaf::app::window::{self, MainWindow, Route};
@@ -471,7 +472,7 @@ async fn ctrl_n_creates_and_opens_a_note_and_escape_saves_it(cx: &mut TestAppCon
     assert_eq!(notes.files(), ["Untitled.md"]);
 
     app.cx.simulate_input("Hallo Welt");
-    assert_eq!(app.editor_text(), "Hallo Welt");
+    assert_eq!(app.editor_text(), "Hallo Welt\n");
     app.cx.simulate_keystrokes("escape");
     assert_eq!(app.route(), Route::Gallery);
     assert_eq!(
@@ -479,7 +480,7 @@ async fn ctrl_n_creates_and_opens_a_note_and_escape_saves_it(cx: &mut TestAppCon
         ["Hallo Welt.md"],
         "the file follows the title"
     );
-    assert!(notes.read("Hallo Welt.md").ends_with("Hallo Welt"));
+    assert!(notes.read("Hallo Welt.md").ends_with("\nHallo Welt\n"));
     assert_eq!(app.titles(), ["Hallo Welt"]);
 
     // Nothing typed, nothing written.
@@ -727,10 +728,9 @@ async fn requests_of_other_launches_reach_the_window(cx: &mut TestAppContext) {
     assert_eq!(app.editor_text(), "");
     assert_eq!(notes.files().len(), 15);
 
-    let toasts = |app: &mut TestApp| app.cx.update(|window, cx| window.notifications(cx).len());
-    assert_eq!(toasts(&mut app), 0);
+    assert!(app.cx.update(|_, cx| quick::current(cx).is_none()));
     app.request(Request::QuickNote);
-    assert_eq!(toasts(&mut app), 1);
+    assert!(app.cx.update(|_, cx| quick::current(cx).is_some()));
 }
 
 // ---- Theme --------------------------------------------------------------------------

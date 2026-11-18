@@ -21,7 +21,7 @@ use crate::frontmatter::{self, Frontmatter};
 use crate::model::{NoteDoc, NoteId, NoteMeta, NoteRef};
 use crate::scan::{self, Scan};
 
-pub use write::{CreateOptions, TaskRef, WriteOptions};
+pub use write::{CreateOptions, TaskRef, WriteOptions, checked_folder, store_attachment};
 
 pub(crate) const TRASH_DIR: &str = ".trash";
 pub(crate) const ATTACHMENTS_DIR: &str = "_attachments";
@@ -223,6 +223,15 @@ impl NoteStore {
     pub fn fingerprint(&self, id: &NoteId) -> Result<Fingerprint> {
         let metadata = fs::metadata(self.abs(&self.path_of(id)?))?;
         Ok(Fingerprint {
+            modified: timestamp(metadata.modified()).unwrap_or_default(),
+            size: metadata.len(),
+        })
+    }
+
+    /// The state of the file at `rel_path` now; `None` if there is none.
+    pub fn fingerprint_at(&self, rel_path: &str) -> Option<Fingerprint> {
+        let metadata = fs::metadata(self.abs(rel_path)).ok()?;
+        Some(Fingerprint {
             modified: timestamp(metadata.modified()).unwrap_or_default(),
             size: metadata.len(),
         })

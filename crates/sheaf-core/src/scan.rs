@@ -43,12 +43,6 @@ const OPENING_PUNCTUATION: [char; 10] = ['(', '[', '{', '"', '\'', '„', '“',
 
 /// Scans a note body (the file text without frontmatter).
 pub fn scan(body: &str) -> Scan {
-    let mut options = Options::empty();
-    options.insert(Options::ENABLE_TABLES);
-    options.insert(Options::ENABLE_TASKLISTS);
-    options.insert(Options::ENABLE_STRIKETHROUGH);
-    options.insert(Options::ENABLE_WIKILINKS);
-
     let mut scanner = Scanner {
         body,
         title_line: first_line(body),
@@ -58,10 +52,70 @@ pub fn scan(body: &str) -> Scan {
         in_code_block: false,
         in_bare_wikilink: false,
     };
-    for (event, range) in Parser::new_ext(body, options).into_offset_iter() {
+    for (event, range) in Parser::new_ext(body, options()).into_offset_iter() {
         scanner.event(event, range);
     }
     scanner.finish()
+}
+
+/// The files a note body links to or shows, as the app opens them: percent escapes
+/// decoded, without `?query`, `#fragment` and leading `./`. Web addresses, anchors,
+/// wiki links and anything inside code are left out.
+pub fn file_targets(body: &str) -> Vec<String> {
+    let mut targets = Vec::new();
+    for event in Parser::new_ext(body, options()) {
+        let (Event::Start(Tag::Link {
+            link_type,
+            dest_url,
+            ..
+        })
+        | Event::Start(Tag::Image {
+            link_type,
+            dest_url,
+            ..
+        })) = event
+        else {
+            continue;
+        };
+        if matches!(link_type, LinkType::WikiLink { .. } | LinkType::Email) || has_scheme(&dest_url)
+        {
+            continue;
+        }
+        let path = dest_url.split(['?', '#']).next().unwrap_or_default();
+        let mut path = percent_decode(path);
+        while let Some(rest) = path.strip_prefix("./") {
+            path = rest.to_owned();
+        }
+        if !path.is_empty() {
+            targets.push(path);
+        }
+    }
+    targets
+}
+
+/// `%20` and friends in a link target, as files on disk do not have them.
+pub fn percent_decode(text: &str) -> String {
+    let mut bytes = Vec::with_capacity(text.len());
+    let mut rest = text.as_bytes();
+    while let [first, tail @ ..] = rest {
+        let escaped = match (first, tail) {
+            (b'%', [high, low, ..]) => std::str::from_utf8(&[*high, *low])
+                .ok()
+                .and_then(|hex| u8::from_str_radix(hex, 16).ok()),
+            _ => None,
+        };
+        match escaped {
+            Some(byte) => {
+                bytes.push(byte);
+                rest = &tail[2..];
+            }
+            None => {
+                bytes.push(*first);
+                rest = tail;
+            }
+        }
+    }
+    String::from_utf8_lossy(&bytes).into_owned()
 }
 
 /// Frontmatter tags followed by text tags, without repeats that differ only in case.
@@ -270,13 +324,26 @@ enum TargetKind {
     Other,
 }
 
-fn target_kind(target: &str) -> TargetKind {
+fn options() -> Options {
+    let mut options = Options::empty();
+    options.insert(Options::ENABLE_TABLES);
+    options.insert(Options::ENABLE_TASKLISTS);
+    options.insert(Options::ENABLE_STRIKETHROUGH);
+    options.insert(Options::ENABLE_WIKILINKS);
+    options
+}
+
+/// Whether `target` starts with a URL scheme such as `https:` or `mailto:`.
+fn has_scheme(target: &str) -> bool {
     let scheme_end = target.find(':').unwrap_or(target.len());
-    let has_scheme = scheme_end < target.len()
+    scheme_end < target.len()
         && target[..scheme_end]
             .chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'));
-    if has_scheme || target.starts_with(['/', '#']) {
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
+}
+
+fn target_kind(target: &str) -> TargetKind {
+    if has_scheme(target) || target.starts_with(['/', '#']) {
         return TargetKind::Other;
     }
     let path = target.split(['?', '#']).next().unwrap_or_default();

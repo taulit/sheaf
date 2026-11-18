@@ -51,6 +51,24 @@ actions!(
         OpenSettings,
         ShowShortcuts,
         CloseWindow,
+        /// Store the quick note and close its window.
+        QuickNoteDone,
+        /// Store the quick note, close its window and show the note in the main window.
+        QuickNoteOpen,
+        /// Save the gallery's search as a smart folder.
+        SaveSearchAsSmartFolder,
+        /// Open the `+ ▾` menu of the gallery: new notes from templates.
+        ShowTemplates,
+        /// Save a copy of the open note as a Markdown file.
+        ExportMarkdown,
+        /// Save the open note as a PDF file.
+        ExportPdf,
+        /// Print the open note.
+        Print,
+        /// Copy a file into the open note's attachments and link it.
+        AttachFile,
+        /// Paste into the open note: files and images become attachments.
+        PasteAttachment,
     ]
 );
 
@@ -60,12 +78,22 @@ pub const WINDOW: &str = "Sheaf";
 pub const GALLERY: &str = "Gallery";
 /// Key context of the note view, around the editor.
 pub const NOTE: &str = "Note";
+/// Key context of the editor itself, inside [`NOTE`].
+pub const EDITOR: &str = "MarkdownEditor";
+/// Key context of the Quick Note window.
+pub const QUICK_NOTE: &str = "QuickNote";
+/// The editor inside the Quick Note window, where Ctrl+Enter is not the editor's.
+const QUICK_NOTE_EDITOR: &str = "QuickNote > MarkdownEditor";
 
 pub fn bind_keys(cx: &mut App) {
+    // The editor's keys first, so that ours win where both bind the same key.
+    gpui_markdown_editor::init(cx);
     cx.bind_keys([
         KeyBinding::new("ctrl-n", NewNote, Some(WINDOW)),
         KeyBinding::new("ctrl-shift-n", QuickNote, Some(WINDOW)),
         KeyBinding::new("ctrl-k", OpenCommandPalette, Some(WINDOW)),
+        // The editor binds Ctrl+K to links; in Sheaf it is the palette (plan 03 §5).
+        KeyBinding::new("ctrl-k", OpenCommandPalette, Some(EDITOR)),
         KeyBinding::new("ctrl-,", OpenSettings, Some(WINDOW)),
         KeyBinding::new("ctrl-?", ShowShortcuts, Some(WINDOW)),
         KeyBinding::new("ctrl-p", TogglePin, Some(WINDOW)),
@@ -81,6 +109,12 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("escape", ClearSearch, Some(GALLERY)),
         KeyBinding::new("ctrl-w", Back, Some(NOTE)),
         KeyBinding::new("escape", Back, Some(NOTE)),
+        KeyBinding::new("escape", QuickNoteDone, Some(QUICK_NOTE)),
+        KeyBinding::new("ctrl-w", QuickNoteDone, Some(QUICK_NOTE)),
+        KeyBinding::new("ctrl-enter", QuickNoteOpen, Some(QUICK_NOTE)),
+        KeyBinding::new("ctrl-enter", QuickNoteOpen, Some(QUICK_NOTE_EDITOR)),
+        // The editor pastes text only; files and images on the clipboard are ours.
+        KeyBinding::new("ctrl-v", PasteAttachment, Some(EDITOR)),
     ]);
 }
 
@@ -110,16 +144,25 @@ pub fn commands() -> Vec<CommandInfo> {
     vec![
         command(Box::new(NewNote), tr("New Note")),
         command(Box::new(QuickNote), tr("Quick Note")),
+        command(Box::new(ShowTemplates), tr("New Note from Template…")),
         command(Box::new(Search), tr("Search")),
         command(Box::new(TogglePin), tr("Pin or Unpin")),
         command(Box::new(Trash), tr("Move to Trash")),
         command(Box::new(ToggleView), tr("Toggle View")),
         command(Box::new(ShowSortOptions), tr("Sort Notes")),
         command(Box::new(ShowFolders), tr("Show Folders")),
+        command(
+            Box::new(SaveSearchAsSmartFolder),
+            tr("Save Search as Smart Folder"),
+        ),
         command(Box::new(Back), tr("Back to Notes")),
         command(Box::new(ShowShortcuts), tr("Keyboard Shortcuts")),
         command(Box::new(OpenSettings), tr("Settings")),
         command(Box::new(CloseWindow), tr("Close Window")),
+        command(Box::new(ExportMarkdown), tr("Export as Markdown…")),
+        command(Box::new(ExportPdf), tr("Export as PDF…")),
+        command(Box::new(Print), tr("Print…")),
+        command(Box::new(AttachFile), tr("Attach File…")),
         hidden(Box::new(OpenCommandPalette), tr("Command Palette")),
         hidden(Box::new(OpenSelected), tr("Open Selected Note")),
         hidden(Box::new(SelectNext), tr("Select Next Note")),
@@ -127,5 +170,8 @@ pub fn commands() -> Vec<CommandInfo> {
         hidden(Box::new(SelectLeft), tr("Select Note on the Left")),
         hidden(Box::new(SelectRight), tr("Select Note on the Right")),
         hidden(Box::new(ClearSearch), tr("Clear Search")),
+        hidden(Box::new(QuickNoteDone), tr("Close Quick Note")),
+        hidden(Box::new(QuickNoteOpen), tr("Open Quick Note in Notes")),
+        hidden(Box::new(PasteAttachment), tr("Paste")),
     ]
 }

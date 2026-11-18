@@ -11,6 +11,7 @@ publish.workspace = true
 [dependencies]
 sheaf-core.workspace = true
 sheaf-searchd.workspace = true
+sheaf-export.workspace = true
 clap.workspace = true
 clap_complete.workspace = true
 serde.workspace = true
@@ -20,6 +21,7 @@ thiserror.workspace = true
 zbus.workspace = true
 log.workspace = true
 toml.workspace = true
+ulid.workspace = true
 gpui.workspace = true
 gpui_platform.workspace = true
 gpui-component.workspace = true

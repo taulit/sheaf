@@ -226,7 +226,12 @@ mod tests {
             notes_dir: Some("/from/config".into()),
             ..AppConfig::default()
         };
-        config.save(&env.app_config_path().unwrap()).unwrap();
+        AppConfig::save_changes(
+            &env.app_config_path().unwrap(),
+            &AppConfig::default(),
+            &config,
+        )
+        .unwrap();
 
         assert_eq!(env.notes_dir(None).unwrap(), Path::new("/from/config"));
         env.notes_dir = Some("/from/env".into());

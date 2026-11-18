@@ -7,8 +7,9 @@
 //!   also while a note covers it, so it keeps its scroll position and selection.
 //! - It reads and changes notes only through the [`Library`] and reloads on every
 //!   [`LibraryEvent`].
-//! - It asks the window to open a note by emitting [`GalleryEvent::Open`] and reports
-//!   a deletion with [`GalleryEvent::Trashed`] for the window's Undo toast; creating a
+//! - It asks the window to open a note by emitting [`GalleryEvent::Open`], reports
+//!   a deletion with [`GalleryEvent::Trashed`] for the window's Undo toast and a change
+//!   that failed with [`GalleryEvent::Failed`]; creating a
 //!   note is the window's `NewNote` action, in [`current_folder`](GalleryView::current_folder).
 //! - The window calls [`set_query`](GalleryView::set_query) for a search that came
 //!   from outside (GNOME search, `sheaf` on the command line) and
@@ -25,6 +26,9 @@
 //! | [`preview`] | the miniature of a note's text |
 //! | `render` | header, search field, chip row, popovers, empty states |
 //! | `cards` | cards, list rows and their context menu |
+//! | [`trash`] | "Recently Deleted": restore, delete for good, the read-only note |
+//! | [`smart`] | smart folders: saved searches |
+//! | `templates` | the `+ ▾` menu: new notes from templates |
 //!
 //! Only metadata from the index is needed to show the gallery. The text of a note is
 //! read, in the background, when its card is first drawn, and its miniature is kept
@@ -37,6 +41,9 @@ pub mod dates;
 pub mod layout;
 pub mod preview;
 mod render;
+pub mod smart;
+mod templates;
+pub mod trash;
 
 use std::collections::{BTreeSet, HashMap};
 use std::ops::Range;
@@ -77,6 +84,12 @@ pub enum GalleryEvent {
     Open { id: NoteId, query: String },
     /// These notes went to the trash; the window offers to undo it.
     Trashed(Vec<NoteId>),
+    /// A change failed; the message says why, for a toast.
+    Failed(String),
+    /// A change worth telling, such as notes restored, for a toast.
+    Notice(String),
+    /// Create a note from this template and open it.
+    NewFromTemplate(String),
 }
 
 /// Which notes the gallery shows: chosen in the chip row or the folder popover.
@@ -87,6 +100,10 @@ pub enum Scope {
     /// A folder with its subfolders, relative to the notes folder.
     Folder(String),
     Tag(String),
+    /// "Recently Deleted": the notes in the trash.
+    Trash,
+    /// A smart folder, by name: what its saved search finds.
+    Smart(String),
 }
 
 impl Scope {
@@ -96,6 +113,7 @@ impl Scope {
             // Anchored, so that `Privat` does not also find `Arbeit/Privat`.
             Scope::Folder(path) => Some(Filter::Folder(format!("/{path}"))),
             Scope::Tag(tag) => Some(Filter::Tag(tag.clone())),
+            Scope::Trash | Scope::Smart(_) => None,
         }
     }
 
@@ -103,7 +121,7 @@ impl Scope {
     fn config_key(&self) -> &str {
         match self {
             Scope::Folder(path) => path,
-            Scope::All | Scope::Tag(_) => "",
+            Scope::All | Scope::Tag(_) | Scope::Trash | Scope::Smart(_) => "",
         }
     }
 
@@ -113,6 +131,8 @@ impl Scope {
             Scope::All => tr("All Notes"),
             Scope::Folder(path) => path.rsplit('/').next().unwrap_or(path).to_owned(),
             Scope::Tag(tag) => format!("#{tag}"),
+            Scope::Trash => tr("Recently Deleted"),
+            Scope::Smart(name) => name.clone(),
         }
     }
 }
@@ -122,6 +142,8 @@ impl Scope {
 pub enum Popover {
     Folders,
     Sort,
+    /// The `+ ▾` menu of new notes and templates.
+    Templates,
 }
 
 /// Where the query matched a note.
@@ -156,7 +178,9 @@ struct Hover {
 pub struct GalleryView {
     library: Entity<Library>,
     scope: Scope,
-    config: FolderConfig,
+    /// The settings of the notes folder; `None` until they are read. Nothing is
+    /// changed in them before.
+    config: Option<FolderConfig>,
     folders: Vec<Folder>,
     search: Entity<InputState>,
     /// Completed filters, shown as chips in front of the text.
@@ -189,11 +213,15 @@ pub struct GalleryView {
     popover: Option<Popover>,
     /// The name field of "New Folder" in the folder popover, while it is open.
     new_folder: Option<Entity<InputState>>,
+    trash: trash::TrashState,
+    smart: smart::SmartState,
+    templates: templates::TemplatesState,
     generation: u64,
     focus_handle: FocusHandle,
     /// The pause before a search, while typing.
     debounce: Task<()>,
     loading: Task<()>,
+    loading_config: Task<()>,
     saving: Task<()>,
     _subscriptions: [Subscription; 2],
 }
@@ -221,7 +249,7 @@ impl GalleryView {
         let mut view = GalleryView {
             library,
             scope: Scope::All,
-            config: FolderConfig::default(),
+            config: None,
             folders: Vec::new(),
             search,
             chips: Vec::new(),
@@ -245,10 +273,14 @@ impl GalleryView {
             hover: Hover::default(),
             popover: None,
             new_folder: None,
+            trash: trash::TrashState::default(),
+            smart: smart::SmartState::default(),
+            templates: templates::TemplatesState::default(),
             generation: 0,
             focus_handle: cx.focus_handle(),
             debounce: Task::ready(()),
             loading: Task::ready(()),
+            loading_config: Task::ready(()),
             saving: Task::ready(()),
             _subscriptions: subscriptions,
         };
@@ -286,7 +318,7 @@ impl GalleryView {
     pub fn current_folder(&self) -> String {
         match &self.scope {
             Scope::Folder(path) => path.clone(),
-            Scope::All | Scope::Tag(_) => String::new(),
+            Scope::All | Scope::Tag(_) | Scope::Trash | Scope::Smart(_) => String::new(),
         }
     }
 
@@ -295,11 +327,18 @@ impl GalleryView {
     }
 
     pub fn view(&self) -> View {
-        self.config.view(self.scope.config_key()).view
+        self.folder_view().view
     }
 
     pub fn sort(&self) -> SortOrder {
-        self.config.view(self.scope.config_key()).sort
+        self.folder_view().sort
+    }
+
+    fn folder_view(&self) -> FolderView {
+        self.config
+            .as_ref()
+            .map(|config| config.view(self.scope.config_key()))
+            .unwrap_or_default()
     }
 
     pub fn popover(&self) -> Option<Popover> {
@@ -506,28 +545,54 @@ impl GalleryView {
 
     // ---- Loading -------------------------------------------------------------------
 
-    fn load_config(&mut self, cx: &mut Context<Self>) {
+    /// Reads the folder settings, with the default order of the settings, and lists
+    /// again; the scope, search and selection stay.
+    pub fn load_config(&mut self, cx: &mut Context<Self>) {
         let config = self.library.read(cx).folder_config(cx);
-        self.loading = cx.spawn(async move |this, cx| {
+        self.loading_config = cx.spawn(async move |this, cx| {
             let config = config.await;
             let _ = this.update(cx, |this, cx| {
                 match config {
-                    Ok(config) => this.config = config,
-                    Err(err) => log::warn!("cannot read the folder settings: {err}"),
+                    Ok(config) => this.config = Some(config),
+                    Err(err) => {
+                        log::warn!("cannot read the folder settings: {err}");
+                        let message = tr("Could not read the folder settings: {}")
+                            .replace("{}", &err.to_string());
+                        cx.emit(GalleryEvent::Failed(message));
+                    }
                 }
                 this.reload(cx);
             });
         });
     }
 
-    fn save_config(&mut self, cx: &mut Context<Self>) {
-        let saved = self
-            .library
-            .read(cx)
-            .save_folder_config(self.config.clone(), cx);
-        self.saving = cx.background_spawn(async move {
+    /// Changes the folder settings shown and writes the keys `change` changes, after
+    /// the changes before it. Does nothing before the settings were read. If the
+    /// write fails, the gallery says so and shows the settings as they are on disk.
+    fn change_config(
+        &mut self,
+        change: impl Fn(&mut FolderConfig) + Send + 'static,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(config) = &mut self.config else {
+            return;
+        };
+        let before = config.clone();
+        change(config);
+        let saved = self.library.read(cx).update_folder_config(change, cx);
+        let previous = std::mem::replace(&mut self.saving, Task::ready(()));
+        self.saving = cx.spawn(async move |this, cx| {
+            previous.await;
             if let Err(err) = saved.await {
                 log::warn!("cannot save the folder settings: {err}");
+                let message =
+                    tr("Could not save the folder settings: {}").replace("{}", &err.to_string());
+                let _ = this.update(cx, |this, cx| {
+                    cx.emit(GalleryEvent::Failed(message));
+                    this.config = Some(before);
+                    this.relayout();
+                    this.load_config(cx);
+                });
             }
         });
     }
@@ -537,10 +602,16 @@ impl GalleryView {
     fn reload(&mut self, cx: &mut Context<Self>) {
         self.generation += 1;
         let generation = self.generation;
+        if self.scope == Scope::Trash {
+            self.reload_trash(generation, cx);
+            return;
+        }
         let library = self.library.read(cx);
         let mut filters: Vec<Filter> = self.scope.filter().into_iter().collect();
         filters.extend(self.chips.iter().cloned());
-        let text = searchable_text(&self.text);
+        let (smart_filters, smart_words) = self.smart_query();
+        filters.extend(smart_filters);
+        let text = searchable_text(&format!("{smart_words} {}", self.text));
         let listing: Task<sheaf_core::Result<Listing>> = if text.is_empty() {
             let sort = self.sort();
             let now = library.now();
@@ -733,7 +804,11 @@ impl GalleryView {
                 preview: None,
             },
         );
-        let body = self.library.read(cx).body(&id, cx);
+        let body = if self.scope == Scope::Trash {
+            self.library.read(cx).trashed_body(&note.rel_path, cx)
+        } else {
+            self.library.read(cx).body(&id, cx)
+        };
         let built = cx.background_spawn(async move {
             let body = body.await.ok().flatten().unwrap_or_default();
             Arc::new(Preview::build(&body))
@@ -767,11 +842,11 @@ impl GalleryView {
     }
 
     pub fn set_view(&mut self, view: View, cx: &mut Context<Self>) {
-        if self.view() == view {
+        if self.config.is_none() || self.view() == view {
             return;
         }
-        self.folder_view().view = view;
-        self.save_config(cx);
+        let key = self.scope.config_key().to_owned();
+        self.change_config(move |config| folder_view(config, &key).view = view, cx);
         self.relayout();
         if let Some(row) = self.selected.and_then(|index| self.layout.row_of(index)) {
             self.list_state.scroll_to_reveal_item(row);
@@ -790,25 +865,26 @@ impl GalleryView {
 
     pub fn set_sort(&mut self, sort: SortOrder, cx: &mut Context<Self>) {
         self.popover = None;
-        if self.sort() != sort {
-            self.folder_view().sort = sort;
-            self.save_config(cx);
+        if self.config.is_some() && self.sort() != sort {
+            let key = self.scope.config_key().to_owned();
+            self.change_config(move |config| folder_view(config, &key).sort = sort, cx);
             self.scroll_to_top = true;
             self.reload(cx);
         }
         cx.notify();
     }
 
-    fn folder_view(&mut self) -> &mut FolderView {
-        let key = self.scope.config_key().to_owned();
-        let current = self.config.view(&key);
-        self.config.folders.entry(key).or_insert(current)
-    }
-
     /// Opens or closes a popover of the header bar.
     pub fn set_popover(&mut self, popover: Option<Popover>, cx: &mut Context<Self>) {
+        if popover == Some(Popover::Folders) {
+            self.count_trash(cx);
+        }
+        if popover == Some(Popover::Templates) {
+            self.load_templates(cx);
+        }
         self.popover = popover;
         self.new_folder = None;
+        self.stop_smart_edit();
         cx.notify();
     }
 
@@ -920,6 +996,10 @@ impl GalleryView {
     }
 
     fn open(&mut self, index: usize, cx: &mut Context<Self>) {
+        if self.scope == Scope::Trash {
+            self.open_trashed(index, cx);
+            return;
+        }
         let Some(note) = self.notes.get(index) else {
             return;
         };
@@ -938,6 +1018,11 @@ impl GalleryView {
     }
 
     fn open_selected(&mut self, _: &OpenSelected, _: &mut Window, cx: &mut Context<Self>) {
+        if self.confirming().is_some() {
+            // Deleting for good takes a click on its button, never Enter.
+            self.cancel_confirm(cx);
+            return;
+        }
         if let Some(index) = self.selected {
             self.open(index, cx);
         }
@@ -965,36 +1050,80 @@ impl GalleryView {
 
     /// Pins the selected notes, or unpins them if all of them are pinned.
     pub fn toggle_pin(&mut self, cx: &mut Context<Self>) {
+        if self.scope == Scope::Trash {
+            return;
+        }
         let notes: Vec<(NoteId, bool)> = self
             .selection()
             .iter()
             .map(|note| (note.id.clone(), note.pinned))
             .collect();
         let pin = !notes.iter().all(|(_, pinned)| *pinned);
-        for (id, _) in notes {
-            self.library
-                .update(cx, |library, cx| library.set_pinned(&id, pin, cx))
-                .detach();
-        }
+        let changes = notes
+            .iter()
+            .map(|(id, _)| {
+                self.library
+                    .update(cx, |library, cx| library.set_pinned(id, pin, cx))
+            })
+            .collect();
+        let message = if pin {
+            tr("Could not pin the note: {}")
+        } else {
+            tr("Could not unpin the note: {}")
+        };
+        Self::report(changes, message, cx);
     }
 
     pub fn move_selection_to(&mut self, folder: &str, cx: &mut Context<Self>) {
-        for id in self.selection_ids() {
-            self.library
-                .update(cx, |library, cx| library.move_to(&id, folder, cx))
-                .detach();
-        }
+        let changes = self
+            .selection_ids()
+            .iter()
+            .map(|id| {
+                self.library
+                    .update(cx, |library, cx| library.move_to(id, folder, cx))
+            })
+            .collect();
+        Self::report(changes, tr("Could not move the note: {}"), cx);
     }
 
     pub fn duplicate_selection(&mut self, cx: &mut Context<Self>) {
-        for id in self.selection_ids() {
-            self.library
-                .update(cx, |library, cx| library.duplicate(&id, cx))
-                .detach();
-        }
+        let changes = self
+            .selection_ids()
+            .iter()
+            .map(|id| {
+                self.library
+                    .update(cx, |library, cx| library.duplicate(id, cx))
+            })
+            .collect();
+        Self::report(changes, tr("Could not duplicate the note: {}"), cx);
     }
 
-    /// Moves the selected notes to the trash; the window offers to undo it.
+    /// Waits for `changes` and, if one failed, says why in a toast: `message` with
+    /// the reason for `{}`. The Library has looked at the note's file again by then,
+    /// so the gallery shows it as it is.
+    fn report(
+        changes: Vec<Task<sheaf_core::Result<NoteMeta>>>,
+        message: String,
+        cx: &mut Context<Self>,
+    ) {
+        cx.spawn(async move |this, cx| {
+            let mut failed = None;
+            for change in changes {
+                if let Err(err) = change.await {
+                    log::error!("cannot change a note: {err}");
+                    failed.get_or_insert(err.to_string());
+                }
+            }
+            if let Some(reason) = failed {
+                let message = message.replace("{}", &reason);
+                let _ = this.update(cx, |_, cx| cx.emit(GalleryEvent::Failed(message)));
+            }
+        })
+        .detach();
+    }
+
+    /// Moves the selected notes to the trash; the window offers to undo it. If one
+    /// could not go, a toast says why instead: an Undo would hide that.
     pub fn trash_selection(&mut self, cx: &mut Context<Self>) {
         let trashing: Vec<_> = self
             .selection_ids()
@@ -1006,15 +1135,24 @@ impl GalleryView {
         }
         cx.spawn(async move |this, cx| {
             let mut trashed = Vec::new();
+            let mut failed = None;
             for task in trashing {
                 match task.await {
                     Ok(meta) => trashed.push(meta.id),
-                    Err(err) => log::error!("cannot move a note to the trash: {err}"),
+                    Err(err) => {
+                        log::error!("cannot move a note to the trash: {err}");
+                        failed.get_or_insert(err.to_string());
+                    }
                 }
             }
-            if !trashed.is_empty() {
-                let _ = this.update(cx, |_, cx| cx.emit(GalleryEvent::Trashed(trashed)));
-            }
+            let event = match failed {
+                Some(reason) => {
+                    GalleryEvent::Failed(tr("Could not move to trash: {}").replace("{}", &reason))
+                }
+                None if trashed.is_empty() => return,
+                None => GalleryEvent::Trashed(trashed),
+            };
+            let _ = this.update(cx, |_, cx| cx.emit(event));
         })
         .detach();
     }
@@ -1037,6 +1175,12 @@ enum Direction {
 
 /// The words and phrases of what is typed, without the filters still being typed:
 /// `#re` must not empty the results before it becomes `#rezepte`.
+/// How `folder` is shown in `config`, stored for it from now on.
+fn folder_view<'a>(config: &'a mut FolderConfig, folder: &str) -> &'a mut FolderView {
+    let current = config.view(folder);
+    config.folders.entry(folder.to_owned()).or_insert(current)
+}
+
 fn searchable_text(text: &str) -> String {
     query::parse(text)
         .items
@@ -1073,7 +1217,11 @@ impl GalleryView {
     }
 
     fn trash(&mut self, _: &Trash, _: &mut Window, cx: &mut Context<Self>) {
-        self.trash_selection(cx);
+        if self.scope == Scope::Trash {
+            self.ask_purge_selection(cx);
+        } else {
+            self.trash_selection(cx);
+        }
     }
 
     fn search_action(&mut self, _: &Search, window: &mut Window, cx: &mut Context<Self>) {

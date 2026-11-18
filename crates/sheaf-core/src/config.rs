@@ -2,7 +2,10 @@
 //! travels with the notes in `<notes>/.sheaf/config.toml`.
 //!
 //! Both keep keys they do not know, so a file written by a newer version or edited by
-//! hand survives a load and save.
+//! hand survives a load and a change. A change is written key by key
+//! ([`FolderConfig::update`], [`AppConfig::save_changes`]): the file is read again and
+//! only the keys the change touched are replaced, so every other key stays as it is on
+//! disk, also one with a value this version does not accept.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -25,8 +28,46 @@ pub struct AppConfig {
     /// The notes folder, if the user chose one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub notes_dir: Option<PathBuf>,
+    /// The order of folders that have none of their own; see [`FolderConfig::view`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sort: Option<Sort>,
+    /// How the note view sets the text.
+    #[serde(default)]
+    pub editor: EditorSettings,
     #[serde(flatten)]
     pub other: toml::Table,
+}
+
+/// How the note view sets the text: `[editor]` in the app configuration.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct EditorSettings {
+    pub font: EditorFont,
+    pub line_width: LineWidth,
+    #[serde(flatten)]
+    pub other: toml::Table,
+}
+
+/// The typeface of the note text.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum EditorFont {
+    /// The font of the desktop.
+    #[default]
+    System,
+    Serif,
+    Mono,
+}
+
+/// The longest line of note text.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LineWidth {
+    Narrow,
+    /// The 700 px column of plan 04.
+    #[default]
+    Medium,
+    Wide,
 }
 
 /// What Sheaf remembers about one notes folder.
@@ -36,7 +77,6 @@ pub struct FolderConfig {
     /// Tags shown as filter chips.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub pinned_tags: Vec<String>,
-    #[serde(skip_serializing_if = "QuickNote::is_default")]
     pub quick_note: QuickNote,
     /// Sort order and view per folder, keyed by folder path; the empty key is "all notes".
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
@@ -47,6 +87,10 @@ pub struct FolderConfig {
     /// defines what is in it.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub notes: BTreeMap<NoteId, toml::Table>,
+    /// The order of folders without one of their own: [`AppConfig::sort`], put here
+    /// by whoever loads this for a view. Not stored in this file.
+    #[serde(skip)]
+    pub default_sort: Sort,
     #[serde(flatten)]
     pub other: toml::Table,
 }
@@ -89,14 +133,16 @@ pub enum View {
     List,
 }
 
-/// Settings of the Quick Note window.
+/// Settings of the Quick Note window, changed in the settings window. The Quick Note
+/// window and `sheaf-searchd` read them.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct QuickNote {
     /// The folder for quick notes; see [`QuickNote::folder_name`] for the default.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub folder: Option<String>,
-    /// A quick note younger than this is continued instead of starting a new one.
+    /// A quick note younger than this is continued instead of starting a new one;
+    /// 0 always starts a new one.
     pub resume_minutes: u32,
     #[serde(flatten)]
     pub other: toml::Table,
@@ -117,10 +163,6 @@ impl QuickNote {
     pub fn folder_name(&self) -> String {
         self.folder.clone().unwrap_or_else(|| tr("Quick Notes"))
     }
-
-    fn is_default(&self) -> bool {
-        *self == QuickNote::default()
-    }
 }
 
 impl AppConfig {
@@ -129,8 +171,19 @@ impl AppConfig {
         load(path)
     }
 
-    pub fn save(&self, path: &Path) -> Result<()> {
-        save(self, path)
+    /// Writes to the file at `path` the keys in which `after` differs from `before`,
+    /// and nothing else. Fails without writing if the file is not TOML.
+    pub fn save_changes(path: &Path, before: &Self, after: &Self) -> Result<()> {
+        let mut file = read_table(path)?;
+        if patch(
+            &mut file,
+            &to_table(before, path)?,
+            &to_table(after, path)?,
+            path,
+        )? {
+            write_table(&file, path)?;
+        }
+        Ok(())
     }
 }
 
@@ -145,13 +198,40 @@ impl FolderConfig {
         load(&Self::path(root))
     }
 
-    pub fn save(&self, root: &Path) -> Result<()> {
-        save(self, &Self::path(root))
+    /// Reads the configuration of `root` again, lets `change` change it and writes back
+    /// only the keys it changed. Returns the configuration as it is now. Fails without
+    /// writing if the file cannot be read, for example because of a value this version
+    /// does not accept.
+    pub fn update(root: &Path, change: impl FnOnce(&mut FolderConfig)) -> Result<FolderConfig> {
+        let path = Self::path(root);
+        let mut file = read_table(&path)?;
+        let before: FolderConfig = file
+            .clone()
+            .try_into()
+            .map_err(|err| Error::Config(format!("{}: {err}", path.display())))?;
+        let mut after = before.clone();
+        change(&mut after);
+        if patch(
+            &mut file,
+            &to_table(&before, &path)?,
+            &to_table(&after, &path)?,
+            &path,
+        )? {
+            write_table(&file, &path)?;
+        }
+        Ok(after)
     }
 
-    /// How `folder` is shown; the defaults if nothing was stored for it.
+    /// How `folder` is shown; the defaults, with [`default_sort`](Self::default_sort),
+    /// if nothing was stored for it.
     pub fn view(&self, folder: &str) -> FolderView {
-        self.folders.get(folder).cloned().unwrap_or_default()
+        self.folders
+            .get(folder)
+            .cloned()
+            .unwrap_or_else(|| FolderView {
+                sort: self.default_sort,
+                ..FolderView::default()
+            })
     }
 }
 
@@ -165,14 +245,102 @@ fn load<T: DeserializeOwned + Default>(path: &Path) -> Result<T> {
     }
 }
 
-fn save<T: Serialize>(config: &T, path: &Path) -> Result<()> {
-    let text = toml::to_string_pretty(config)
+/// The file at `path` as plain TOML, whatever its values mean; empty if it is missing.
+fn read_table(path: &Path) -> Result<toml::Table> {
+    match fs::read_to_string(path) {
+        Ok(text) => text
+            .parse()
+            .map_err(|err| Error::Config(format!("{}: {err}", path.display()))),
+        Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(toml::Table::new()),
+        Err(err) => Err(err.into()),
+    }
+}
+
+fn to_table<T: Serialize>(config: &T, path: &Path) -> Result<toml::Table> {
+    toml::Table::try_from(config).map_err(|err| Error::Config(format!("{}: {err}", path.display())))
+}
+
+fn write_table(table: &toml::Table, path: &Path) -> Result<()> {
+    let text = toml::to_string_pretty(table)
         .map_err(|err| Error::Config(format!("{}: {err}", path.display())))?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
     fsops::write_atomic(path, text.as_bytes())?;
     Ok(())
+}
+
+/// Makes the keys of `file` in which `after` differs from `before` what they are in
+/// `after`; the others stay. Tables are compared key by key, other values whole.
+/// Returns whether `file` changed. Fails, leaving `file` as it was, if a table of
+/// `after` is something else in `file`.
+fn patch(
+    file: &mut toml::Table,
+    before: &toml::Table,
+    after: &toml::Table,
+    path: &Path,
+) -> Result<bool> {
+    let mut patched = file.clone();
+    let changed = patch_table(&mut patched, before, after, path)?;
+    if changed {
+        *file = patched;
+    }
+    Ok(changed)
+}
+
+fn patch_table(
+    file: &mut toml::Table,
+    before: &toml::Table,
+    after: &toml::Table,
+    path: &Path,
+) -> Result<bool> {
+    let empty = toml::Table::new();
+    let mut changed = false;
+    for (key, new) in after {
+        let old = before.get(key);
+        if old == Some(new) {
+            continue;
+        }
+        if let toml::Value::Table(new) = new {
+            let old = match old {
+                Some(toml::Value::Table(old)) => old,
+                _ => &empty,
+            };
+            if new.is_empty() && !file.contains_key(key) {
+                continue;
+            }
+            let target = file
+                .entry(key.clone())
+                .or_insert_with(|| toml::Value::Table(toml::Table::new()));
+            let toml::Value::Table(target) = target else {
+                return Err(Error::Config(format!(
+                    "{}: `{key}` is not a table",
+                    path.display()
+                )));
+            };
+            changed |= patch_table(target, old, new, path)?;
+        } else if file.get(key) != Some(new) {
+            file.insert(key.clone(), new.clone());
+            changed = true;
+        }
+    }
+    for (key, old) in before.iter().filter(|(key, _)| !after.contains_key(*key)) {
+        match (old, file.get_mut(key)) {
+            (toml::Value::Table(old), Some(toml::Value::Table(target))) => {
+                changed |= patch_table(target, old, &empty, path)?;
+                if target.is_empty() {
+                    file.remove(key);
+                    changed = true;
+                }
+            }
+            (_, Some(_)) => {
+                file.remove(key);
+                changed = true;
+            }
+            (_, None) => {}
+        }
+    }
+    Ok(changed)
 }
 
 #[cfg(test)]
@@ -257,19 +425,21 @@ enabled = true
     }
 
     #[test]
-    fn unknown_keys_survive_a_load_and_save() {
+    fn an_update_changes_only_its_keys_and_keeps_unknown_ones() {
         let dir = tempfile::tempdir().unwrap();
         fs::create_dir(dir.path().join(".sheaf")).unwrap();
         fs::write(FolderConfig::path(dir.path()), FULL).unwrap();
         let loaded = FolderConfig::load(dir.path()).unwrap();
 
-        let mut changed = loaded.clone();
-        changed.pinned_tags.push("neu".to_owned());
-        changed.folders.entry("Privat".to_owned()).or_default().view = View::List;
-        changed.save(dir.path()).unwrap();
+        let changed = FolderConfig::update(dir.path(), |config| {
+            config.pinned_tags.push("neu".to_owned());
+            config.folders.entry("Privat".to_owned()).or_default().view = View::List;
+        })
+        .unwrap();
 
         let reloaded = FolderConfig::load(dir.path()).unwrap();
         assert_eq!(reloaded, changed);
+        assert_eq!(reloaded.pinned_tags, ["rezepte", "büro", "neu"]);
         assert_eq!(reloaded.other["future_setting"].as_str(), Some("kept"));
         assert_eq!(
             reloaded.other["plugin"]["settings"]["enabled"].as_bool(),
@@ -285,26 +455,76 @@ enabled = true
             Some("blue")
         );
         assert_eq!(reloaded.view("Privat").view, View::List);
+        assert_eq!(
+            FolderConfig {
+                pinned_tags: loaded.pinned_tags.clone(),
+                folders: loaded.folders.clone(),
+                ..reloaded.clone()
+            },
+            loaded
+        );
         let entries: Vec<_> = fs::read_dir(dir.path().join(".sheaf")).unwrap().collect();
         assert_eq!(entries.len(), 1);
     }
 
     #[test]
-    fn defaults_are_not_written() {
+    fn updates_of_different_keys_both_survive() {
         let dir = tempfile::tempdir().unwrap();
-        FolderConfig::default().save(dir.path()).unwrap();
-        assert_eq!(
-            fs::read_to_string(FolderConfig::path(dir.path())).unwrap(),
-            ""
-        );
+        fs::create_dir(dir.path().join(".sheaf")).unwrap();
+        fs::write(FolderConfig::path(dir.path()), FULL).unwrap();
+        let id: NoteId = "01JD3K8Z6Q4X7V9B2M5N8P0R3T".parse().unwrap();
 
-        let config = FolderConfig {
-            pinned_tags: vec!["a".to_owned()],
-            ..FolderConfig::default()
-        };
-        config.save(dir.path()).unwrap();
+        FolderConfig::update(dir.path(), |config| {
+            config.folders.entry(String::new()).or_default().view = View::List;
+        })
+        .unwrap();
+        FolderConfig::update(dir.path(), |config| {
+            config.notes.remove(&id);
+            config.quick_note.resume_minutes = 0;
+        })
+        .unwrap();
+
+        let config = FolderConfig::load(dir.path()).unwrap();
+        assert_eq!(config.view("").view, View::List);
+        assert_eq!(config.view("").sort, Sort::Created);
+        assert!(config.notes.is_empty());
+        assert_eq!(config.quick_note.resume_minutes, 0);
+        assert_eq!(config.quick_note.folder_name(), "Eingang");
+        assert_eq!(config.smart_folders.len(), 2);
+        assert_eq!(config.other["future_setting"].as_str(), Some("kept"));
+    }
+
+    #[test]
+    fn an_update_that_changes_nothing_writes_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        FolderConfig::update(dir.path(), |_| {}).unwrap();
+        assert!(!dir.path().join(".sheaf").exists());
+
+        let config = FolderConfig::update(dir.path(), |config| {
+            config.pinned_tags = vec!["a".to_owned()];
+        })
+        .unwrap();
+        assert_eq!(config.pinned_tags, ["a"]);
         let text = fs::read_to_string(FolderConfig::path(dir.path())).unwrap();
         assert_eq!(text.trim(), "pinned_tags = [\"a\"]");
+    }
+
+    #[test]
+    fn an_update_of_an_unreadable_file_fails_and_writes_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir(dir.path().join(".sheaf")).unwrap();
+        for broken in ["pinned_tags = [", "[folders.x]\nsort = \"size\"\n"] {
+            fs::write(FolderConfig::path(dir.path()), broken).unwrap();
+            let err = FolderConfig::update(dir.path(), |config| {
+                config.pinned_tags.push("a".to_owned());
+            })
+            .unwrap_err();
+            assert!(matches!(err, Error::Config(_)), "{broken:?}: {err:?}");
+            assert_eq!(
+                fs::read_to_string(FolderConfig::path(dir.path())).unwrap(),
+                broken
+            );
+        }
     }
 
     #[test]
@@ -333,16 +553,96 @@ enabled = true
         let path = dir.path().join("sheaf/config.toml");
         let mut config = AppConfig {
             notes_dir: Some(PathBuf::from("/home/me/Notizen")),
-            other: toml::Table::new(),
+            ..AppConfig::default()
         };
         config.other.insert(
             "window".to_owned(),
             toml::Value::String("1100x720".to_owned()),
         );
-        config.save(&path).unwrap();
+        AppConfig::save_changes(&path, &AppConfig::default(), &config).unwrap();
         assert_eq!(AppConfig::load(&path).unwrap(), config);
 
         fs::write(&path, "notes_dir = 5\n").unwrap();
         assert!(matches!(AppConfig::load(&path), Err(Error::Config(_))));
+    }
+
+    #[test]
+    fn app_settings_change_only_their_keys() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        fs::write(
+            &path,
+            "notes_dir = \"/n\"\nsort = \"title\"\nwindow = \"big\"\n\n[editor]\nfont = \"serif\"\nline_width = \"wide\"\nligatures = false\n",
+        )
+        .unwrap();
+        let before = AppConfig::load(&path).unwrap();
+        assert_eq!(before.sort, Some(Sort::Title));
+        assert_eq!(before.editor.font, EditorFont::Serif);
+        assert_eq!(before.editor.line_width, LineWidth::Wide);
+        let mut after = before.clone();
+        after.editor.font = EditorFont::Mono;
+        AppConfig::save_changes(&path, &before, &after).unwrap();
+        let text = fs::read_to_string(&path).unwrap();
+        assert!(text.contains("window = \"big\""), "{text}");
+        assert!(text.contains("ligatures = false"), "{text}");
+        assert!(text.contains("font = \"mono\""), "{text}");
+        assert_eq!(AppConfig::load(&path).unwrap(), after);
+
+        let mut unset = after.clone();
+        unset.sort = None;
+        AppConfig::save_changes(&path, &after, &unset).unwrap();
+        assert_eq!(AppConfig::load(&path).unwrap(), unset);
+    }
+
+    #[test]
+    fn values_this_version_rejects_survive_a_change_of_another_key() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        let text = "sort = \"manual\"\nwindow = \"big\"\n\n[editor]\nline_width = \"huge\"\n";
+        fs::write(&path, text).unwrap();
+        assert!(AppConfig::load(&path).is_err());
+
+        // What the app works with when the file could not be read.
+        let before = AppConfig::default();
+        let mut after = before.clone();
+        after.editor.font = EditorFont::Mono;
+        AppConfig::save_changes(&path, &before, &after).unwrap();
+
+        let table: toml::Table = fs::read_to_string(&path).unwrap().parse().unwrap();
+        assert_eq!(table["sort"].as_str(), Some("manual"));
+        assert_eq!(table["window"].as_str(), Some("big"));
+        assert_eq!(table["editor"]["line_width"].as_str(), Some("huge"));
+        assert_eq!(table["editor"]["font"].as_str(), Some("mono"));
+    }
+
+    #[test]
+    fn a_change_to_a_file_that_is_not_toml_writes_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        for broken in ["sort = [", "editor = 3\n"] {
+            fs::write(&path, broken).unwrap();
+            let mut after = AppConfig::default();
+            after.editor.font = EditorFont::Mono;
+            let err = AppConfig::save_changes(&path, &AppConfig::default(), &after).unwrap_err();
+            assert!(matches!(err, Error::Config(_)), "{broken:?}: {err:?}");
+            assert_eq!(fs::read_to_string(&path).unwrap(), broken);
+        }
+    }
+
+    #[test]
+    fn folders_without_an_order_take_the_default_one() {
+        let mut config = FolderConfig::default();
+        config.folders.entry("Arbeit".to_owned()).or_default().sort = Sort::Created;
+        config.default_sort = Sort::Title;
+        assert_eq!(config.view("Privat").sort, Sort::Title);
+        assert_eq!(config.view("Arbeit").sort, Sort::Created);
+        let dir = tempfile::tempdir().unwrap();
+        FolderConfig::update(dir.path(), |stored| {
+            stored.folders.clone_from(&config.folders);
+            stored.default_sort = Sort::Title;
+        })
+        .unwrap();
+        let text = fs::read_to_string(FolderConfig::path(dir.path())).unwrap();
+        assert!(!text.contains("default_sort"), "{text}");
     }
 }

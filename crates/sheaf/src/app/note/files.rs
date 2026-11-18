@@ -39,7 +39,7 @@ fn show_items(path: &Path) -> zbus::Result<()> {
 }
 
 /// `path` as a `file://` URI, with the characters a URI cannot hold escaped.
-fn file_uri(path: &Path) -> String {
+pub(crate) fn file_uri(path: &Path) -> String {
     let mut uri = String::from("file://");
     for byte in path.to_string_lossy().bytes() {
         match byte {

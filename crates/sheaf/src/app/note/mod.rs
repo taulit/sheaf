@@ -32,35 +32,45 @@
 //! A save that fails shows a banner and is tried again with the next change, with "Try
 //! Again" and on leaving; leaving that fails keeps the view open.
 
+mod attach;
+mod backlinks;
 mod date;
-mod files;
+mod export;
+pub use export::ViewerFiles;
+pub(crate) mod files;
 mod header;
 mod jump;
-mod setup;
+pub(crate) mod setup;
 mod worker;
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
 use async_channel::Sender;
 use gpui::{
     AnimationExt as _, App, AppContext as _, ClipboardItem, Context, Entity, EventEmitter,
-    FocusHandle, Focusable, InteractiveElement as _, IntoElement, ParentElement as _, Render,
-    Styled as _, Subscription, Task, Window, div, prelude::FluentBuilder as _, px,
+    ExternalPaths, FocusHandle, Focusable, InteractiveElement as _, IntoElement,
+    ParentElement as _, Render, Styled as _, Subscription, Task, Window, div,
+    prelude::FluentBuilder as _, px,
 };
 use gpui_component::Theme;
 use gpui_markdown_editor::{DocMeta, EditorEvent, MarkdownEditor};
 use sheaf_core::i18n::tr;
 use sheaf_core::{CreateOptions, Note, NoteId, NoteMeta, Sort};
 
-use super::actions::{self, Back, Trash};
+use super::actions::{
+    self, AttachFile, Back, ExportMarkdown, ExportPdf, PasteAttachment, Print, Trash,
+};
 use super::chrome::pane;
 use super::library::{Folder, Library, LibraryEvent};
 use super::overlays::Toast;
+use super::settings::{self, Settings};
 use super::state::Recovery;
 use super::theme::ActiveTokens as _;
 use setup::{Lookup, SharedLookup};
+pub use worker::Upload;
 use worker::{Change, Job, Leave, Queued, Report, Shared};
 
 /// How long typing may pause before the text is saved.
@@ -127,6 +137,9 @@ pub struct NoteView {
     closed: bool,
     /// Leaving is under way.
     leaving: bool,
+    /// Set when the note is left or closed: copies of attachments still running are
+    /// given up, as leaving does not wait for them.
+    closing: Arc<AtomicBool>,
     /// Moving to the trash is under way.
     trashing: bool,
     /// The first line as last seen, to notice when the title changes.
@@ -142,6 +155,13 @@ pub struct NoteView {
     _rename_timer: Task<()>,
     _lookup: Task<()>,
     _state: Task<()>,
+    /// The notes that link here, and the title they were looked up for.
+    backlinks: Vec<NoteMeta>,
+    backlinks_title: String,
+    backlinks_open: bool,
+    _backlinks: Task<()>,
+    _export: Task<()>,
+    _attach: Task<()>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -182,6 +202,11 @@ impl NoteView {
                 this.editor
                     .update(cx, |editor, cx| editor.set_style(style, cx));
             }),
+            cx.observe_global::<Settings>(|this, cx| {
+                let style = setup::style(cx);
+                this.editor
+                    .update(cx, |editor, cx| editor.set_style(style, cx));
+            }),
             // GPUI runs no task while it quits, so the save happens right here.
             cx.on_app_quit(|this, cx| {
                 this.save_now(cx);
@@ -196,6 +221,7 @@ impl NoteView {
                     this.send(Job::Check);
                 }
                 this.refresh_lookup(cx);
+                this.refresh_backlinks(true, cx);
             }),
         ];
 
@@ -222,6 +248,7 @@ impl NoteView {
             lookup,
             fresh: false,
             closed: false,
+            closing: Arc::default(),
             leaving: false,
             trashing: false,
             title: String::new(),
@@ -234,6 +261,12 @@ impl NoteView {
             _rename_timer: Task::ready(()),
             _lookup: Task::ready(()),
             _state: Task::ready(()),
+            backlinks: Vec::new(),
+            backlinks_title: String::new(),
+            backlinks_open: false,
+            _backlinks: Task::ready(()),
+            _export: Task::ready(()),
+            _attach: Task::ready(()),
             _subscriptions: subscriptions,
         };
         view.load_state(cx);
@@ -260,6 +293,11 @@ impl NoteView {
 
     pub fn popover(&self) -> Option<&Popover> {
         self.popover.as_ref()
+    }
+
+    /// Whether the text is there and the editor takes the keys.
+    pub fn is_loaded(&self) -> bool {
+        self.loaded
     }
 
     /// Whether "Saved" is shown at the bottom.
@@ -294,6 +332,7 @@ impl NoteView {
             return Some(Task::ready(false));
         }
         self.leaving = true;
+        self.closing.store(true, Ordering::SeqCst);
         self._save_timer = Task::ready(());
         self._rename_timer = Task::ready(());
         Some(cx.spawn(async move |this, cx| {
@@ -354,10 +393,12 @@ impl NoteView {
     fn left(&mut self, left: bool, text: &str, cx: &mut Context<Self>) -> bool {
         self.leaving = false;
         if !left {
+            self.closing = Arc::default();
             return false;
         }
         if self.editor.read(cx).markdown() != text {
             // Typed while leaving: stay, with what leaving stored as the note.
+            self.closing = Arc::default();
             worker::lock(&self.shared).finished = false;
             self.banner = None;
             self._save_timer = self.after(SAVE_DELAY, false, cx);
@@ -504,6 +545,7 @@ impl NoteView {
     /// Nothing more is written.
     fn finish(&mut self) {
         self.closed = true;
+        self.closing.store(true, Ordering::SeqCst);
         worker::lock(&self.shared).finished = true;
         self._save_timer = Task::ready(());
         self._rename_timer = Task::ready(());
@@ -543,7 +585,7 @@ impl NoteView {
             return;
         }
         self.saved_shown = false;
-        let title = first_line(self.editor.read(cx).document().source()).to_owned();
+        let title = title(self.editor.read(cx));
         if title != self.title {
             self.title = title;
             self.rename_pending = true;
@@ -624,6 +666,7 @@ impl NoteView {
             }
             Report::ChangeFailed { change, reason } => self.change_failed(change, &reason, cx),
         }
+        self.refresh_backlinks(false, cx);
         cx.notify();
     }
 
@@ -643,6 +686,7 @@ impl NoteView {
                 }
             }
             Change::Move => tr("Could not move the note: {}"),
+            Change::Attach => tr("Could not attach: {}"),
         };
         cx.emit(NoteEvent::Toast(Toast::new(message.replace("{}", reason))));
     }
@@ -696,10 +740,9 @@ impl NoteView {
     }
 
     fn show(&mut self, note: &Note, cx: &mut Context<Self>) {
-        let body = note.body();
-        self.title = first_line(body).to_owned();
         self.editor
-            .update(cx, |editor, cx| editor.set_markdown(body, cx));
+            .update(cx, |editor, cx| editor.set_markdown(note.body(), cx));
+        self.title = title(self.editor.read(cx));
         self.took(note.meta.clone());
     }
 
@@ -768,6 +811,26 @@ impl NoteView {
         });
     }
 
+    /// Keeps the column of text at the line width of the settings for the width of
+    /// the window. The editor's column is fixed when it is created, so narrower lines
+    /// are space beside the text.
+    fn fit_column(&mut self, window: &Window, cx: &mut Context<Self>) {
+        let frame = match window.window_decorations() {
+            gpui::Decorations::Client { .. } if !window.is_maximized() => px(40.),
+            _ => px(0.),
+        };
+        let width = window.viewport_size().width - frame;
+        let side = setup::side_padding(width, settings::config(cx).editor.line_width);
+        let padding = self.editor.read(cx).style().padding;
+        if padding.left != side || padding.right != side {
+            let mut style = self.editor.read(cx).style().clone();
+            style.padding.left = side;
+            style.padding.right = side;
+            self.editor
+                .update(cx, |editor, cx| editor.set_style(style, cx));
+        }
+    }
+
     /// Hands the editor what it remembered about this note, such as column widths.
     fn load_state(&mut self, cx: &mut Context<Self>) {
         let state = self.library.read(cx).note_state(&self.id, cx);
@@ -787,7 +850,17 @@ impl NoteView {
         let Some(state) = meta_to_table(self.editor.read(cx).meta()) else {
             return;
         };
-        let stored = self.library.read(cx).set_note_state(&self.id, state, cx);
+        let id = self.id.clone();
+        let stored = self.library.read(cx).update_folder_config(
+            move |config| {
+                if state.is_empty() {
+                    config.notes.remove(&id);
+                } else {
+                    config.notes.insert(id, state);
+                }
+            },
+            cx,
+        );
         cx.background_spawn(async move {
             if let Err(err) = stored.await {
                 log::warn!("cannot remember the view of a note: {err}");
@@ -800,6 +873,14 @@ impl NoteView {
 /// The first line of a text, where the title is.
 fn first_line(text: &str) -> &str {
     text.lines().next().unwrap_or_default()
+}
+
+/// The text of the editor's first block, the title, without Markdown syntax.
+fn title(editor: &MarkdownEditor) -> String {
+    let first = editor.document().blocks().first();
+    first
+        .map(|block| block.text().to_owned())
+        .unwrap_or_default()
 }
 
 /// The editor's view state as it is kept in the folder configuration: TOML, whose
@@ -835,6 +916,7 @@ impl Render for NoteView {
         if self.loaded && self.focus_handle.is_focused(window) {
             self.editor.focus_handle(cx).focus(window, cx);
         }
+        self.fit_column(window, cx);
         let tokens = cx.tokens().clone();
         let date = self.meta.as_ref().map(|meta| {
             let zone = self.library.read(cx).now().time_zone().clone();
@@ -868,6 +950,11 @@ impl Render for NoteView {
                 }
             }))
             .on_action(cx.listener(|this, _: &Trash, _, cx| this.trash(cx)))
+            .on_action(cx.listener(|this, _: &ExportMarkdown, _, cx| this.export_markdown(cx)))
+            .on_action(cx.listener(|this, _: &ExportPdf, _, cx| this.export_pdf(cx)))
+            .on_action(cx.listener(|this, _: &Print, _, cx| this.print(cx)))
+            .on_action(cx.listener(|this, _: &AttachFile, window, cx| this.attach_file(window, cx)))
+            .on_action(cx.listener(|this, _: &PasteAttachment, window, cx| this.paste(window, cx)))
             .child(header::header(self, cx))
             .children(self.banner.clone().map(|banner| header::banner(banner, cx)))
             .child(
@@ -882,10 +969,16 @@ impl Render for NoteView {
             )
             .child(
                 div()
+                    .id("note-text")
                     .flex_1()
                     .min_h_0()
+                    .on_drop(cx.listener(|this, paths: &ExternalPaths, window, cx| {
+                        let files = paths.paths().iter().cloned().map(Upload::File).collect();
+                        this.attach(files, window, cx);
+                    }))
                     .when(self.loaded, |area| area.child(self.editor.clone())),
             )
+            .children(self.backlinks_section(cx))
             .children(saved)
             .when(self.popover.is_some(), |pane| {
                 pane.child(header::dismiss_layer(cx))

@@ -15,44 +15,29 @@ Written 2026-11-17 for whoever continues without the session's context. Read
 
 ## Running
 
-Nothing. S2 is in review: https://github.com/taulit/sheaf/pull/4 (against `main`).
-
-## Second and third S2 review: no blocking finding left
-
-All ten findings of the second review are fixed (`7c9b81e..e0b424c`) and confirmed by a
-third, narrow review. Its three minor findings and one more leftover are listed in
-`docs/STATUS.md` under "Open" and are the first task of S3.
-
-## Review findings of the first S2 bug review: all fixed (commits `9e47287..90700b4`)
-
-Close or quit right after typing, silent failed save (banner, retry, recovery folder
-`$XDG_STATE_HOME/sheaf/recovered/`), note deleted elsewhere, failed trash, discard of an
-empty new note, cover image cache, delete during a conflict, scroll anchor underflow,
-header title centring. After the fixes: fmt, clippy, `cargo deny check` clean, all
-workspace tests pass (`tests/shutdown.rs` runs on the real headless platform).
-
-Confirmed by the second review, except the cover cache (finding 3 above).
+Nothing. S2 is merged (#4). S3 is in review as a PR against `main` (see `gh pr list`).
+Its three review rounds left no blocking or major finding; what is still open is in
+`docs/STATUS.md` under "Open".
 
 ## Next
 
-1. After the fixes: a fresh review agent re-checks the fixes and reads the files listed
-   above (skill `bug-review`), until no blocking finding is left.
-2. S2 gate, run once: `cargo fmt --check`, `cargo clippy --workspace --all-targets
-   --all-features -- -D warnings`, `cargo test --workspace --all-features`, `cargo deny
-   check`, `scripts/screenshot.sh`, look at every screenshot, try the app by hand
-   (`SHEAF_NOTES_DIR=<tmp> cargo run -p sheaf`).
-3. Open the S2 PR **against `main`** (skill `file-pr`), screenshots dark and light
-   embedded. Update `docs/STATUS.md`.
-4. S3 on `phase/s3-features`, branching from `phase/s2-app`: quick note, trash view,
-   smart folders, templates, backlinks, attachments, export (PDF with `krilla`, see
-   `docs/verified.md` §2), settings; the Visor module only if `taulit/visor` has the tag
-   `api-v1` (`gh api repos/taulit/visor/git/refs/tags/api-v1`).
-5. S4: budgets, translations, reviews, Flatpak, AUR, metainfo, README.
+1. S4 on `phase/s4-release`, branching from `phase/s3-features` (or from `main` once the
+   S3 PR is merged; `main` gets squash merges, so sync a branch that was built on the
+   unsquashed commits with `git merge -s ours origin/main` only after checking that the
+   trees match, as done for S3): budgets (start time, memory, search), translations
+   check, a final review, Flatpak manifest, AUR `PKGBUILD`, metainfo, README, release
+   notes. `flatpak-builder` and `git-cliff` are not installed on this machine.
+2. Check for newer editor tags (`gh api repos/taulit/gpui-markdown-editor/git/refs/tags`)
+   and bump from `v0.0.3`; the editor still lacks format bar, slash menu, completions,
+   image loading, `MetaChanged` and the APIs listed in `docs/STATUS.md`.
 
 ## Waiting for the user
 
-- CI for S2 needs the secret `EDITOR_DEPLOY_KEY` (read-only deploy key on the private
-  `taulit/gpui-markdown-editor`). Not created; needs the user's go-ahead.
+- Nothing about CI. The user decided on 2026-11-17: `taulit/gpui-markdown-editor` stays
+  private for now and the red PR checks are ignored (CI cannot fetch the editor). The
+  gate is therefore run locally before every PR: `cargo fmt --check`, clippy with
+  `-D warnings`, `cargo test --workspace --all-features`, `cargo deny check`,
+  `scripts/test-visor-module.sh`, `scripts/screenshot.sh`; state the results in the PR.
 - PR screenshots are embedded
   from the repository instead.
 
@@ -68,5 +53,5 @@ completions.
 - Sub-agents: Opus for implementation, Sonnet for mechanical work, Fable for reviews and
   gates. Worktree agents should use `CARGO_TARGET_DIR=~/development/sheaf/target`.
 - Phase PRs target `main` directly (a stacked base sent #2 into the wrong branch).
-- The editor is pinned at `v0.0.1-api` (raw Markdown text). Check for a newer tag with
+- The editor is pinned at `v0.0.3` (WYSIWYG). Check for a newer tag with
   `gh api repos/taulit/gpui-markdown-editor/git/refs/tags` and bump it in `Cargo.toml`.

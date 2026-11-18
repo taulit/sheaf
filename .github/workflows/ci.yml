@@ -13,9 +13,6 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
   RUSTFLAGS: -D warnings
-  # The editor is a private repository behind a deploy key; cargo's own git
-  # library cannot use the ssh agent, the git command line can.
-  CARGO_NET_GIT_FETCH_WITH_CLI: "true"
 
 jobs:
   check:
@@ -27,11 +24,6 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
-      - name: Give cargo access to the editor repository
-        uses: webfactory/ssh-agent@v0.9.1
-        with:
-          ssh-private-key: ${{ secrets.EDITOR_DEPLOY_KEY }}
-      - run: git config --global url."ssh://git@github.com/taulit/gpui-markdown-editor".insteadOf "https://github.com/taulit/gpui-markdown-editor"
       - name: Install system packages
         # dbus-daemon and gettext for the tests, the rest to build GPUI.
         run: >
@@ -48,12 +40,6 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
-      - name: Give cargo access to the editor repository
-        uses: webfactory/ssh-agent@v0.9.1
-        with:
-          ssh-private-key: ${{ secrets.EDITOR_DEPLOY_KEY }}
-      - run: git config --global url."ssh://git@github.com/taulit/gpui-markdown-editor".insteadOf "https://github.com/taulit/gpui-markdown-editor"
-      # On the runner rather than in the action's container, which has no ssh agent.
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-deny
@@ -68,9 +54,14 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: release
-      - name: Give cargo access to the editor repository
-        uses: webfactory/ssh-agent@v0.9.1
-        with:
-          ssh-private-key: ${{ secrets.EDITOR_DEPLOY_KEY }}
-      - run: git config --global url."ssh://git@github.com/taulit/gpui-markdown-editor".insteadOf "https://github.com/taulit/gpui-markdown-editor"
       - run: cargo run --release --locked -p sheaf-core --features testgen --example search_budget
+
+  visor-module:
+    name: Visor module (gjs tests, zip)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install system packages
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends gjs gettext jq zip
+      - run: scripts/test-visor-module.sh
+      - run: scripts/pack-visor-module.sh

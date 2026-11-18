@@ -13,7 +13,9 @@ use sheaf_core::config::{Sort as SortOrder, View};
 use sheaf_core::i18n::tr;
 
 use super::{GalleryView, Popover, Scope, chips};
-use crate::app::actions::{self, NewNote, ShowFolders, ShowSortOptions, ToggleView};
+use crate::app::actions::{
+    self, NewNote, SaveSearchAsSmartFolder, ShowFolders, ShowSortOptions, ShowTemplates, ToggleView,
+};
 use crate::app::assets::{IconName, icon};
 use crate::app::chrome::{FlatButton, HeaderBar, pane};
 use crate::app::theme::{ActiveTokens as _, Tokens, size};
@@ -58,8 +60,18 @@ impl Render for GalleryView {
             .on_action(cx.listener(|this, _: &ShowFolders, _, cx| {
                 this.set_popover(Some(Popover::Folders), cx)
             }))
+            .on_action(
+                cx.listener(|this, _: &SaveSearchAsSmartFolder, window, cx| {
+                    this.ask_smart_folder_name(window, cx)
+                }),
+            )
+            .on_action(cx.listener(|this, _: &ShowTemplates, _, cx| this.show_templates(cx)))
             .on_action(cx.listener(|this, action, window, cx| {
-                if this.popover.is_some() {
+                if this.confirming().is_some() {
+                    this.cancel_confirm(cx);
+                } else if this.shown_trashed().is_some() {
+                    this.close_trashed(cx);
+                } else if this.popover.is_some() {
                     this.set_popover(None, cx);
                 } else {
                     this.clear(action, window, cx);
@@ -73,6 +85,8 @@ impl Render for GalleryView {
             .children(self.render_scope_chips(&tokens, cx))
             .child(self.render_body(&tokens, cx))
             .children(self.render_popover(&tokens, cx))
+            .children(self.render_trash_page(window, cx))
+            .children(self.render_confirm(cx))
     }
 }
 
@@ -93,6 +107,22 @@ impl GalleryView {
                     .on_click(toggle(Popover::Folders)),
             )
             .title(self.scope.title())
+            .when(
+                self.scope == Scope::Trash && !self.notes.is_empty(),
+                |bar| {
+                    let tokens = cx.tokens().clone();
+                    bar.end(
+                        super::trash::pill(
+                            "empty-trash",
+                            tr("Empty Trash"),
+                            super::trash::Kind::Plain,
+                            &tokens,
+                        )
+                        .mr(px(4.))
+                        .on_click(cx.listener(|this, _, _, cx| this.ask_empty_trash(cx))),
+                    )
+                },
+            )
             .end(
                 FlatButton::new("sort", IconName::Sort)
                     .tooltip(tr("Sort"))
@@ -111,11 +141,20 @@ impl GalleryView {
                     .active(view == View::List)
                     .on_click(cx.listener(|this, _, _, cx| this.set_view(View::List, cx))),
             )
-            .end(
-                FlatButton::new("new-note", IconName::Edit)
-                    .tooltip(tr("New Note"))
-                    .on_click(|_, window, cx| window.dispatch_action(Box::new(NewNote), cx)),
-            )
+            // New notes never land in the trash.
+            .when(self.scope != Scope::Trash, |bar| {
+                bar.end(
+                    FlatButton::new("new-note", IconName::Edit)
+                        .tooltip(tr("New Note"))
+                        .on_click(|_, window, cx| window.dispatch_action(Box::new(NewNote), cx)),
+                )
+                .end(
+                    FlatButton::new("new-note-menu", IconName::PanDown)
+                        .tooltip(tr("New Note from Template"))
+                        .active(self.popover == Some(Popover::Templates))
+                        .on_click(toggle(Popover::Templates)),
+                )
+            })
     }
 
     /// The field: the search icon, the chips, then the text.
@@ -190,12 +229,15 @@ impl GalleryView {
     }
 
     /// "All", the folders at the top and the pinned tags; nothing if there are no
-    /// folders or tags to choose.
+    /// folders or tags to choose, or in the trash, which they do not filter.
     fn render_scope_chips(
         &self,
         tokens: &Tokens,
         cx: &mut Context<Self>,
     ) -> Option<impl IntoElement + use<>> {
+        if self.scope == Scope::Trash {
+            return None;
+        }
         let mut scopes = vec![(Scope::All, tr("All"))];
         scopes.extend(
             self.folders
@@ -205,10 +247,11 @@ impl GalleryView {
         );
         scopes.extend(
             self.config
-                .pinned_tags
                 .iter()
+                .flat_map(|config| &config.pinned_tags)
                 .map(|tag| (Scope::Tag(tag.clone()), format!("#{tag}"))),
         );
+        scopes.extend(self.smart_scopes());
         if scopes.len() == 1 {
             return None;
         }
@@ -303,6 +346,8 @@ impl GalleryView {
                 Scope::All => tr("No notes yet"),
                 Scope::Folder(_) => tr("No notes in this folder"),
                 Scope::Tag(_) => tr("No notes with this tag"),
+                Scope::Trash => tr("No recently deleted notes"),
+                Scope::Smart(_) => tr("No notes in this smart folder"),
             }
         };
         let button = if searching {
@@ -315,6 +360,8 @@ impl GalleryView {
                 )
                 .on_click(cx.listener(|this, _, _, cx| this.search_without_filters(cx)))
             })
+        } else if self.scope == Scope::Trash {
+            None
         } else {
             Some(
                 pill("empty-new-note", tr("New Note"), true, tokens)
@@ -344,6 +391,7 @@ impl GalleryView {
         let surface = match popover {
             Popover::Folders => self.render_folders(tokens, cx).into_any_element(),
             Popover::Sort => self.render_sort_menu(tokens, cx).into_any_element(),
+            Popover::Templates => self.render_templates_menu(tokens, cx).into_any_element(),
         };
         let overlay = div()
             .absolute()
@@ -374,7 +422,9 @@ impl GalleryView {
                     .when(popover == Popover::Folders, |slot| slot.left(px(8.)))
                     // Under the sort button: the bar's padding, the close button and
                     // three 34 px buttons with their gaps are right of it.
-                    .when(popover == Popover::Sort, |slot| slot.right(px(158.)))
+                    .when(popover == Popover::Sort, |slot| slot.right(px(196.)))
+                    // Under `+ ▾`, the last button before the close button.
+                    .when(popover == Popover::Templates, |slot| slot.right(px(44.)))
                     .child(surface),
             );
         Some(deferred(overlay).with_priority(1).into_any_element())
@@ -420,17 +470,17 @@ impl GalleryView {
                     .into_any_element(),
             );
         }
-        let trash = div()
-            .flex()
-            .items_center()
-            .gap(px(11.))
-            .h(px(34.))
-            .px(px(12.))
-            .text_size(tokens.text(13.5))
-            .font_weight(FontWeight::MEDIUM)
-            .text_color(tokens.faint)
-            .child(icon(IconName::Trash, tokens.faint).size(px(16.)))
-            .child(div().flex_1().child(tr("Recently Deleted")));
+        let trash = menu_row(
+            "folder-trash",
+            IconName::Trash,
+            tr("Recently Deleted"),
+            tokens,
+        )
+        .when(self.scope == Scope::Trash, |row| row.bg(tokens.selected))
+        .when_some(self.trash_count(), |row, notes| {
+            row.child(count(notes, tokens))
+        })
+        .on_click(cx.listener(|this, _, _, cx| this.set_scope(Scope::Trash, cx)));
         let new_folder = match &self.new_folder {
             Some(name) => div()
                 .flex()
@@ -454,6 +504,8 @@ impl GalleryView {
                 .on_click(cx.listener(|this, _, window, cx| this.start_new_folder(window, cx)))
                 .into_any_element(),
         };
+        let smart = self.render_smart_rows(tokens, cx);
+        let new_smart_folder = self.render_new_smart_folder(tokens, cx);
         surface(tokens)
             .id("folders-popover")
             .on_action(cx.listener(|this, _: &input::Escape, _, cx| this.set_popover(None, cx)))
@@ -461,10 +513,14 @@ impl GalleryView {
             .max_h(px(520.))
             .overflow_y_scroll()
             .children(rows)
+            .when(!smart.is_empty(), |popover| {
+                popover.child(separator(tokens)).children(smart)
+            })
             .child(separator(tokens))
             .child(trash)
             .child(separator(tokens))
             .child(new_folder)
+            .child(new_smart_folder)
     }
 
     fn start_new_folder(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -538,7 +594,7 @@ pub(super) fn ring(color: Hsla, width: f32) -> BoxShadow {
 }
 
 /// A popover's panel: `.popo` of the prototype.
-fn surface(tokens: &Tokens) -> Div {
+pub(super) fn surface(tokens: &Tokens) -> Div {
     div()
         .flex()
         .flex_col()
@@ -559,7 +615,7 @@ fn surface(tokens: &Tokens) -> Div {
         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
 }
 
-fn menu_row(
+pub(super) fn menu_row(
     id: impl Into<ElementId>,
     symbol: IconName,
     label: impl Into<SharedString>,
@@ -590,7 +646,7 @@ fn count(notes: usize, tokens: &Tokens) -> impl IntoElement {
         .child(notes.to_string())
 }
 
-fn separator(tokens: &Tokens) -> impl IntoElement {
+pub(super) fn separator(tokens: &Tokens) -> impl IntoElement {
     div()
         .flex_none()
         .h(px(1.))

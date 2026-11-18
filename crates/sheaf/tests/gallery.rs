@@ -135,6 +135,15 @@ impl TestApp {
     fn route(&mut self) -> Route {
         self.main.read_with(self.cx, |main, cx| main.route(cx))
     }
+
+    fn toast(&mut self) -> Option<String> {
+        self.main.read_with(self.cx, |main, cx| {
+            main.toasts()
+                .read(cx)
+                .shown()
+                .map(|toast| toast.message.to_string())
+        })
+    }
 }
 
 // ---- Groups, sort, scope ------------------------------------------------------------
@@ -428,6 +437,50 @@ async fn delete_moves_the_selection_to_the_trash_and_undo_restores_it(cx: &mut T
     assert!(notes.files().contains(&"Arbeit/Notch-Ideen.md".to_owned()));
 }
 
+type Change = fn(&mut GalleryView, &mut gpui::Context<GalleryView>);
+
+#[gpui::test]
+async fn a_change_that_fails_says_why_and_shows_the_note_as_it_is(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let mut app = open_app(&notes, cx);
+    let changes: [(&str, &str, Change, &str); 4] = [
+        (
+            "Privat/Lesestoff.md",
+            "Lesestoff",
+            |gallery, cx| gallery.toggle_pin(cx),
+            "Could not pin the note: ",
+        ),
+        (
+            "Arbeit/Notch-Ideen.md",
+            "Notch-Ideen",
+            |gallery, cx| gallery.move_selection_to("Work", cx),
+            "Could not move the note: ",
+        ),
+        (
+            "Privat/Einkauf.md",
+            "Einkauf",
+            |gallery, cx| gallery.duplicate_selection(cx),
+            "Could not duplicate the note: ",
+        ),
+        (
+            "Reading list.md",
+            "Reading list",
+            |gallery, cx| gallery.trash_selection(cx),
+            "Could not move to trash: ",
+        ),
+    ];
+    for (path, title, change, message) in changes {
+        // Deleted by another program, still listed.
+        std::fs::remove_file(notes.dir.join(path)).unwrap();
+        app.click(title, Modifiers::control());
+        app.update(change);
+        let toast = app.toast().unwrap_or_default();
+        assert!(toast.starts_with(message), "{title}: {toast:?}");
+        assert!(!app.titles().contains(&title.to_owned()), "{title} is gone");
+    }
+    assert_eq!(app.titles().len(), 10);
+}
+
 #[gpui::test]
 async fn the_context_menu_moves_and_duplicates(cx: &mut TestAppContext) {
     let notes = Notes::seeded();
@@ -477,6 +530,164 @@ async fn the_view_is_remembered_per_folder(cx: &mut TestAppContext) {
     let library = app.library.clone();
     let mut again = open_window(library, app.cx);
     assert_eq!(again.read(|gallery| gallery.view()), View::List);
+}
+
+const FULL_CONFIG: &str = r#"pinned_tags = ["ausschreibung", "rezepte"]
+future_setting = "kept"
+
+[folders.Arbeit]
+sort = "title"
+density = 2
+
+[[smart_folders]]
+name = "Offen"
+query = "offen:"
+color = "blue"
+
+[notes.01JD3K8Z6Q4X7V9B2M5N8P0R3T]
+folded = ["Anhang"]
+"#;
+
+/// The settings file as plain TOML, to see keys this version does not know.
+fn stored_config(notes: &Notes) -> toml::Table {
+    notes.read(".sheaf/config.toml").parse().unwrap()
+}
+
+fn assert_kept(config: &toml::Table) {
+    assert_eq!(
+        config["pinned_tags"].as_array().unwrap().len(),
+        2,
+        "{config}"
+    );
+    assert_eq!(config["future_setting"].as_str(), Some("kept"), "{config}");
+    assert_eq!(config["folders"]["Arbeit"]["sort"].as_str(), Some("title"));
+    assert_eq!(config["folders"]["Arbeit"]["density"].as_integer(), Some(2));
+    let smart = config["smart_folders"].as_array().unwrap();
+    assert_eq!(smart[0]["color"].as_str(), Some("blue"), "{config}");
+    assert!(config["notes"]["01JD3K8Z6Q4X7V9B2M5N8P0R3T"].is_table());
+}
+
+#[gpui::test]
+async fn a_search_at_launch_keeps_the_folder_settings(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    notes.write(".sheaf/config.toml", FULL_CONFIG);
+    let library = cx.update(|cx| {
+        fixture::init_app(Look::default(), cx);
+        fixture::open_library(&notes, cx)
+    });
+    let (window, main) = cx
+        .update(|cx| window::open(library.clone(), None, cx))
+        .unwrap();
+    let vcx = VisualTestContext::from_window(window.into(), cx).into_mut();
+    // A search from the command line arrives before the settings are read.
+    let gallery = main.read_with(vcx, |main, _| main.gallery().clone());
+    gallery.update(vcx, |gallery, cx| gallery.set_query("Rezept", cx));
+    vcx.run_until_parked();
+    assert_eq!(
+        gallery.read_with(vcx, |gallery, _| gallery.smart_folders().len()),
+        1
+    );
+
+    gallery.update(vcx, |gallery, cx| gallery.set_view(View::List, cx));
+    vcx.run_until_parked();
+
+    let config = stored_config(&notes);
+    assert_kept(&config);
+    assert_eq!(config["folders"][""]["view"].as_str(), Some("list"));
+}
+
+#[gpui::test]
+async fn nothing_is_changed_before_the_folder_settings_are_read(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    notes.write(".sheaf/config.toml", FULL_CONFIG);
+    let library = cx.update(|cx| {
+        fixture::init_app(Look::default(), cx);
+        fixture::open_library(&notes, cx)
+    });
+    let (window, main) = cx
+        .update(|cx| window::open(library.clone(), None, cx))
+        .unwrap();
+    let vcx = VisualTestContext::from_window(window.into(), cx).into_mut();
+    let gallery = main.read_with(vcx, |main, _| main.gallery().clone());
+    // A change while the settings are still being read: it is not written over them.
+    gallery.update(vcx, |gallery, cx| gallery.set_view(View::List, cx));
+    vcx.run_until_parked();
+    assert_kept(&stored_config(&notes));
+    assert_eq!(notes.read(".sheaf/config.toml"), FULL_CONFIG);
+}
+
+#[gpui::test]
+async fn every_writer_of_the_folder_settings_keeps_the_keys_of_the_others(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    notes.write(".sheaf/config.toml", FULL_CONFIG);
+    let mut app = open_app(&notes, cx);
+
+    // Another writer changes the file after the gallery read it.
+    let id: sheaf_core::NoteId = "01JD3K8Z6Q4X7V9B2M5N8P0R3T".parse().unwrap();
+    let library = app.library.clone();
+    let quick = app.cx.update(|_, cx| {
+        library
+            .read(cx)
+            .update_folder_config(|config| config.quick_note.resume_minutes = 60, cx)
+    });
+    app.cx.run_until_parked();
+    app.cx.foreground_executor().block_test(quick).unwrap();
+
+    app.update(|gallery, cx| gallery.set_view(View::List, cx));
+    app.update(|gallery, cx| gallery.set_query("#rezepte", cx));
+    app.update(|gallery, cx| gallery.save_smart_folder("Rezepte", cx));
+    app.update(|gallery, cx| gallery.set_sort(SortOrder::Title, cx));
+    let state = app.cx.update(|_, cx| {
+        let id = id.clone();
+        library.read(cx).update_folder_config(
+            move |config| {
+                config.notes.remove(&id);
+            },
+            cx,
+        )
+    });
+    app.cx.run_until_parked();
+    app.cx.foreground_executor().block_test(state).unwrap();
+
+    let config = stored_config(&notes);
+    assert_eq!(config["future_setting"].as_str(), Some("kept"));
+    assert_eq!(config["folders"]["Arbeit"]["density"].as_integer(), Some(2));
+    assert_eq!(config["folders"][""]["view"].as_str(), Some("list"));
+    assert_eq!(
+        config["quick_note"]["resume_minutes"].as_integer(),
+        Some(60)
+    );
+    let smart = config["smart_folders"].as_array().unwrap();
+    assert_eq!(smart.len(), 2);
+    assert_eq!(smart[0]["color"].as_str(), Some("blue"));
+    assert_eq!(smart[1]["name"].as_str(), Some("Rezepte"));
+    assert!(config.get("notes").is_none(), "{config}");
+    let stored = FolderConfig::load(&notes.dir).unwrap();
+    assert_eq!(stored.view("").sort, SortOrder::Title);
+}
+
+#[cfg(unix)]
+#[gpui::test]
+async fn a_view_that_cannot_be_stored_says_so_and_goes_back(cx: &mut TestAppContext) {
+    use std::os::unix::fs::PermissionsExt as _;
+    let notes = Notes::seeded();
+    let mut app = open_app(&notes, cx);
+    let sheaf_dir = notes.dir.join(".sheaf");
+    std::fs::set_permissions(&sheaf_dir, std::fs::Permissions::from_mode(0o555)).unwrap();
+
+    app.update(|gallery, cx| gallery.set_view(View::List, cx));
+    std::fs::set_permissions(&sheaf_dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    assert_eq!(app.read(|gallery| gallery.view()), View::Gallery);
+    let toast = app.toast().unwrap_or_default();
+    assert!(
+        toast.starts_with("Could not save the folder settings"),
+        "{toast}"
+    );
+    assert_eq!(
+        FolderConfig::load(&notes.dir).unwrap().pinned_tags,
+        ["ausschreibung", "rezepte"]
+    );
 }
 
 #[gpui::test]

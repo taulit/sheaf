@@ -1,0 +1,6 @@
+{
+  "uuid": "visor@taulit.github.io",
+  "name": "Visor before the module API",
+  "description": "Test stand-in for a Visor older than api-v1: it is active but offers no API.",
+  "shell-version": ["50", "51"]
+}

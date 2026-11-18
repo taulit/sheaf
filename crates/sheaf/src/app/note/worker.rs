@@ -11,12 +11,14 @@
 //! worker is under way on another thread. So each step holds the lock from reading the
 //! file to recording what it wrote, and nothing is written once the note is `finished`.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use async_channel::{Receiver, Sender};
 use gpui::{AsyncApp, Entity, WeakEntity};
 use jiff::Timestamp;
 use sheaf_core::i18n::tr;
+use sheaf_core::store::store_attachment;
 use sheaf_core::{
     CreateOptions, Error, Fingerprint, Note, NoteId, NoteMeta, NoteStore, WriteOptions,
 };
@@ -77,6 +79,42 @@ pub enum Job {
     KeepMine(String),
     /// The note was deleted elsewhere: store this text as a new note in its folder.
     SaveAsNew(String),
+    /// Copy these files into the note's attachment folder; `done` hears the links.
+    /// The copy runs apart from the other jobs and is given up once `closing` is set.
+    Attach {
+        files: Vec<Upload>,
+        done: Sender<Attached>,
+        closing: Arc<AtomicBool>,
+    },
+}
+
+/// A file to attach: one on disk, or bytes such as a pasted image.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Upload {
+    File(std::path::PathBuf),
+    Bytes { name: String, bytes: Vec<u8> },
+}
+
+impl Upload {
+    /// The file name the attachment is stored under, before it is made safe.
+    fn name(&self) -> String {
+        match self {
+            Upload::File(path) => path
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+            Upload::Bytes { name, .. } => name.clone(),
+        }
+    }
+}
+
+/// What came of [`Job::Attach`].
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Attached {
+    /// The name and link target of each file stored, in order.
+    pub links: Vec<(String, String)>,
+    /// Why files could not be stored.
+    pub failed: Vec<String>,
 }
 
 /// What leaving a note stores. Whatever it is, it does not end without the text on
@@ -150,6 +188,7 @@ pub enum Change {
     /// Pin, or unpin with `false`.
     Pin(bool),
     Move,
+    Attach,
 }
 
 /// Whether the file is as the worker last saw it.
@@ -304,6 +343,36 @@ impl Worker {
                 })
                 .await
             }
+            Job::Attach {
+                files,
+                done,
+                closing,
+            } => {
+                // Only giving the note its id takes the lock; the copy runs on its own,
+                // so that the next save or leaving the note does not wait for it.
+                let prepared = Arc::new(Mutex::new(None));
+                let sink = prepared.clone();
+                let report = self
+                    .change(cx, Change::Attach, move |store, id| {
+                        let (meta, dir) = store.prepare_attachments(id)?;
+                        *sink.lock().unwrap_or_else(PoisonError::into_inner) =
+                            Some((meta.id.clone(), dir));
+                        Ok(meta)
+                    })
+                    .await;
+                let prepared = prepared
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .take();
+                if let Some((id, dir)) = prepared {
+                    cx.background_executor()
+                        .spawn(async move {
+                            let _ = done.try_send(copy_attachments(&dir, &id, &files, &closing));
+                        })
+                        .detach();
+                }
+                report
+            }
             Job::SaveAsNew(body) => {
                 self.resolve(cx, body, |known, store, touched, body| {
                     known.create(store, touched, body)
@@ -397,6 +466,57 @@ impl Worker {
             }
         }
     }
+}
+
+/// Copies `files` into `dir`, the attachment folder of the note `id`. Files that
+/// cannot be copied are noted with the reason and skipped; once `closing` is set, the
+/// rest is given up and noted as well, for when leaving is called off.
+fn copy_attachments(
+    dir: &std::path::Path,
+    id: &NoteId,
+    files: &[Upload],
+    closing: &AtomicBool,
+) -> Attached {
+    let go_on = || !closing.load(Ordering::SeqCst);
+    let mut attached = Attached::default();
+    for (at, file) in files.iter().enumerate() {
+        if !go_on() {
+            let names: Vec<_> = files[at..].iter().map(Upload::name).collect();
+            attached.failed.push(
+                tr("not copied as the note was being left: {}").replace("{}", &names.join(", ")),
+            );
+            break;
+        }
+        let stored = match file {
+            Upload::File(path) => {
+                let name = file.name();
+                open_regular(path).and_then(|mut source| {
+                    store_attachment(dir, id, &name, &mut source, &go_on).map(|link| (name, link))
+                })
+            }
+            Upload::Bytes { name, bytes } => {
+                store_attachment(dir, id, name, &mut bytes.as_slice(), &go_on)
+                    .map(|link| (name.clone(), link))
+            }
+        };
+        match stored {
+            Ok(link) => attached.links.push(link),
+            Err(err) => {
+                log::warn!("cannot attach a file: {err}");
+                attached.failed.push(reason(&err));
+            }
+        }
+    }
+    attached
+}
+
+/// The file at `path` opened for reading, if it is a regular file: a pipe or device
+/// would never end.
+fn open_regular(path: &std::path::Path) -> sheaf_core::Result<std::fs::File> {
+    if !std::fs::metadata(path)?.is_file() {
+        return Err(Error::Invalid(tr("not a file")));
+    }
+    Ok(std::fs::File::open(path)?)
 }
 
 /// What came of a save.

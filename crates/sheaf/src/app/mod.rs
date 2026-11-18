@@ -11,11 +11,17 @@
 //! | [`window`] | the main window and its router |
 //! | [`gallery`], [`note`] | the two views |
 //! | [`overlays`] | toast, command palette, list of shortcuts, popover parts |
+//! | [`dialogs`] | save, open and print dialogs of the portals |
+//! | [`settings`] | the user's settings and their window |
 //! | [`state`] | what is remembered between runs |
+//! | `serial` | background jobs in order, for the writes of settings files |
+//! | [`quick`] | the Quick Note window |
+//! | [`shortcut`] | the global Quick Note shortcut through the portal |
 
 pub mod actions;
 pub mod assets;
 pub mod chrome;
+pub mod dialogs;
 pub mod gallery;
 pub mod instance;
 pub mod library;
@@ -23,6 +29,10 @@ mod logger;
 pub mod note;
 pub mod overlays;
 pub mod portal;
+pub mod quick;
+mod serial;
+pub mod settings;
+pub mod shortcut;
 pub mod state;
 pub mod theme;
 pub mod window;
@@ -75,6 +85,13 @@ pub fn run(launch: Launch, dir: Option<PathBuf>) -> ExitCode {
         Err(err) => return fail(&err.to_string()),
     };
     let index_dir = env.index_dir(&notes_dir).ok();
+    let settings = env.app_config_path().ok().map(settings::Settings::load);
+    // PDFs a viewer was given last time are not needed any more.
+    let viewer_files = note::ViewerFiles::from_process();
+    if let Some(files) = &viewer_files {
+        files.clear();
+    }
+    let for_the_app = viewer_files.clone();
 
     let mut application = gpui_platform::application().with_assets(assets::Assets);
     if launch.service {
@@ -86,6 +103,9 @@ pub fn run(launch: Launch, dir: Option<PathBuf>) -> ExitCode {
         quit_on_signals(cx);
         gpui_component::init(cx);
         theme::init(theme::Overrides::from_process(), cx);
+        if let Some(settings) = settings {
+            cx.set_global(settings);
+        }
         actions::bind_keys(cx);
         if let Some(connection) = &connection {
             portal::follow(connection.clone(), cx);
@@ -100,6 +120,9 @@ pub fn run(launch: Launch, dir: Option<PathBuf>) -> ExitCode {
         };
         if let Some(recovery) = Recovery::from_process() {
             cx.set_global(recovery);
+        }
+        if let Some(files) = for_the_app {
+            cx.set_global(files);
         }
         cx.set_global(Session {
             library,
@@ -119,27 +142,83 @@ pub fn run(launch: Launch, dir: Option<PathBuf>) -> ExitCode {
         })
         .detach();
     });
+    if let Some(files) = &viewer_files {
+        files.clear();
+    }
     ExitCode::SUCCESS
 }
 
 /// Quits on SIGTERM (logout, `kill`), SIGINT (Ctrl+C) and SIGHUP (the terminal
 /// closing) the way the app quits itself, with the last save of the open note.
-/// Otherwise the signal would end the process before it.
+/// Otherwise the signal would end the process before it. A second signal ends the
+/// app at once, also while the last save hangs. SIGHUP is left alone if it was
+/// ignored at startup, as under `nohup`.
 pub fn quit_on_signals(cx: &mut App) {
-    let mut signals = match Signals::new([Signal::Term, Signal::Int, Signal::Hup]) {
+    let mut wanted = vec![Signal::Term, Signal::Int];
+    if !hangup_ignored() {
+        wanted.push(Signal::Hup);
+    }
+    let mut signals = match Signals::new(wanted) {
         Ok(signals) => signals,
         Err(err) => {
             log::warn!("cannot follow the signals to quit: {err}");
             return;
         }
     };
+    let (quit, quitting) = async_channel::bounded(1);
+    // Its own thread: the UI thread does not take a second signal while it saves.
+    let spawned = std::thread::Builder::new()
+        .name("sheaf-signals".to_owned())
+        .spawn(move || {
+            async_io::block_on(async move {
+                let Some(Ok(first)) = signals.next().await else {
+                    return;
+                };
+                log::info!("quitting on {first:?}");
+                let _ = quit.send(()).await;
+                if let Some(Ok(second)) = signals.next().await {
+                    log::warn!("{second:?} while quitting, ending at once");
+                    std::process::exit(128 + number(second));
+                }
+            });
+        });
+    if let Err(err) = spawned {
+        log::warn!("cannot follow the signals to quit: {err}");
+        return;
+    }
     cx.spawn(async move |cx| {
-        if let Some(signal) = signals.next().await {
-            log::info!("quitting on {signal:?}");
+        if quitting.recv().await.is_ok() {
             cx.update(|cx| cx.quit());
         }
     })
     .detach();
+}
+
+/// Whether SIGHUP was ignored when the process started. Read from
+/// `/proc/self/status`, since asking the kernel directly takes `unsafe`; where that
+/// cannot be read, it counts as ignored, and the app leaves SIGHUP alone.
+fn hangup_ignored() -> bool {
+    let status = std::fs::read_to_string("/proc/self/status").ok();
+    let ignored = status.as_deref().and_then(ignored_signals);
+    ignored.is_none_or(|mask| mask & (1 << (number(Signal::Hup) - 1)) != 0)
+}
+
+/// The mask of ignored signals in the text of `/proc/<pid>/status`: bit `n - 1`
+/// stands for signal `n`.
+fn ignored_signals(status: &str) -> Option<u64> {
+    let mask = status
+        .lines()
+        .find_map(|line| line.strip_prefix("SigIgn:"))?;
+    u64::from_str_radix(mask.trim(), 16).ok()
+}
+
+/// The number of one of the signals the app quits on, as on Linux.
+fn number(signal: Signal) -> i32 {
+    match signal {
+        Signal::Hup => 1,
+        Signal::Int => 2,
+        _ => 15,
+    }
 }
 
 fn fail(message: &str) -> ExitCode {
@@ -162,6 +241,14 @@ struct Session {
 
 impl Global for Session {}
 
+/// Makes `library` the one a main window opened from now on shows, after the notes
+/// folder changed.
+pub(crate) fn use_library(library: Entity<Library>, cx: &mut App) {
+    if cx.has_global::<Session>() {
+        cx.global_mut::<Session>().library = library;
+    }
+}
+
 /// Brings the main window to the front, opening it if needed, and passes it `request`.
 async fn show(request: Request, token: Option<String>, cx: &mut AsyncApp) {
     let headless = cx.update(|cx| cx.graphical_environment().is_none());
@@ -177,10 +264,26 @@ async fn show(request: Request, token: Option<String>, cx: &mut AsyncApp) {
         }
     }
     cx.update(|cx| {
+        let shown = match request {
+            // Only its own small window, not the main one (plan 03 §8).
+            Request::QuickNote => open_quick_note(cx),
+            request => present(request, cx),
+        };
+        if let Err(err) = shown {
+            log::error!("cannot show the window: {err:#}");
+        }
+    });
+}
+
+/// Opens the Quick Note window; what it asks of the main window opens that.
+fn open_quick_note(cx: &mut App) -> anyhow::Result<()> {
+    let library = cx.global::<Session>().library.clone();
+    let on_request: quick::RequestHandler = std::rc::Rc::new(|request, cx| {
         if let Err(err) = present(request, cx) {
             log::error!("cannot show the window: {err:#}");
         }
     });
+    quick::open(library, on_request, cx).map(|_| ())
 }
 
 fn present(request: Request, cx: &mut App) -> anyhow::Result<()> {
@@ -201,4 +304,18 @@ fn present(request: Request, cx: &mut App) -> anyhow::Result<()> {
         window.activate_window();
         main.update(cx, |main, cx| main.handle(request, window, cx));
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ignored_signals_are_read_from_the_status() {
+        let status = "Name:\tsheaf\nSigBlk:\t0000000000000000\nSigIgn:\t0000000000001001\nSigCgt:\t0000000180004002\n";
+        let mask = ignored_signals(status);
+        assert_eq!(mask, Some(0x1001));
+        assert_eq!(ignored_signals("Name:\tsheaf\n"), None);
+        assert_eq!(ignored_signals("SigIgn:\tzz\n"), None);
+    }
 }
