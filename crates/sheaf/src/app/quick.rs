@@ -36,7 +36,7 @@ use gpui::{
     WindowOptions, div, prelude::FluentBuilder as _, px, size as size_of,
 };
 use gpui_component::{Root, Theme};
-use gpui_markdown_editor::EditorStyle;
+use gpui_markdown_editor::{EditorStyle, UiParts};
 use jiff::{SignedDuration, Timestamp};
 use sheaf_core::i18n::tr;
 use sheaf_core::{CreateOptions, NoteId};
@@ -289,7 +289,12 @@ impl QuickNoteView {
     /// Takes the note `id` into the window; `fresh` if it was just created for it.
     fn attach(&mut self, id: NoteId, fresh: bool, window: &mut Window, cx: &mut Context<Self>) {
         let library = self.library.clone();
-        let note = cx.new(|cx| NoteView::new(library, id, String::new(), window, cx));
+        // Plan 03 §8: only the editor and the footer, no format bar over the text.
+        let ui = UiParts {
+            format_bar: false,
+            ..UiParts::ALL
+        };
+        let note = cx.new(|cx| NoteView::new(library, id, String::new(), ui, window, cx));
         if fresh {
             note.update(cx, |note, _| note.mark_new());
         }

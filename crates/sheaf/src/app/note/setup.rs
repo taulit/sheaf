@@ -44,7 +44,7 @@ pub struct Lookup {
 
 pub type SharedLookup = Arc<Mutex<Lookup>>;
 
-pub fn options(lookup: &SharedLookup, slash_items: Vec<SlashItem>) -> EditorOptions {
+pub fn options(lookup: &SharedLookup, slash_items: Vec<SlashItem>, ui: UiParts) -> EditorOptions {
     let resolver: SrcResolver = {
         let lookup = lookup.clone();
         Arc::new(move |src| resolve(&lookup, src))
@@ -61,7 +61,7 @@ pub fn options(lookup: &SharedLookup, slash_items: Vec<SlashItem>) -> EditorOpti
         resolve_src: Some(resolver),
         completions: Some(completions),
         slash_items,
-        ui: UiParts::ALL,
+        ui,
         ..Default::default()
     }
 }

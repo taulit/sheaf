@@ -56,7 +56,7 @@ use gpui::{
     Styled as _, Subscription, Task, Window, div, prelude::FluentBuilder as _, px,
 };
 use gpui_component::Theme;
-use gpui_markdown_editor::{DocMeta, EditorEvent, MarkdownEditor};
+use gpui_markdown_editor::{DocMeta, EditorEvent, MarkdownEditor, UiParts};
 use sheaf_core::i18n::tr;
 use sheaf_core::{CreateOptions, Note, NoteId, NoteMeta, Sort};
 
@@ -181,10 +181,13 @@ impl std::fmt::Debug for NoteView {
 impl EventEmitter<NoteEvent> for NoteView {}
 
 impl NoteView {
+    /// The view of note `id`, opened from the search `query`. `ui` is what the editor
+    /// shows of its own: the Quick Note window is too small for the format bar.
     pub fn new(
         library: Entity<Library>,
         id: NoteId,
         query: String,
+        ui: UiParts,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -196,7 +199,7 @@ impl NoteView {
         let note = cx.weak_entity();
         let editor = cx.new(|cx| {
             let slash = vec![template::slash_item(note)];
-            let mut editor = MarkdownEditor::new(window, cx, setup::options(&lookup, slash));
+            let mut editor = MarkdownEditor::new(window, cx, setup::options(&lookup, slash, ui));
             editor.set_style(setup::style(cx), cx);
             editor
         });

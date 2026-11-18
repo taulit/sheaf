@@ -20,6 +20,7 @@ use gpui::{
 use std::rc::Rc;
 
 use gpui_component::Root;
+use gpui_markdown_editor::UiParts;
 use sheaf_core::CreateOptions;
 use sheaf_core::NoteId;
 use sheaf_core::i18n::{ntr, tr};
@@ -202,7 +203,8 @@ impl MainWindow {
     ) {
         self.leave_note(window, cx, move |this, _, window, cx| {
             let library = this.library.clone();
-            let note = cx.new(|cx| NoteView::new(library, id, query.clone(), window, cx));
+            let note =
+                cx.new(|cx| NoteView::new(library, id, query.clone(), UiParts::ALL, window, cx));
             if fresh {
                 note.update(cx, |note, _| note.mark_new());
             }
