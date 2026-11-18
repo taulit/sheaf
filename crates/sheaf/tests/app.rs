@@ -776,11 +776,15 @@ async fn a_change_of_the_desktop_theme_reaches_tokens_components_and_views(
 fn theme_overrides_win_over_the_desktop(cx: &mut TestAppContext) {
     cx.update(|cx| {
         gpui_component::init(cx);
-        theme::init(Overrides::parse(Some("light"), Some("#9141ac")), cx);
+        let overrides = Overrides {
+            dark: Some(false),
+            accent: Some(0x9141ac),
+        };
+        theme::init(overrides, cx);
         assert!(!cx.tokens().dark);
 
         theme::set_appearance(Appearance::default(), cx);
-        assert!(!cx.tokens().dark, "SHEAF_THEME stays");
+        assert!(!cx.tokens().dark, "the override stays");
         assert_eq!(cx.tokens().accent, Hsla::from(gpui::rgb(0x9141ac)));
         assert!(theme::appearance(cx).dark, "what the desktop said is kept");
     });

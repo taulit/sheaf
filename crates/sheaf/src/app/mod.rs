@@ -108,7 +108,7 @@ pub fn run(launch: Launch, dir: Option<PathBuf>) -> ExitCode {
             trace::draw_headless(cx);
         }
         gpui_component::init(cx);
-        theme::init(theme::Overrides::from_process(), cx);
+        theme::init(theme::Overrides::default(), cx);
         if let Some(settings) = settings {
             cx.set_global(settings);
         }
