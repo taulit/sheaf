@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: sheaf\n"
 "Report-Msgid-Bugs-To: https://github.com/taulit/sheaf/issues\n"
-"POT-Creation-Date: 2026-11-18 03:56+0100\n"
+"POT-Creation-Date: 2026-11-18 04:17+0100\n"
 "PO-Revision-Date: 2026-11-18 12:00+0100\n"
 "Last-Translator: Automatically generated\n"
 "Language-Team: Simplified Chinese\n"
@@ -60,7 +60,7 @@ msgstr "搜索索引：{}"
 #: crates/sheaf-searchd/src/library.rs:189
 #: crates/sheaf/src/app/gallery/cards.rs:631
 #: crates/sheaf/src/app/gallery/trash.rs:364
-#: crates/sheaf/src/app/note/export.rs:85
+#: crates/sheaf/src/app/note/export.rs:96
 #: crates/sheaf/src/app/overlays/palette.rs:164
 #: crates/sheaf/src/cli/output.rs:183
 msgid "Untitled"
@@ -76,7 +76,7 @@ msgstr[0] "{} 条笔记"
 #: crates/sheaf/src/app/note/header.rs:96
 #: crates/sheaf/src/app/note/header.rs:252
 #: crates/sheaf/src/app/overlays/palette.rs:203
-#: crates/sheaf/src/app/quick.rs:511 crates/sheaf/src/app/window.rs:764
+#: crates/sheaf/src/app/quick.rs:511 crates/sheaf/src/app/window.rs:769
 msgid "Notes"
 msgstr "笔记"
 
@@ -102,7 +102,7 @@ msgstr "新建笔记"
 #: crates/sheaf/src/app/overlays/shortcuts.rs:31
 #: crates/sheaf/src/app/quick.rs:110 crates/sheaf/src/app/quick.rs:485
 #: crates/sheaf/src/app/settings/view.rs:558
-#: crates/sheaf/src/app/shortcut.rs:102
+#: crates/sheaf/src/app/shortcut.rs:121
 msgid "Quick Note"
 msgstr "快速笔记"
 
@@ -110,7 +110,7 @@ msgstr "快速笔记"
 msgid "New Note from Template…"
 msgstr "从模板新建笔记…"
 
-#: crates/sheaf/src/app/actions.rs:173 crates/sheaf/src/app/gallery/mod.rs:264
+#: crates/sheaf/src/app/actions.rs:173 crates/sheaf/src/app/gallery/mod.rs:268
 msgid "Search"
 msgstr "搜索"
 
@@ -144,13 +144,13 @@ msgstr "返回笔记"
 
 #: crates/sheaf/src/app/actions.rs:184
 #: crates/sheaf/src/app/overlays/shortcuts.rs:149
-#: crates/sheaf/src/app/settings/view.rs:635
+#: crates/sheaf/src/app/settings/view.rs:633
 msgid "Keyboard Shortcuts"
 msgstr "键盘快捷键"
 
 #: crates/sheaf/src/app/actions.rs:185
-#: crates/sheaf/src/app/settings/view.rs:649
-#: crates/sheaf/src/app/settings/view.rs:690
+#: crates/sheaf/src/app/settings/view.rs:647
+#: crates/sheaf/src/app/settings/view.rs:688
 msgid "Settings"
 msgstr "设置"
 
@@ -413,74 +413,97 @@ msgstr "星期六"
 msgid "Sunday"
 msgstr "星期日"
 
-#: crates/sheaf/src/app/gallery/folders.rs:74
+#: crates/sheaf/src/app/gallery/folders.rs:42
+#, rust-format
+msgid "{} file stayed in the folder"
+msgid_plural "{} files stayed in the folder"
+msgstr[0] "{} 个文件留在了文件夹中"
+
+#: crates/sheaf/src/app/gallery/folders.rs:76
+#, rust-format
+msgid "Renamed; {} note could not be read and is missing from search"
+msgid_plural "Renamed; {} notes could not be read and are missing from search"
+msgstr[0] "已重命名；{} 条笔记无法读取，不会出现在搜索中"
+
+#: crates/sheaf/src/app/gallery/folders.rs:99
 #, rust-format
 msgid "Could not rename the folder: {}"
 msgstr "无法重命名文件夹：{}"
 
-#: crates/sheaf/src/app/gallery/folders.rs:108
+#: crates/sheaf/src/app/gallery/folders.rs:137
+#, rust-format
+msgid "The folder still holds {} other file and was kept"
+msgid_plural "The folder still holds {} other files and was kept"
+msgstr[0] "文件夹中仍有 {} 个其他文件，因此已保留"
+
+#: crates/sheaf/src/app/gallery/folders.rs:143
+#: crates/sheaf/src/app/note/header.rs:176
+msgid "Show in Files"
+msgstr "在“文件”中显示"
+
+#: crates/sheaf/src/app/gallery/folders.rs:155
 #, rust-format
 msgid "Could not delete the folder: {}"
 msgstr "无法删除文件夹：{}"
 
-#: crates/sheaf/src/app/gallery/folders.rs:121
+#: crates/sheaf/src/app/gallery/folders.rs:169
 #: crates/sheaf/src/app/gallery/render.rs:590
 msgid "Folder Name"
 msgstr "文件夹名称"
 
-#: crates/sheaf/src/app/gallery/folders.rs:149
+#: crates/sheaf/src/app/gallery/folders.rs:197
 #: crates/sheaf/src/app/gallery/smart.rs:370
 msgid "Rename…"
 msgstr "重命名…"
 
-#: crates/sheaf/src/app/gallery/folders.rs:156
+#: crates/sheaf/src/app/gallery/folders.rs:204
 msgid "Delete…"
 msgstr "删除…"
 
-#: crates/sheaf/src/app/gallery/mod.rs:139
+#: crates/sheaf/src/app/gallery/mod.rs:143
 #: crates/sheaf/src/app/gallery/render.rs:478
 msgid "All Notes"
 msgstr "所有笔记"
 
-#: crates/sheaf/src/app/gallery/mod.rs:142
+#: crates/sheaf/src/app/gallery/mod.rs:146
 #: crates/sheaf/src/app/gallery/render.rs:526
 msgid "Recently Deleted"
 msgstr "最近删除"
 
-#: crates/sheaf/src/app/gallery/mod.rs:582
+#: crates/sheaf/src/app/gallery/mod.rs:586
 #, rust-format
 msgid "Could not read the folder settings: {}"
 msgstr "无法读取文件夹设置：{}"
 
-#: crates/sheaf/src/app/gallery/mod.rs:612
+#: crates/sheaf/src/app/gallery/mod.rs:616
 #, rust-format
 msgid "Could not save the folder settings: {}"
 msgstr "无法保存文件夹设置：{}"
 
-#: crates/sheaf/src/app/gallery/mod.rs:1104
+#: crates/sheaf/src/app/gallery/mod.rs:1108
 #: crates/sheaf/src/app/note/mod.rs:698
 #, rust-format
 msgid "Could not pin the note: {}"
 msgstr "无法固定笔记：{}"
 
-#: crates/sheaf/src/app/gallery/mod.rs:1106
+#: crates/sheaf/src/app/gallery/mod.rs:1110
 #: crates/sheaf/src/app/note/mod.rs:700
 #, rust-format
 msgid "Could not unpin the note: {}"
 msgstr "无法取消固定笔记：{}"
 
-#: crates/sheaf/src/app/gallery/mod.rs:1120
+#: crates/sheaf/src/app/gallery/mod.rs:1124
 #: crates/sheaf/src/app/note/mod.rs:703
 #, rust-format
 msgid "Could not move the note: {}"
 msgstr "无法移动笔记：{}"
 
-#: crates/sheaf/src/app/gallery/mod.rs:1132
+#: crates/sheaf/src/app/gallery/mod.rs:1136
 #, rust-format
 msgid "Could not duplicate the note: {}"
 msgstr "无法复制笔记：{}"
 
-#: crates/sheaf/src/app/gallery/mod.rs:1215
+#: crates/sheaf/src/app/gallery/mod.rs:1219
 #: crates/sheaf/src/app/note/mod.rs:670
 #, rust-format
 msgid "Could not move to trash: {}"
@@ -719,41 +742,47 @@ msgstr[0] "{} 条笔记链接到此处"
 msgid "{day} {month} {year}, {time}"
 msgstr "{year}年{month}{day}日 {time}"
 
-#: crates/sheaf/src/app/note/export.rs:116
+#: crates/sheaf/src/app/note/export.rs:127
 msgid "Export as Markdown"
 msgstr "导出为 Markdown"
 
-#: crates/sheaf/src/app/note/export.rs:117
+#: crates/sheaf/src/app/note/export.rs:128
 msgid "Export as PDF"
 msgstr "导出为 PDF"
 
-#: crates/sheaf/src/app/note/export.rs:140
+#: crates/sheaf/src/app/note/export.rs:167
 msgid "Markdown"
 msgstr "Markdown"
 
-#: crates/sheaf/src/app/note/export.rs:144
+#: crates/sheaf/src/app/note/export.rs:171
 msgid "PDF"
 msgstr "PDF"
 
-#: crates/sheaf/src/app/note/export.rs:183
-msgid "Exported"
-msgstr "已导出"
-
-#: crates/sheaf/src/app/note/export.rs:183 crates/sheaf/src/app/quick.rs:556
+#: crates/sheaf/src/app/note/export.rs:228 crates/sheaf/src/app/quick.rs:556
 msgid "Open"
 msgstr "打开"
 
-#: crates/sheaf/src/app/note/export.rs:189
+#: crates/sheaf/src/app/note/export.rs:232
+msgid "Exported"
+msgstr "已导出"
+
+#: crates/sheaf/src/app/note/export.rs:240
+#, rust-format
+msgid "{written} exported, {failed} failed: {reason}"
+msgid_plural "{written} exported, {failed} failed: {reason}"
+msgstr[0] "已导出 {written} 条，{failed} 条失败：{reason}"
+
+#: crates/sheaf/src/app/note/export.rs:252
 #, rust-format
 msgid "Could not export: {}"
 msgstr "无法导出：{}"
 
-#: crates/sheaf/src/app/note/export.rs:318
+#: crates/sheaf/src/app/note/export.rs:381
 #, rust-format
 msgid "Could not print: {}"
 msgstr "无法打印：{}"
 
-#: crates/sheaf/src/app/note/export.rs:319
+#: crates/sheaf/src/app/note/export.rs:382
 msgid "Open as PDF"
 msgstr "以 PDF 打开"
 
@@ -773,10 +802,6 @@ msgstr "复制为 Markdown"
 #: crates/sheaf/src/app/note/header.rs:236
 msgid "Info"
 msgstr "信息"
-
-#: crates/sheaf/src/app/note/header.rs:176
-msgid "Show in Files"
-msgstr "在“文件”中显示"
 
 #: crates/sheaf/src/app/note/header.rs:181
 #: crates/sheaf/src/app/note/header.rs:269
@@ -1060,21 +1085,25 @@ msgstr "随处可用的快捷键"
 msgid "Visor supplies it: open Visor and type “note”"
 msgstr "由 Visor 提供：打开 Visor 并输入“note”"
 
-#: crates/sheaf/src/app/settings/view.rs:585
-msgid "While Notes runs. Otherwise add a custom shortcut for “sheaf --quick” in GNOME Settings, Keyboard"
-msgstr "仅在“笔记”运行时有效。否则请在 GNOME 设置的“键盘”中为“sheaf --quick”添加自定义快捷键"
-
-#: crates/sheaf/src/app/settings/view.rs:603
+#: crates/sheaf/src/app/settings/view.rs:601
 msgid "Editor"
 msgstr "编辑器"
 
-#: crates/sheaf/src/app/settings/view.rs:605
+#: crates/sheaf/src/app/settings/view.rs:603
 msgid "Font"
 msgstr "字体"
 
-#: crates/sheaf/src/app/settings/view.rs:606
+#: crates/sheaf/src/app/settings/view.rs:604
 msgid "Line Width"
 msgstr "行宽"
+
+#: crates/sheaf/src/app/shortcut.rs:89
+msgid "While Notes runs, through GNOME’s shortcut portal, also with Visor installed. Otherwise add a custom shortcut for “flatpak run io.github.taulit.Sheaf --quick” in GNOME Settings, Keyboard"
+msgstr "仅在“笔记”运行时有效，通过 GNOME 的快捷键门户绑定，即使已安装 Visor 也是如此。否则请在 GNOME 设置的“键盘”中为“flatpak run io.github.taulit.Sheaf --quick”添加自定义快捷键"
+
+#: crates/sheaf/src/app/shortcut.rs:93
+msgid "While Notes runs. Otherwise add a custom shortcut for “sheaf --quick” in GNOME Settings, Keyboard"
+msgstr "仅在“笔记”运行时有效。否则请在 GNOME 设置的“键盘”中为“sheaf --quick”添加自定义快捷键"
 
 #: crates/sheaf/src/app/window.rs:152
 msgid "Recovered unsaved notes"
@@ -1095,11 +1124,11 @@ msgid "Note moved to trash"
 msgid_plural "{} notes moved to trash"
 msgstr[0] "已将 {} 条笔记移到回收站"
 
-#: crates/sheaf/src/app/window.rs:399
+#: crates/sheaf/src/app/window.rs:402
 msgid "Undo"
 msgstr "撤销"
 
-#: crates/sheaf/src/app/window.rs:606
+#: crates/sheaf/src/app/window.rs:611
 #, rust-format
 msgid "Could not open the notes folder: {}"
 msgstr "无法打开笔记文件夹：{}"

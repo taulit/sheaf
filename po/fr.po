@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: sheaf\n"
 "Report-Msgid-Bugs-To: https://github.com/taulit/sheaf/issues\n"
-"POT-Creation-Date: 2026-11-18 03:56+0100\n"
+"POT-Creation-Date: 2026-11-18 04:17+0100\n"
 "PO-Revision-Date: 2026-11-18 12:00+0100\n"
 "Last-Translator: Automatically generated\n"
 "Language-Team: French\n"
@@ -60,7 +60,7 @@ msgstr "index de recherche : {}"
 #: crates/sheaf-searchd/src/library.rs:189
 #: crates/sheaf/src/app/gallery/cards.rs:631
 #: crates/sheaf/src/app/gallery/trash.rs:364
-#: crates/sheaf/src/app/note/export.rs:85
+#: crates/sheaf/src/app/note/export.rs:96
 #: crates/sheaf/src/app/overlays/palette.rs:164
 #: crates/sheaf/src/cli/output.rs:183
 msgid "Untitled"
@@ -77,7 +77,7 @@ msgstr[1] "{} notes"
 #: crates/sheaf/src/app/note/header.rs:96
 #: crates/sheaf/src/app/note/header.rs:252
 #: crates/sheaf/src/app/overlays/palette.rs:203
-#: crates/sheaf/src/app/quick.rs:511 crates/sheaf/src/app/window.rs:764
+#: crates/sheaf/src/app/quick.rs:511 crates/sheaf/src/app/window.rs:769
 msgid "Notes"
 msgstr "Notes"
 
@@ -103,7 +103,7 @@ msgstr "Nouvelle note"
 #: crates/sheaf/src/app/overlays/shortcuts.rs:31
 #: crates/sheaf/src/app/quick.rs:110 crates/sheaf/src/app/quick.rs:485
 #: crates/sheaf/src/app/settings/view.rs:558
-#: crates/sheaf/src/app/shortcut.rs:102
+#: crates/sheaf/src/app/shortcut.rs:121
 msgid "Quick Note"
 msgstr "Note rapide"
 
@@ -111,7 +111,7 @@ msgstr "Note rapide"
 msgid "New Note from Template…"
 msgstr "Nouvelle note à partir d’un modèle…"
 
-#: crates/sheaf/src/app/actions.rs:173 crates/sheaf/src/app/gallery/mod.rs:264
+#: crates/sheaf/src/app/actions.rs:173 crates/sheaf/src/app/gallery/mod.rs:268
 msgid "Search"
 msgstr "Rechercher"
 
@@ -145,13 +145,13 @@ msgstr "Retour aux notes"
 
 #: crates/sheaf/src/app/actions.rs:184
 #: crates/sheaf/src/app/overlays/shortcuts.rs:149
-#: crates/sheaf/src/app/settings/view.rs:635
+#: crates/sheaf/src/app/settings/view.rs:633
 msgid "Keyboard Shortcuts"
 msgstr "Raccourcis clavier"
 
 #: crates/sheaf/src/app/actions.rs:185
-#: crates/sheaf/src/app/settings/view.rs:649
-#: crates/sheaf/src/app/settings/view.rs:690
+#: crates/sheaf/src/app/settings/view.rs:647
+#: crates/sheaf/src/app/settings/view.rs:688
 msgid "Settings"
 msgstr "Paramètres"
 
@@ -414,74 +414,100 @@ msgstr "Samedi"
 msgid "Sunday"
 msgstr "Dimanche"
 
-#: crates/sheaf/src/app/gallery/folders.rs:74
+#: crates/sheaf/src/app/gallery/folders.rs:42
+#, rust-format
+msgid "{} file stayed in the folder"
+msgid_plural "{} files stayed in the folder"
+msgstr[0] "{} fichier est resté dans le dossier"
+msgstr[1] "{} fichiers sont restés dans le dossier"
+
+#: crates/sheaf/src/app/gallery/folders.rs:76
+#, rust-format
+msgid "Renamed; {} note could not be read and is missing from search"
+msgid_plural "Renamed; {} notes could not be read and are missing from search"
+msgstr[0] "Renommé ; {} note n’a pas pu être lue et manque dans la recherche"
+msgstr[1] "Renommé ; {} notes n’ont pas pu être lues et manquent dans la recherche"
+
+#: crates/sheaf/src/app/gallery/folders.rs:99
 #, rust-format
 msgid "Could not rename the folder: {}"
 msgstr "Impossible de renommer le dossier : {}"
 
-#: crates/sheaf/src/app/gallery/folders.rs:108
+#: crates/sheaf/src/app/gallery/folders.rs:137
+#, rust-format
+msgid "The folder still holds {} other file and was kept"
+msgid_plural "The folder still holds {} other files and was kept"
+msgstr[0] "Le dossier contient encore {} autre fichier et a été conservé"
+msgstr[1] "Le dossier contient encore {} autres fichiers et a été conservé"
+
+#: crates/sheaf/src/app/gallery/folders.rs:143
+#: crates/sheaf/src/app/note/header.rs:176
+msgid "Show in Files"
+msgstr "Afficher dans Fichiers"
+
+#: crates/sheaf/src/app/gallery/folders.rs:155
 #, rust-format
 msgid "Could not delete the folder: {}"
 msgstr "Impossible de supprimer le dossier : {}"
 
-#: crates/sheaf/src/app/gallery/folders.rs:121
+#: crates/sheaf/src/app/gallery/folders.rs:169
 #: crates/sheaf/src/app/gallery/render.rs:590
 msgid "Folder Name"
 msgstr "Nom du dossier"
 
-#: crates/sheaf/src/app/gallery/folders.rs:149
+#: crates/sheaf/src/app/gallery/folders.rs:197
 #: crates/sheaf/src/app/gallery/smart.rs:370
 msgid "Rename…"
 msgstr "Renommer…"
 
-#: crates/sheaf/src/app/gallery/folders.rs:156
+#: crates/sheaf/src/app/gallery/folders.rs:204
 msgid "Delete…"
 msgstr "Supprimer…"
 
-#: crates/sheaf/src/app/gallery/mod.rs:139
+#: crates/sheaf/src/app/gallery/mod.rs:143
 #: crates/sheaf/src/app/gallery/render.rs:478
 msgid "All Notes"
 msgstr "Toutes les notes"
 
-#: crates/sheaf/src/app/gallery/mod.rs:142
+#: crates/sheaf/src/app/gallery/mod.rs:146
 #: crates/sheaf/src/app/gallery/render.rs:526
 msgid "Recently Deleted"
 msgstr "Supprimées récemment"
 
-#: crates/sheaf/src/app/gallery/mod.rs:582
+#: crates/sheaf/src/app/gallery/mod.rs:586
 #, rust-format
 msgid "Could not read the folder settings: {}"
 msgstr "Impossible de lire les réglages du dossier : {}"
 
-#: crates/sheaf/src/app/gallery/mod.rs:612
+#: crates/sheaf/src/app/gallery/mod.rs:616
 #, rust-format
 msgid "Could not save the folder settings: {}"
 msgstr "Impossible d’enregistrer les réglages du dossier : {}"
 
-#: crates/sheaf/src/app/gallery/mod.rs:1104
+#: crates/sheaf/src/app/gallery/mod.rs:1108
 #: crates/sheaf/src/app/note/mod.rs:698
 #, rust-format
 msgid "Could not pin the note: {}"
 msgstr "Impossible d’épingler la note : {}"
 
-#: crates/sheaf/src/app/gallery/mod.rs:1106
+#: crates/sheaf/src/app/gallery/mod.rs:1110
 #: crates/sheaf/src/app/note/mod.rs:700
 #, rust-format
 msgid "Could not unpin the note: {}"
 msgstr "Impossible de désépingler la note : {}"
 
-#: crates/sheaf/src/app/gallery/mod.rs:1120
+#: crates/sheaf/src/app/gallery/mod.rs:1124
 #: crates/sheaf/src/app/note/mod.rs:703
 #, rust-format
 msgid "Could not move the note: {}"
 msgstr "Impossible de déplacer la note : {}"
 
-#: crates/sheaf/src/app/gallery/mod.rs:1132
+#: crates/sheaf/src/app/gallery/mod.rs:1136
 #, rust-format
 msgid "Could not duplicate the note: {}"
 msgstr "Impossible de dupliquer la note : {}"
 
-#: crates/sheaf/src/app/gallery/mod.rs:1215
+#: crates/sheaf/src/app/gallery/mod.rs:1219
 #: crates/sheaf/src/app/note/mod.rs:670
 #, rust-format
 msgid "Could not move to trash: {}"
@@ -725,41 +751,48 @@ msgstr[1] "{} notes renvoient ici"
 msgid "{day} {month} {year}, {time}"
 msgstr "{day} {month} {year} à {time}"
 
-#: crates/sheaf/src/app/note/export.rs:116
+#: crates/sheaf/src/app/note/export.rs:127
 msgid "Export as Markdown"
 msgstr "Exporter en Markdown"
 
-#: crates/sheaf/src/app/note/export.rs:117
+#: crates/sheaf/src/app/note/export.rs:128
 msgid "Export as PDF"
 msgstr "Exporter en PDF"
 
-#: crates/sheaf/src/app/note/export.rs:140
+#: crates/sheaf/src/app/note/export.rs:167
 msgid "Markdown"
 msgstr "Markdown"
 
-#: crates/sheaf/src/app/note/export.rs:144
+#: crates/sheaf/src/app/note/export.rs:171
 msgid "PDF"
 msgstr "PDF"
 
-#: crates/sheaf/src/app/note/export.rs:183
-msgid "Exported"
-msgstr "Exportée"
-
-#: crates/sheaf/src/app/note/export.rs:183 crates/sheaf/src/app/quick.rs:556
+#: crates/sheaf/src/app/note/export.rs:228 crates/sheaf/src/app/quick.rs:556
 msgid "Open"
 msgstr "Ouvrir"
 
-#: crates/sheaf/src/app/note/export.rs:189
+#: crates/sheaf/src/app/note/export.rs:232
+msgid "Exported"
+msgstr "Exportée"
+
+#: crates/sheaf/src/app/note/export.rs:240
+#, rust-format
+msgid "{written} exported, {failed} failed: {reason}"
+msgid_plural "{written} exported, {failed} failed: {reason}"
+msgstr[0] "{written} exportée(s), {failed} échec : {reason}"
+msgstr[1] "{written} exportée(s), {failed} échecs : {reason}"
+
+#: crates/sheaf/src/app/note/export.rs:252
 #, rust-format
 msgid "Could not export: {}"
 msgstr "Impossible d’exporter : {}"
 
-#: crates/sheaf/src/app/note/export.rs:318
+#: crates/sheaf/src/app/note/export.rs:381
 #, rust-format
 msgid "Could not print: {}"
 msgstr "Impossible d’imprimer : {}"
 
-#: crates/sheaf/src/app/note/export.rs:319
+#: crates/sheaf/src/app/note/export.rs:382
 msgid "Open as PDF"
 msgstr "Ouvrir en PDF"
 
@@ -779,10 +812,6 @@ msgstr "Copier en Markdown"
 #: crates/sheaf/src/app/note/header.rs:236
 msgid "Info"
 msgstr "Informations"
-
-#: crates/sheaf/src/app/note/header.rs:176
-msgid "Show in Files"
-msgstr "Afficher dans Fichiers"
 
 #: crates/sheaf/src/app/note/header.rs:181
 #: crates/sheaf/src/app/note/header.rs:269
@@ -1067,21 +1096,25 @@ msgstr "Raccourci depuis n’importe où"
 msgid "Visor supplies it: open Visor and type “note”"
 msgstr "Fourni par Visor : ouvrez Visor et saisissez « note »"
 
-#: crates/sheaf/src/app/settings/view.rs:585
-msgid "While Notes runs. Otherwise add a custom shortcut for “sheaf --quick” in GNOME Settings, Keyboard"
-msgstr "Tant que Notes est lancé. Sinon, ajoutez un raccourci personnalisé pour « sheaf --quick » dans les paramètres de GNOME, Clavier"
-
-#: crates/sheaf/src/app/settings/view.rs:603
+#: crates/sheaf/src/app/settings/view.rs:601
 msgid "Editor"
 msgstr "Éditeur"
 
-#: crates/sheaf/src/app/settings/view.rs:605
+#: crates/sheaf/src/app/settings/view.rs:603
 msgid "Font"
 msgstr "Police"
 
-#: crates/sheaf/src/app/settings/view.rs:606
+#: crates/sheaf/src/app/settings/view.rs:604
 msgid "Line Width"
 msgstr "Largeur des lignes"
+
+#: crates/sheaf/src/app/shortcut.rs:89
+msgid "While Notes runs, through GNOME’s shortcut portal, also with Visor installed. Otherwise add a custom shortcut for “flatpak run io.github.taulit.Sheaf --quick” in GNOME Settings, Keyboard"
+msgstr "Tant que Notes est lancé, via le portail de raccourcis de GNOME, même si Visor est installé. Sinon, ajoutez un raccourci personnalisé pour « flatpak run io.github.taulit.Sheaf --quick » dans les paramètres de GNOME, Clavier"
+
+#: crates/sheaf/src/app/shortcut.rs:93
+msgid "While Notes runs. Otherwise add a custom shortcut for “sheaf --quick” in GNOME Settings, Keyboard"
+msgstr "Tant que Notes est lancé. Sinon, ajoutez un raccourci personnalisé pour « sheaf --quick » dans les paramètres de GNOME, Clavier"
 
 #: crates/sheaf/src/app/window.rs:152
 msgid "Recovered unsaved notes"
@@ -1103,11 +1136,11 @@ msgid_plural "{} notes moved to trash"
 msgstr[0] "Note mise à la corbeille"
 msgstr[1] "{} notes mises à la corbeille"
 
-#: crates/sheaf/src/app/window.rs:399
+#: crates/sheaf/src/app/window.rs:402
 msgid "Undo"
 msgstr "Annuler"
 
-#: crates/sheaf/src/app/window.rs:606
+#: crates/sheaf/src/app/window.rs:611
 #, rust-format
 msgid "Could not open the notes folder: {}"
 msgstr "Impossible d’ouvrir le dossier des notes : {}"
