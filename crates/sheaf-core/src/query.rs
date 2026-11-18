@@ -296,28 +296,129 @@ fn token(input: &str, start: usize) -> (ItemKind, usize) {
     (kind, end)
 }
 
-/// `query` with every `folder:` filter that names the folder `from` (or one inside it)
-/// naming `to` instead, as a rename of the folder needs it. The rest stays as typed.
-pub fn rename_folder(query: &str, from: &str, to: &str) -> String {
+/// The folded segments of a folder path or of a `folder:` value.
+fn folder_segments(path: &str) -> Vec<String> {
+    path.split('/')
+        .map(str::trim)
+        .filter(|segment| !segment.is_empty())
+        .map(|segment| fold(segment).primary)
+        .collect()
+}
+
+/// Every run of consecutive segments of `folder`, so that `folder:b` and `folder:b/c`
+/// find a note in `a/b/c` with one term lookup. Runs that start at the root are also
+/// listed with a leading `/`, for anchored values.
+pub(crate) fn folder_runs(folder: &str) -> Vec<String> {
+    let segments = folder_segments(folder);
+    let mut runs = Vec::new();
+    for start in 0..segments.len() {
+        for end in start + 1..=segments.len() {
+            let run = segments[start..end].join("/");
+            if start == 0 {
+                runs.push(format!("/{run}"));
+            }
+            runs.push(run);
+        }
+    }
+    runs
+}
+
+/// The term a `folder:` value looks up among the [`folder_runs`] of a note's folder.
+pub(crate) fn folder_key(value: &str) -> String {
+    let run = folder_segments(value).join("/");
+    if value.starts_with('/') {
+        format!("/{run}")
+    } else {
+        run
+    }
+}
+
+/// Whether the `folder:` value `value` finds the notes in `folder` (and so in the
+/// folders inside it): the rule the search index applies.
+pub fn folder_matches(value: &str, folder: &str) -> bool {
+    folder_runs(folder).contains(&folder_key(value))
+}
+
+/// `query` with every `folder:` filter that found the folder `from` (or one inside it),
+/// and no folder outside it, finding `to` in the same way instead, as a rename of the
+/// folder needs it. `folders` are all folders before the rename. A filter that also
+/// found other folders stays as typed: it still means what it says.
+pub fn rename_folder(query: &str, from: &str, to: &str, folders: &[String]) -> String {
+    let inside = |folder: &str, root: &str| {
+        folder
+            .strip_prefix(root)
+            .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
+    };
+    let after: Vec<String> = folders
+        .iter()
+        .map(|folder| match folder.strip_prefix(from) {
+            Some(rest) if inside(folder, from) => format!("{to}{rest}"),
+            _ => folder.clone(),
+        })
+        .collect();
+    // Finds exactly the folders in `root` among `folders`.
+    let finds_only = |value: &str, root: &str, folders: &[String]| {
+        let mut found = folders
+            .iter()
+            .filter(|folder| folder_matches(value, folder))
+            .peekable();
+        found.peek().is_some() && found.all(|folder| inside(folder, root))
+    };
     let mut renamed = String::with_capacity(query.len());
     let mut position = 0;
     for item in parse(query).items {
-        let ItemKind::Filter(Filter::Folder(folder)) = &item.kind else {
+        let ItemKind::Filter(Filter::Folder(value)) = &item.kind else {
             continue;
         };
-        let anchored = folder.starts_with('/');
-        let path = folder.trim_start_matches('/');
-        let rest = match path.strip_prefix(from) {
-            Some(rest) if rest.is_empty() || rest.starts_with('/') => rest,
-            _ => continue,
+        if !finds_only(value, from, folders) {
+            continue;
+        }
+        let Some(new) = renamed_value(value, from, to)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .find(|new| finds_only(new, to, &after))
+        else {
+            continue;
         };
-        let new = format!("{}{to}{rest}", if anchored { "/" } else { "" });
         renamed.push_str(&query[position..item.span.start]);
         renamed.push_str(&Filter::Folder(new).to_string());
         position = item.span.end;
     }
     renamed.push_str(&query[position..]);
     renamed
+}
+
+/// What the `folder:` value `value`, which names the folder `from` or one inside it,
+/// could say once `from` is `to`: first in the form it was typed in, then as the
+/// whole path from the notes folder. `None` if `value` does not name `from`.
+fn renamed_value(value: &str, from: &str, to: &str) -> Option<[Option<String>; 2]> {
+    let anchored = value.starts_with('/');
+    let typed: Vec<&str> = value
+        .split('/')
+        .map(str::trim)
+        .filter(|segment| !segment.is_empty())
+        .collect();
+    let folded: Vec<String> = typed.iter().map(|segment| fold(segment).primary).collect();
+    let old = folder_segments(from);
+    let new: Vec<&str> = to.split('/').collect();
+    // Where `value` starts in `from`: it covers the end of `from` and may go below.
+    let start = (0..old.len()).find(|&start| {
+        (!anchored || start == 0)
+            && folded.len() >= old.len() - start
+            && folded[..old.len() - start] == old[start..]
+    })?;
+    let below = typed[old.len() - start..]
+        .iter()
+        .map(|segment| format!("/{segment}"));
+    let below: String = below.collect();
+    let same_form = if start == 0 {
+        Some(format!("{}{to}{below}", if anchored { "/" } else { "" }))
+    } else {
+        let tail = new.len().checked_sub(old.len() - start);
+        tail.map(|tail| format!("{}{below}", new[tail..].join("/")))
+    };
+    Some([same_form, Some(format!("/{to}{below}"))])
 }
 
 /// Looks `value` up among the names of a filter's values: `Some(Some(_))` for a name,
@@ -338,25 +439,101 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_folder_rename_follows_into_folder_filters() {
+    fn folder_runs_list_every_run_of_segments() {
+        assert_eq!(folder_runs(""), Vec::<String>::new());
+        assert_eq!(folder_runs("Arbeit"), ["/arbeit", "arbeit"]);
         assert_eq!(
-            rename_folder("folder:/Arbeit open: plan", "Arbeit", "Büro"),
+            folder_runs("Firma/Büro/Projekte"),
+            [
+                "/firma",
+                "firma",
+                "/firma/buro",
+                "firma/buro",
+                "/firma/buro/projekte",
+                "firma/buro/projekte",
+                "buro",
+                "buro/projekte",
+                "projekte",
+            ]
+        );
+    }
+
+    #[test]
+    fn folder_keys_fold_and_keep_the_anchor() {
+        assert_eq!(folder_key("Arbeit"), "arbeit");
+        assert_eq!(folder_key("Büro/Projekte/"), "buro/projekte");
+        assert_eq!(folder_key("/Meine Notizen"), "/meine notizen");
+    }
+
+    fn folders(paths: &[&str]) -> Vec<String> {
+        paths.iter().map(|path| (*path).to_owned()).collect()
+    }
+
+    #[test]
+    fn a_folder_rename_follows_into_folder_filters() {
+        let all = folders(&["Arbeit", "Arbeit/Kunden", "Arbeitszeit", "Privat"]);
+        let rename = |query, from, to| rename_folder(query, from, to, &all);
+        assert_eq!(
+            rename("folder:/Arbeit open: plan", "Arbeit", "Büro"),
             "folder:/Büro open: plan"
         );
         assert_eq!(
-            rename_folder("folder:Arbeit/Kunden #x", "Arbeit", "Alt/Arbeit"),
+            rename("folder:Arbeit/Kunden #x", "Arbeit", "Alt/Arbeit"),
             "folder:Alt/Arbeit/Kunden #x"
         );
         assert_eq!(
-            rename_folder("folder:/Arbeit", "Arbeit", "Neue Arbeit"),
+            rename("folder:/Arbeit", "Arbeit", "Neue Arbeit"),
             "folder:\"/Neue Arbeit\""
         );
         // Other folders, and words that only look alike, stay.
         assert_eq!(
-            rename_folder("folder:/Arbeitszeit Arbeit", "Arbeit", "Büro"),
+            rename("folder:/Arbeitszeit Arbeit", "Arbeit", "Büro"),
             "folder:/Arbeitszeit Arbeit"
         );
-        assert_eq!(rename_folder("", "Arbeit", "Büro"), "");
+        assert_eq!(rename("", "Arbeit", "Büro"), "");
+    }
+
+    #[test]
+    fn a_folder_rename_follows_filters_as_the_search_matches_them() {
+        let all = folders(&["Arbeit", "Arbeit/Kunden", "Privat"]);
+        // Case and accents are folded, as in the search.
+        assert_eq!(
+            rename_folder("folder:arbeit open:", "Arbeit", "Büro", &all),
+            "folder:Büro open:"
+        );
+        // Unanchored, a filter finds a folder at any depth.
+        assert_eq!(
+            rename_folder("folder:Kunden", "Arbeit/Kunden", "Arbeit/Clients", &all),
+            "folder:Clients"
+        );
+        assert_eq!(
+            rename_folder("folder:/arbeit/kunden", "Arbeit/Kunden", "Privat/Leute", &all),
+            "folder:/Privat/Leute"
+        );
+    }
+
+    #[test]
+    fn a_filter_that_also_finds_other_folders_stays() {
+        let all = folders(&["Arbeit", "Arbeit/Kunden", "Privat", "Privat/Kunden"]);
+        assert_eq!(
+            rename_folder("folder:Kunden", "Arbeit/Kunden", "Arbeit/Clients", &all),
+            "folder:Kunden"
+        );
+        // Nor does a filter that finds no folder change.
+        assert_eq!(
+            rename_folder("folder:Fehlt", "Arbeit", "Büro", &all),
+            "folder:Fehlt"
+        );
+    }
+
+    #[test]
+    fn a_filter_is_not_renamed_to_one_that_finds_more() {
+        // "folder:Kunden" would also find Privat/Kunden after the rename.
+        let all = folders(&["Arbeit", "Arbeit/Leute", "Privat", "Privat/Kunden"]);
+        assert_eq!(
+            rename_folder("folder:Leute", "Arbeit/Leute", "Arbeit/Kunden", &all),
+            "folder:/Arbeit/Kunden"
+        );
     }
 
     fn kinds(input: &str) -> Vec<ItemKind> {

@@ -215,8 +215,9 @@ impl FolderConfig {
     }
 
     /// Makes what names the folder `from`, or one inside it, name `to` instead: its
-    /// view, the Quick Notes folder and the smart folders' searches.
-    pub fn rename_folder(&mut self, from: &str, to: &str) {
+    /// view, the Quick Notes folder and the smart folders' searches. `folders` are all
+    /// folders before the rename, which tell what a `folder:` filter found.
+    pub fn rename_folder(&mut self, from: &str, to: &str, folders: &[String]) {
         let moved = |folder: &str| match folder.strip_prefix(from) {
             Some(rest) if rest.is_empty() || rest.starts_with('/') => Some(format!("{to}{rest}")),
             _ => None,
@@ -237,7 +238,7 @@ impl FolderConfig {
             self.quick_note.folder = Some(folder);
         }
         for smart in &mut self.smart_folders {
-            smart.query = crate::query::rename_folder(&smart.query, from, to);
+            smart.query = crate::query::rename_folder(&smart.query, from, to, folders);
         }
     }
 
@@ -387,7 +388,8 @@ mod tests {
         }
         config.folders.get_mut("Arbeit").unwrap().view = View::List;
 
-        config.rename_folder("Arbeit", "Büro");
+        let all = ["Arbeit", "Arbeit/Kunden", "Arbeitszeit"].map(str::to_owned);
+        config.rename_folder("Arbeit", "Büro", &all);
         let folders: Vec<&str> = config.folders.keys().map(String::as_str).collect();
         assert_eq!(folders, ["", "Arbeitszeit", "Büro", "Büro/Kunden"]);
         assert_eq!(config.folders["Büro"].view, View::List);
@@ -398,10 +400,10 @@ mod tests {
     #[test]
     fn the_default_quick_notes_folder_follows_a_rename() {
         let mut config = FolderConfig::default();
-        config.rename_folder("Arbeit", "Büro");
+        config.rename_folder("Arbeit", "Büro", &[]);
         assert_eq!(config.quick_note.folder, None);
 
-        config.rename_folder("Quick Notes", "Inbox");
+        config.rename_folder("Quick Notes", "Inbox", &[]);
         assert_eq!(config.quick_note.folder.as_deref(), Some("Inbox"));
     }
 

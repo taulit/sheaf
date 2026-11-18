@@ -67,9 +67,9 @@ impl GalleryView {
         cx.spawn(async move |this, cx| {
             let renamed = renaming.await;
             let _ = this.update(cx, |this, cx| match renamed {
-                Ok(unreadable) => {
-                    if unreadable > 0 {
-                        let count = u32::try_from(unreadable).unwrap_or(u32::MAX);
+                Ok(renamed) => {
+                    if renamed.unreadable > 0 {
+                        let count = u32::try_from(renamed.unreadable).unwrap_or(u32::MAX);
                         let message = ntr(
                             "Renamed; {} note could not be read and is missing from search",
                             "Renamed; {} notes could not be read and are missing from search",
@@ -80,7 +80,9 @@ impl GalleryView {
                     }
                     let (old, new) = (from.clone(), to.clone());
                     this.change_config(
-                        move |config: &mut FolderConfig| config.rename_folder(&old, &new),
+                        move |config: &mut FolderConfig| {
+                            config.rename_folder(&old, &new, &renamed.folders);
+                        },
                         cx,
                     );
                     if let Scope::Folder(shown) = &this.scope

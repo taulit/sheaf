@@ -207,6 +207,16 @@ impl Touched {
     }
 }
 
+/// What [`Library::rename_folder`] did.
+#[derive(Debug)]
+pub struct RenamedFolder {
+    /// All folders before the rename.
+    pub folders: Vec<String>,
+    /// The notes in the folder that could not be read and so are not indexed under
+    /// the new path.
+    pub unreadable: usize,
+}
+
 /// What [`Library::delete_folder`] did.
 #[derive(Debug)]
 pub struct DeletedFolder {
@@ -564,19 +574,19 @@ impl Library {
     }
 
     /// Renames or moves the folder `from` to `to` with every note in it. Once the
-    /// folder is renamed, that is done: resolves to the number of notes in it that
-    /// could not be read and so are not indexed under the new path.
+    /// folder is renamed, that is done, also if some notes in it cannot be read.
     pub fn rename_folder(
         &mut self,
         from: &str,
         to: &str,
         cx: &mut Context<Self>,
-    ) -> Task<Result<usize>> {
+    ) -> Task<Result<RenamedFolder>> {
         let (from, to) = (from.to_owned(), to.to_owned());
         self.run(cx, move |store, touched| {
             for rel_path in paths_in(store, &from)? {
                 touched.paths.push(rel_path);
             }
+            let folders = store.folders()?;
             store.rename_folder(&from, &to)?;
             let moved = paths_in(store, &to).unwrap_or_else(|err| {
                 log::warn!("cannot list the renamed folder: {err}");
@@ -592,7 +602,10 @@ impl Library {
                     }
                 }
             }
-            Ok(unreadable)
+            Ok(RenamedFolder {
+                folders,
+                unreadable,
+            })
         })
     }
 
