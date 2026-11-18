@@ -31,9 +31,9 @@ use std::rc::Rc;
 use gpui::{
     AnyElement, App, AppContext as _, Bounds, ClickEvent, Context, Edges, Entity, FocusHandle,
     Focusable, FontWeight, Global, InteractiveElement as _, IntoElement, MouseButton,
-    ParentElement as _, Render, SharedString, StatefulInteractiveElement as _, Styled as _,
-    Subscription, Task, TitlebarOptions, Window, WindowBounds, WindowDecorations, WindowHandle,
-    WindowOptions, div, prelude::FluentBuilder as _, px, size as size_of,
+    ParentElement as _, Render, StatefulInteractiveElement as _, Styled as _, Subscription, Task,
+    TitlebarOptions, Window, WindowBounds, WindowDecorations, WindowHandle, WindowOptions, div,
+    prelude::FluentBuilder as _, px, size as size_of,
 };
 use gpui_component::{Root, Theme};
 use gpui_markdown_editor::{EditorStyle, UiParts};
@@ -44,7 +44,7 @@ use sheaf_searchd::api::APP_NAME;
 
 use super::actions::{self, PasteAttachment, QuickNoteDone, QuickNoteOpen};
 use super::assets::{IconName, icon};
-use super::chrome::pane;
+use super::chrome::{button, pane};
 use super::instance::Request;
 use super::library::{Folder, Library};
 use super::note::{Banner, NoteEvent, NoteView, attach, setup, template};
@@ -608,33 +608,6 @@ impl QuickNoteView {
                 .into_any_element(),
         )
     }
-}
-
-/// `.btn` of the prototype; `primary` is `.btn.pri`.
-fn button(
-    id: &'static str,
-    label: String,
-    primary: bool,
-    tokens: &super::theme::Tokens,
-) -> gpui::Stateful<gpui::Div> {
-    div()
-        .id(id)
-        .flex()
-        .flex_none()
-        .items_center()
-        .h(px(30.))
-        .px(px(13.))
-        .rounded(px(8.))
-        .text_size(tokens.text(12.5))
-        .font_weight(FontWeight::BOLD)
-        .cursor_pointer()
-        .when(primary, |button| {
-            button.bg(tokens.accent).text_color(tokens.on_accent)
-        })
-        .when(!primary, |button| {
-            button.bg(tokens.selected).text_color(tokens.fg)
-        })
-        .child(SharedString::from(label))
 }
 
 /// The note view's editor style at the size of 04 "Schnellnotiz": text 15/1.55 and a

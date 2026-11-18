@@ -18,7 +18,7 @@ use crate::app::actions::{
     self, NewNote, SaveSearchAsSmartFolder, ShowFolders, ShowSortOptions, ShowTemplates, ToggleView,
 };
 use crate::app::assets::{IconName, icon};
-use crate::app::chrome::{FlatButton, HeaderBar, pane};
+use crate::app::chrome::{FlatButton, HeaderBar, button, pane};
 use crate::app::theme::{ActiveTokens as _, Tokens, size};
 use crate::app::trace::{self, Event};
 
@@ -394,7 +394,7 @@ impl GalleryView {
         };
         let button = if searching {
             filtered.then(|| {
-                pill(
+                button(
                     "without-filters",
                     tr("Search Without Filters"),
                     false,
@@ -406,7 +406,7 @@ impl GalleryView {
             None
         } else {
             Some(
-                pill("empty-new-note", tr("New Note"), true, tokens)
+                button("empty-new-note", tr("New Note"), true, tokens)
                     .on_click(|_, window, cx| window.dispatch_action(Box::new(NewNote), cx)),
             )
         };
@@ -715,25 +715,4 @@ pub(super) fn separator(tokens: &Tokens) -> impl IntoElement {
         .mx(px(6.))
         .my(px(4.))
         .bg(tokens.hair)
-}
-
-/// `.btn` of the prototype; `primary` is `.btn.pri`.
-fn pill(id: &'static str, label: String, primary: bool, tokens: &Tokens) -> Stateful<Div> {
-    div()
-        .id(id)
-        .flex()
-        .items_center()
-        .h(px(30.))
-        .px(px(13.))
-        .rounded(px(8.))
-        .text_size(tokens.text(12.5))
-        .font_weight(FontWeight::BOLD)
-        .cursor_pointer()
-        .when(primary, |button| {
-            button.bg(tokens.accent).text_color(tokens.on_accent)
-        })
-        .when(!primary, |button| {
-            button.bg(tokens.selected).text_color(tokens.fg)
-        })
-        .child(label)
 }
