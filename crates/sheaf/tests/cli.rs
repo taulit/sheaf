@@ -844,7 +844,11 @@ fn messages_and_errors_are_in_the_language_of_the_user() {
             .any(|locale| locale.eq_ignore_ascii_case("de_DE.utf8"))
     });
     let sandbox = Sandbox::seeded();
-    let messages = sandbox.notes.parent().unwrap().join("locale/de/LC_MESSAGES");
+    let messages = sandbox
+        .notes
+        .parent()
+        .unwrap()
+        .join("locale/de/LC_MESSAGES");
     fs::create_dir_all(&messages).unwrap();
     let compiled = std::process::Command::new("msgfmt")
         .arg("-o")
@@ -859,7 +863,10 @@ fn messages_and_errors_are_in_the_language_of_the_user() {
         let output = sandbox
             .command()
             .env("LC_ALL", "de_DE.UTF-8")
-            .env("SHEAF_LOCALEDIR", messages.parent().unwrap().parent().unwrap())
+            .env(
+                "SHEAF_LOCALEDIR",
+                messages.parent().unwrap().parent().unwrap(),
+            )
             .args(args)
             .output()
             .unwrap();
