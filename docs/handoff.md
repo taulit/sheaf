@@ -16,29 +16,30 @@ Written 2026-11-17 for whoever continues without the session's context. Read
 ## Running
 
 S2 is merged (#4). S3 is in review: https://github.com/taulit/sheaf/pull/5 (against
-`main`, mergeable; its checks are red because CI cannot fetch the editor, see below).
-S4 runs on `phase/s4-release` (branched from `phase/s3-features`) with two child agents:
+`main`; its checks are red because CI cannot fetch the editor, see below).
+S4 on `phase/s4-release` (branched from `phase/s3-features`, everything pushed): budgets
+measured and all met (`scripts/budgets.sh`, table in `docs/STATUS.md`), end-to-end
+scenarios automated (`scripts/e2e.sh`), packaging merged (`build-aux/`, metainfo,
+release workflow, README, `docs/release-checklist.md`), editor at `v0.1.0`.
 
-- WP-A (this checkout, commits and pushes per step): `scripts/budgets.sh` for the budgets
-  of plan 05 §1 (cold start < 250 ms and < 120 MB RSS with 1,000 notes, search p95
-  < 30 ms with 10,000, gallery frame time), fixes to meet them, `scripts/e2e.sh` for the
-  end-to-end scenarios of 05 §3, test gaps of 05 §2.
-- WP-B (own worktree, pushes its `t3/*` branch): metainfo, `build-aux/install.sh`,
-  Flatpak manifest, AUR PKGBUILDs, release workflow, `CHANGELOG.md`, README,
-  `docs/release-checklist.md`.
+Three read-only review agents run in this checkout (2026-11-18): "S4 gate: bug review"
+(diff `phase/s3-features...phase/s4-release`), "S4 gate: spec review" (whole app against
+plan 03/04/05) and "S4 gate: simplicity review" (whole code base).
 
 ## Next
 
-1. Merge WP-B into `phase/s4-release`, run the gate (fmt, clippy, tests, deny, Visor
-   tests, `scripts/budgets.sh`, `scripts/e2e.sh`, screenshots).
-2. Reviews, once each, fresh agents (plan 05 §4): `bug-review` over
-   `git diff phase/s3-features...phase/s4-release`, plus `simplicity-review` and
-   `spec-review` over the whole app against `docs/design/plan/03-sheaf.md`; fix together.
-3. S4 PR against `main` (after #5 is merged; `main` gets squash merges, so first sync
-   with `git merge -s ours origin/main` after checking that the trees match).
-4. Known release blockers: Flathub and CI cannot fetch the private
-   `taulit/gpui-markdown-editor`; `flatpak-builder` and `git-cliff` are not installed
-   here; newer editor tags may exist (`gh api repos/taulit/gpui-markdown-editor/git/refs/tags`).
+1. Collect the three reports; fix blocking and major bug findings and the spec findings
+   that are plan requirements for 1.0; apply only the low-risk simplifications; one
+   narrow re-check of the fixes.
+2. Gate: fmt, clippy, tests, deny, Visor tests, `scripts/budgets.sh`, `scripts/e2e.sh`,
+   `scripts/screenshot.sh` (copy the untracked `docs/screenshots/gnome-search-light.png`
+   aside first: the shell check scripts overwrite it).
+3. S4 PR against `main` after #5 is merged (`main` gets squash merges: sync with
+   `git merge -s ours origin/main` only after checking that main's tree equals
+   `phase/s3-features`). Fill `docs/release-checklist.md` as the final report.
+4. Release blockers that need the user: both repositories are private (Flathub, AUR
+   users and CI cannot fetch them; metainfo screenshot URLs 404), `flatpak-builder` is not
+   installed (Flatpak build untested), the manual desktop checklist in `docs/testing.md`.
 
 ## Waiting for the user
 
