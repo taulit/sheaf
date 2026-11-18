@@ -107,8 +107,9 @@ Screenshots of the dock view go to `docs/screenshots/visor-notes-{dark,light}.pn
 scripts/budgets.sh [RUNS]     # RUNS starts of the app, default 9
 ```
 
-Builds the release binaries with `--locked` (`sheaf`, `sheaf-searchd`, the `search_budget` example and
-`sheaf-budgets`, the measuring binary behind the `budgets` feature of `crates/sheaf`), generates notes with
+Builds the release binaries with `--locked` (`sheaf`, the `search_budget` example and `sheaf-budgets`, the
+measuring binary behind the `budgets` feature of `crates/sheaf`) and `sheaf-searchd` with the profile
+`service` it ships with (`target/service`, see `docs/ARCHITECTURE.md`, "Index"), generates notes with
 `sheaf_core::testgen` (German and English, checklists, tables, tags; 15 % of the notes start with a
 1600×1067 JPEG cover, hard links to eight generated photos), prints one table and exits non-zero when a
 budget fails. A run takes about 4 minutes, most of it the two release builds.

@@ -8,14 +8,14 @@ Other sessions read only this file. Updated at the end of every phase.
 | S1 Core, searchd, CLI | merged | [#2](https://github.com/taulit/sheaf/pull/2), [#3](https://github.com/taulit/sheaf/pull/3) |
 | S2 App | merged | [#4](https://github.com/taulit/sheaf/pull/4) |
 | S3 Features | gate green, in review | `phase/s3-features` |
-| S4 Release | budgets and end-to-end scenarios measured | `phase/s4-release` |
+| S4 Release | editor `v0.1.0`, every budget met, end-to-end scenarios pass | `phase/s4-release` |
 
 ## What works (S1)
 
 - `sheaf-core`: notes folder (lossless frontmatter, atomic writes, trash, watcher), index
   and search language. Search p95 5.7 ms for 10,000 notes (budget 30 ms).
 - `sheaf-searchd`: GNOME Shell search provider and `io.github.taulit.Sheaf1` on D-Bus,
-  about 11 MB idle (budget 15 MB). The D-Bus contract is `crates/sheaf-searchd/src/api.rs`.
+  12.1 MB idle with 1,000 notes, 13.4 MB with 10,000 (budget 15 MB). The D-Bus contract is `crates/sheaf-searchd/src/api.rs`.
 - `sheaf` CLI with JSON output, schemas in `docs/cli-schema/`, agent guide `docs/AGENTS.md`.
 - `scripts/shell-search-check.sh` proves the GNOME overview finds notes, in a sandboxed
   headless shell (`docs/testing.md`).
@@ -30,8 +30,11 @@ Other sessions read only this file. Updated at the end of every phase.
   SIGTERM; the file follows the title; changes from other programs reload or ask; a save
   that fails shows a banner and falls back to `$XDG_STATE_HOME/sheaf/recovered/`.
 - Command palette (Ctrl+K), keyboard shortcuts (Ctrl+?), toasts; German translation.
-- The editor renders and edits the note in place (`gpui-markdown-editor` `v0.0.3`);
-  Ctrl+K stays the command palette inside it. Screenshots: `docs/screenshots/app-*.png`
+- The editor renders and edits the note in place (`gpui-markdown-editor` `v0.1.0`);
+  Ctrl+K stays the command palette inside it, the editor's link prompt is on Ctrl+Shift+K.
+  Format bar, slash menu (`/vorlage` and `/template` insert a template), find bar
+  (Ctrl+F), folding, tables, inline images. Dropped and pasted files and images become
+  attachments, also in the Quick Note (which has no format bar). Screenshots: `docs/screenshots/app-*.png`
   (`scripts/screenshot.sh`).
 
 ## What works (S3)
@@ -63,27 +66,27 @@ Other sessions read only this file. Updated at the end of every phase.
 
 ## Budgets
 
-Measured on 2026-11-18 with `scripts/budgets.sh` (release build, `--locked`, commit `7e15889`), Intel
-Core i5-11400F, 12 threads, 31 GB, Manjaro, Linux 6.18. How each number is taken: `docs/testing.md`,
-"Budgets".
+Measured on 2026-11-18 with `scripts/budgets.sh` (release build, `--locked`, commit `a94a84e`;
+`sheaf-searchd` with its profile `service`), Intel Core i5-11400F, 12 threads, 31 GB, Manjaro, Linux
+6.18. How each number is taken: `docs/testing.md`, "Budgets".
 
 | Budget (05 §1) | Target | Measured | |
 |---|---|---|---|
-| Cold start to the gallery, 1,000 notes | < 250 ms | 174 ms to the frame with every miniature, 126 ms to the first cards (median of 8 warm starts; first start 181 ms) | pass |
-| Memory, 1,000 notes, gallery open | < 120 MB RSS | 65.3 MB RSS, 59.5 MB PSS | pass |
-| Search p95, 10,000 notes | < 30 ms | 5.3 ms | pass |
-| Gallery scrolling, 10,000 notes | 60 fps | CPU frame p50 6.4 ms, p95 12.5 ms, max 15.5 ms, none of 600 over 16.7 ms | pass |
-| `sheaf-searchd` idle | < 15 MB | 16.6 MB RSS with 1,000 notes, 18.1 MB with 10,000 (PSS 11.8 and 13.4 MB) | **fail** |
+| Cold start to the gallery, 1,000 notes | < 250 ms | 167 ms to the frame with every miniature, 119 ms to the first cards (median of 8 warm starts; first start 178 ms) | pass |
+| Memory, 1,000 notes, gallery open | < 120 MB RSS | 66.7 MB RSS, 60.9 MB PSS | pass |
+| Search p95, 10,000 notes | < 30 ms | 5.8 ms | pass |
+| Gallery scrolling, 10,000 notes | 60 fps | CPU frame p50 3.5 ms, p95 10.2 ms, max 21.5 ms, 4 of 600 over 16.7 ms | pass |
+| `sheaf-searchd` idle | < 15 MB | 12.1 MB RSS with 1,000 notes, 13.4 MB with 10,000 (PSS 7.3 and 8.7 MB) | pass |
 
 - The start and memory are measured on the headless platform: no Wayland connection, GPU device,
   shaders or presenting, and no GPU memory. Scrolling is CPU time per frame, not frames on screen.
-  Of the 174 ms, about 25 ms are GPUI's platform setup (fonts), 45 ms opening the window and its first
-  frame, 45 ms to the listing and 50 ms to the miniatures.
-- `sheaf-searchd` was at 53 MB after the query mix on 10,000 notes; it now lets go of the index 5 s after
-  the last request. What is left are 4–6 MB of its own memory (malloc arenas of the searches) and about
-  12 MB of mapped files, clean and shared: 7.7 MB of its own code, 2.3 MB of the locale archive (any
-  locale but C maps it) and libc. Not met; candidates are a smaller binary (fewer pages of code touched)
-  and returning freed memory to the system (needs `malloc_trim`, which takes `unsafe`).
+- `sheaf-searchd` was at 16.6 / 18.1 MB. Now: built for size with the Cargo profile `service`
+  (16.3 -> 14.0 / 17.8 -> 15.7 MB) and restarted once at start with glibc malloc tunables
+  (one arena, fixed trim threshold; -> 12.1 / 13.4 MB), besides letting go of the index 5 s after
+  the last request (`docs/ARCHITECTURE.md`, "Index"). What stays is about 10 MB of mapped files,
+  most of it its own code (5.4 MB) and the locale archive (2.3 MB): the kernel maps page-cache
+  folios whole, so a few touched pages bring in much of a file. Search through D-Bus on 10,000
+  notes went from p95 8.6-10.0 ms to 12.0 ms (gdbus round trips).
 - Only the search budget runs in CI; the others are a local script (GPUI release build, timing noise on
   shared runners, and CI cannot fetch the editor at the moment).
 
@@ -102,7 +105,7 @@ None yet.
 
 | What | State on 2026-11-16 | Effect |
 |---|---|---|
-| `taulit/gpui-markdown-editor` tag `v0.0.3` | used since 2026-11-17 (newest tag then): WYSIWYG editing, `highlight`, `scroll_to`, `set_style`, format bar, slash menu with host items, completions, image resolver, `MetaChanged` | gpui-pre =0.3.12, gpui-component =0.10.0, MSRV 1.95 |
+| `taulit/gpui-markdown-editor` tag `v0.1.0` | used since 2026-11-18 (newest tag): WYSIWYG editing, `highlight`, `scroll_to`, `set_style`, format bar, slash menu with host items, find bar, folding, tables, images, completions, `MetaChanged`. API as in `v0.0.3`; empty paragraphs are no longer written | gpui-pre =0.3.12, gpui-component =0.10.0, MSRV 1.95 |
 | `taulit/visor` tag `api-v1` | exists (checked 2026-11-17) | "Visor: Notes" is built in `visor-module/` against it (S3) |
 
 ## Open
@@ -114,11 +117,9 @@ None yet.
 - `rust-version` is 1.95 (the editor's MSRV), above the 1.92 that `krilla` needs.
 - S3 is pushed. Its `bug-review` found 12 issues, all fixed on 2026-11-17
   (`a8c46c4..21290e9`); a narrow re-review of the fixes and the S3 PR are next.
-- Not built from plan 03 §9: `/vorlage` in the slash menu (the editor's `SlashItem`s are
-  fixed when the editor is created, so they cannot follow the templates), the Print
-  portal is not probed beforehand (Print shows always; the fallback comes after a
-  failure). Images do not show in the read-only trashed note (relative paths point
-  beside the original).
+- Not built from plan 03 §9: the Print portal is not probed beforehand (Print shows
+  always; the fallback comes after a failure). Images do not show in the read-only
+  trashed note (gpui-component's `TextView`, since the editor has no read-only mode).
 - PDF limits: no italic face (slanted Inter), checked items are grey but not struck
   through, `#tags` are not coloured, right-to-left text is set left to right, no
   hyphenation.
@@ -126,11 +127,18 @@ None yet.
   private `taulit/gpui-markdown-editor`. The gate runs locally before every PR.
 - In service mode folder and tag counts follow the service's index, not the app's own
   writes (`app/library/overlay.rs`).
-- Wanted from the editor (API, not in `v0.0.3`): read and set the scroll position (a
-  reload from disk scrolls to the top), a getter for the scroll target, a slot above the
-  first block (the date line does not scroll with the text), asynchronous completions,
-  slash items that can change after creation (for `/vorlage`).
-  Also letter spacing (title −0.02em) and tabular figures for table numbers.
+- Wanted from the editor (API, still not in `v0.1.0`): read and set the scroll position (a
+  silent reload from disk scrolls to the top), slots above the first and below the last
+  block (the date line and "Linked from" do not scroll with the text, and the format bar
+  floats above an open "Linked from"), asynchronous completions (`[[`/`#` use a cached
+  lookup), slash items that can change after creation (`/vorlage` opens Sheaf's own
+  menu), a read-only mode (trashed notes use `TextView`), a setter for `max_width` (line
+  width is padding), a drop hook (Sheaf lays a drop target over the editor while
+  something is dragged; the editor would link dropped files where they lie), a hook for
+  pasted files (Sheaf takes Ctrl+V; `on_image` is synchronous and drops the file name),
+  letter spacing (title −0.02em). Tables have tabular figures since `v0.0.4`.
+- GPUI 0.3.12: file drops do not switch the input mode to the mouse, so right after
+  typing a drop lands nowhere until the mouse has moved over the window.
 - The S2 and S3 app was checked through tests and offscreen screenshots only, not by hand
   in a real desktop session; no real portal dialog (FileChooser, Print, GlobalShortcuts)
   was opened.
