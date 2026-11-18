@@ -187,3 +187,37 @@ async fn the_palette_action_asks_for_a_name(cx: &mut TestAppContext) {
     assert_eq!(app.names(), ["Ferien"]);
     assert_eq!(app.titles(), ["Reise nach Lissabon"]);
 }
+
+#[gpui::test]
+async fn a_symbol_is_chosen_under_the_name(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let mut app = open_app(&notes, cx);
+    app.update(|gallery, cx| gallery.set_query("#urlaub", cx));
+    app.cx
+        .update(|window, cx| window.dispatch_action(Box::new(SaveSearchAsSmartFolder), cx));
+    app.cx.run_until_parked();
+    app.cx.update(|window, cx| window.draw(cx).clear(cx));
+    let travel = app
+        .cx
+        .debug_bounds("smart-icon-emoji-travel-symbolic")
+        .expect("the symbols are shown");
+    app.cx
+        .simulate_click(travel.center(), gpui::Modifiers::none());
+    // The name field keeps the keys.
+    app.cx.simulate_input("Ferien");
+    app.cx.simulate_keystrokes("enter");
+    app.cx.run_until_parked();
+    let icon_of = |notes: &Notes, name: &str| {
+        let config = FolderConfig::load(&notes.dir).unwrap();
+        let folder = config
+            .smart_folders
+            .iter()
+            .find(|f| f.name == name)
+            .cloned();
+        folder.unwrap().icon
+    };
+    assert_eq!(icon_of(&notes, "Ferien"), "emoji-travel-symbolic");
+
+    app.update(|gallery, cx| gallery.set_smart_icon("Ferien", "starred-symbolic", cx));
+    assert_eq!(icon_of(&notes, "Ferien"), "starred-symbolic");
+}

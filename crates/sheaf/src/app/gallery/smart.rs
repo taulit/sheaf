@@ -5,11 +5,13 @@
 //!
 //! "New Smart Folder" at the bottom of the folder popover (and the palette's "Save
 //! Search as Smart Folder") saves the search as it is: scope, chips and text. A right
-//! click on a smart folder renames or deletes it.
+//! click on a smart folder renames or deletes it. Under the name field the symbol is
+//! chosen from [`SYMBOLS`], stored as `icon` by its GNOME icon name.
 
 use gpui::{
-    AnyElement, AppContext as _, ClickEvent, Context, Entity, IntoElement, ParentElement as _,
-    StatefulInteractiveElement as _, Styled as _, Window, div, prelude::FluentBuilder as _, px,
+    AnyElement, AppContext as _, ClickEvent, Context, Entity, InteractiveElement as _, IntoElement,
+    ParentElement as _, StatefulInteractiveElement as _, Styled as _, Window, div,
+    prelude::FluentBuilder as _, px,
 };
 use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::menu::{ContextMenuExt as _, PopupMenuItem};
@@ -21,8 +23,30 @@ use super::{GalleryView, Popover, Scope, chips};
 use crate::app::assets::{IconName, icon};
 use crate::app::theme::Tokens;
 
-/// The symbol a smart folder is saved with: GNOME's saved-search folder.
+/// The symbol a smart folder gets unless another is chosen: GNOME's saved-search folder.
 pub const ICON: &str = "folder-saved-search-symbolic";
+
+/// The symbols to choose from, by the GNOME icon name they are stored under.
+pub const SYMBOLS: [(&str, IconName); 10] = [
+    (ICON, IconName::SmartFolder),
+    ("starred-symbolic", IconName::Star),
+    ("object-select-symbolic", IconName::Check),
+    ("x-office-calendar-symbolic", IconName::Calendar),
+    ("alarm-symbolic", IconName::Alarm),
+    ("user-home-symbolic", IconName::Home),
+    ("emoji-food-symbolic", IconName::Food),
+    ("emoji-travel-symbolic", IconName::Travel),
+    ("applications-science-symbolic", IconName::Science),
+    ("camera-photo-symbolic", IconName::Camera),
+];
+
+/// The symbol stored as `icon`; one this version does not know is the default.
+pub fn symbol(icon: &str) -> IconName {
+    SYMBOLS
+        .iter()
+        .find(|(name, _)| *name == icon)
+        .map_or(IconName::SmartFolder, |(_, symbol)| *symbol)
+}
 
 /// What the name field in the folder popover is for.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -34,6 +58,8 @@ enum Edit {
 #[derive(Default)]
 pub(super) struct SmartState {
     editing: Option<(Entity<InputState>, Edit)>,
+    /// The symbol chosen for a new smart folder.
+    icon: Option<&'static str>,
 }
 
 /// `name`, or `name 2`, `name 3`, … if a smart folder of that name exists.
@@ -96,7 +122,7 @@ impl GalleryView {
         let name = unique_name(self.smart_folders(), name);
         let folder = SmartFolder {
             name: name.clone(),
-            icon: ICON.to_owned(),
+            icon: self.smart.icon.take().unwrap_or(ICON).to_owned(),
             query,
             other: toml::Table::new(),
         };
@@ -143,6 +169,45 @@ impl GalleryView {
             self.scope = Scope::Smart(to);
         }
         cx.notify();
+    }
+
+    /// Gives the smart folder `name` the symbol stored as `icon`.
+    pub fn set_smart_icon(&mut self, name: &str, icon: &str, cx: &mut Context<Self>) {
+        let unchanged = self
+            .smart_folders()
+            .iter()
+            .find(|folder| folder.name == name)
+            .is_none_or(|folder| folder.icon == icon);
+        if unchanged {
+            return;
+        }
+        let (name, icon) = (name.to_owned(), icon.to_owned());
+        self.change_config(
+            move |config| {
+                if let Some(folder) = config
+                    .smart_folders
+                    .iter_mut()
+                    .find(|folder| folder.name == name)
+                {
+                    folder.icon.clone_from(&icon);
+                }
+            },
+            cx,
+        );
+        cx.notify();
+    }
+
+    /// Chooses the symbol in the name field: of the smart folder being renamed at once,
+    /// of a new one for when it is saved.
+    pub fn choose_smart_icon(&mut self, icon: &'static str, cx: &mut Context<Self>) {
+        match self.smart.editing.as_ref().map(|(_, edit)| edit.clone()) {
+            Some(Edit::Rename(name)) => self.set_smart_icon(&name, icon, cx),
+            Some(Edit::New) => {
+                self.smart.icon = Some(icon);
+                cx.notify();
+            }
+            None => {}
+        }
     }
 
     /// Deletes the smart folder `name`; its notes stay where they are.
@@ -199,12 +264,75 @@ impl GalleryView {
         field.update(cx, |state, cx| state.focus(window, cx));
         self.new_folder = None;
         self.smart.editing = Some((field, edit));
+        self.smart.icon = None;
         cx.notify();
     }
 
     /// Forgets the name field, as closing the popover does.
     pub(super) fn stop_smart_edit(&mut self) {
         self.smart.editing = None;
+        self.smart.icon = None;
+    }
+
+    /// The symbol the name field shows as chosen.
+    fn editing_icon(&self) -> &str {
+        match self.smart.editing.as_ref().map(|(_, edit)| edit) {
+            Some(Edit::Rename(name)) => self
+                .smart_folders()
+                .iter()
+                .find(|folder| folder.name == *name)
+                .map_or(ICON, |folder| folder.icon.as_str()),
+            _ => self.smart.icon.unwrap_or(ICON),
+        }
+    }
+
+    /// The name field with the symbols to choose from under it.
+    fn editor(
+        &self,
+        field: &Entity<InputState>,
+        tokens: &Tokens,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let chosen = symbol(self.editing_icon());
+        let symbols = SYMBOLS.iter().enumerate().map(|(index, (name, symbol))| {
+            let on = *symbol == chosen;
+            let name: &'static str = name;
+            div()
+                .id(("smart-icon", index))
+                .debug_selector(move || format!("smart-icon-{name}"))
+                .flex()
+                .items_center()
+                .justify_center()
+                .size(px(28.))
+                .rounded(px(7.))
+                .cursor_pointer()
+                .when(on, |button| button.bg(tokens.selected))
+                .when(!on, |button| button.hover(|style| style.bg(tokens.hover)))
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.choose_smart_icon(name, cx);
+                    // Back to the name, so that Enter saves.
+                    if let Some((field, _)) = &this.smart.editing {
+                        field.update(cx, |state, cx| state.focus(window, cx));
+                    }
+                }))
+                .child(icon(*symbol, if on { tokens.accent } else { tokens.muted }).size(px(16.)))
+        });
+        div()
+            .flex()
+            .flex_col()
+            .flex_none()
+            .gap(px(4.))
+            .child(name_field(field, chosen, tokens))
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap(px(2.))
+                    .px(px(6.))
+                    .pb(px(4.))
+                    .children(symbols),
+            )
+            .into_any_element()
     }
 
     /// The smart folders of the folder popover, each with a menu to rename or delete
@@ -222,7 +350,7 @@ impl GalleryView {
                 if let Some((field, Edit::Rename(from))) = &self.smart.editing
                     && *from == folder.name
                 {
-                    return name_field(field, tokens);
+                    return self.editor(field, tokens, cx);
                 }
                 let scope = Scope::Smart(folder.name.clone());
                 let on = self.scope == scope;
@@ -230,7 +358,7 @@ impl GalleryView {
                 let gallery = gallery.clone();
                 super::render::menu_row(
                     ("smart", index),
-                    IconName::SmartFolder,
+                    symbol(&folder.icon),
                     name.clone(),
                     tokens,
                 )
@@ -267,7 +395,7 @@ impl GalleryView {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         if let Some((field, Edit::New)) = &self.smart.editing {
-            return name_field(field, tokens);
+            return self.editor(field, tokens, cx);
         }
         if self.full_query().is_empty() {
             // From the search only: without one there is nothing to save.
@@ -312,7 +440,7 @@ impl GalleryView {
     }
 }
 
-fn name_field(field: &Entity<InputState>, tokens: &Tokens) -> AnyElement {
+fn name_field(field: &Entity<InputState>, symbol: IconName, tokens: &Tokens) -> impl IntoElement {
     div()
         .flex()
         .flex_none()
@@ -322,7 +450,7 @@ fn name_field(field: &Entity<InputState>, tokens: &Tokens) -> AnyElement {
         .px(px(12.))
         .rounded(px(9.))
         .bg(tokens.hover)
-        .child(icon(IconName::SmartFolder, tokens.muted).size(px(16.)))
+        .child(icon(symbol, tokens.muted).size(px(16.)))
         .child(
             Input::new(field)
                 .appearance(false)
@@ -331,7 +459,6 @@ fn name_field(field: &Entity<InputState>, tokens: &Tokens) -> AnyElement {
                 .px_0()
                 .text_size(tokens.text(13.5)),
         )
-        .into_any_element()
 }
 
 #[cfg(test)]
@@ -343,6 +470,14 @@ mod tests {
             name: name.to_owned(),
             ..SmartFolder::default()
         }
+    }
+
+    #[test]
+    fn symbols_are_found_by_their_icon_name() {
+        assert_eq!(symbol("starred-symbolic"), IconName::Star);
+        assert_eq!(symbol(ICON), IconName::SmartFolder);
+        assert_eq!(symbol("something-else"), IconName::SmartFolder);
+        assert_eq!(symbol(""), IconName::SmartFolder);
     }
 
     #[test]

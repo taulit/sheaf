@@ -549,21 +549,29 @@ impl GalleryView {
         let tags = self.render_tag_rows(tokens, cx);
         let smart = self.render_smart_rows(tokens, cx);
         let new_smart_folder = self.render_new_smart_folder(tokens, cx);
+        // What is created stays in view under the lists, which scroll.
+        let lists = div()
+            .id("folders-lists")
+            .flex()
+            .flex_col()
+            .flex_shrink(1.)
+            .min_h_0()
+            .overflow_y_scroll()
+            .children(rows)
+            .when(!tags.is_empty(), |lists| {
+                lists.child(separator(tokens)).children(tags)
+            })
+            .when(!smart.is_empty(), |lists| {
+                lists.child(separator(tokens)).children(smart)
+            })
+            .child(separator(tokens))
+            .child(trash);
         surface(tokens)
             .id("folders-popover")
             .on_action(cx.listener(|this, _: &input::Escape, _, cx| this.set_popover(None, cx)))
             .w(px(250.))
             .max_h(px(520.))
-            .overflow_y_scroll()
-            .children(rows)
-            .when(!tags.is_empty(), |popover| {
-                popover.child(separator(tokens)).children(tags)
-            })
-            .when(!smart.is_empty(), |popover| {
-                popover.child(separator(tokens)).children(smart)
-            })
-            .child(separator(tokens))
-            .child(trash)
+            .child(lists)
             .child(separator(tokens))
             .child(new_folder)
             .child(new_smart_folder)

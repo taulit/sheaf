@@ -807,18 +807,18 @@ async fn tags_are_pinned_to_the_chips_from_the_folder_popover(cx: &mut TestAppCo
     let tags = app.read(|gallery| gallery.tags().to_vec());
     assert!(
         tags.iter()
-            .any(|(tag, notes)| tag == "urlaub" && *notes > 0),
+            .any(|(tag, notes)| tag == "books" && *notes > 0),
         "{tags:?}"
     );
-    assert!(!app.read(|gallery| gallery.is_tag_pinned("urlaub")));
+    assert!(!app.read(|gallery| gallery.is_tag_pinned("books")));
 
-    let pin = app.cx.debug_bounds("tag-pin-urlaub").expect("a pin");
+    let pin = app.cx.debug_bounds("tag-pin-books").expect("a pin");
     app.cx.simulate_click(pin.center(), Modifiers::none());
     app.settle();
-    assert!(app.read(|gallery| gallery.is_tag_pinned("urlaub")));
+    assert!(app.read(|gallery| gallery.is_tag_pinned("books")));
     assert_eq!(
         FolderConfig::load(&notes.dir).unwrap().pinned_tags,
-        ["ausschreibung", "rezepte", "urlaub"]
+        ["ausschreibung", "rezepte", "books"]
     );
     // The click pinned the tag without choosing it.
     assert_eq!(app.read(|gallery| gallery.scope().clone()), Scope::All);
@@ -826,6 +826,6 @@ async fn tags_are_pinned_to_the_chips_from_the_folder_popover(cx: &mut TestAppCo
     app.update(|gallery, cx| gallery.set_tag_pinned("Rezepte", false, cx));
     assert_eq!(
         FolderConfig::load(&notes.dir).unwrap().pinned_tags,
-        ["ausschreibung", "urlaub"]
+        ["ausschreibung", "books"]
     );
 }
