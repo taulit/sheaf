@@ -18,8 +18,9 @@ First release.
   sync tools are picked up while the app runs.
 - Gallery of cards with a miniature of each note, grouped by date, and a list view. Folders,
   tags, pinned notes, multi-select and a context menu.
-- Editing in place with checklists, tables, images, links between notes, a format bar and a
-  slash menu. Notes save a moment after the last change and when you leave them.
+- Editing in place with checklists, tables, images, links between notes, a format bar, a
+  slash menu (`/template` inserts a template), find in the note (Ctrl+F) and folding of
+  sections (editor `gpui-markdown-editor` 0.1.0). The link prompt is Ctrl+Shift+K. Notes save a moment after the last change and when you leave them.
 - Search that finds a note in milliseconds, forgives typos, knows German umlauts and
   understands `#tag`, `folder:`, `has:`, `open:`, `modified:` and `pinned:`. Hits are
   highlighted in the cards and in the note.

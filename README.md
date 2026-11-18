@@ -146,6 +146,10 @@ Ctrl+? shows the list in the app.
 | Ctrl+? | Keyboard shortcuts |
 | Ctrl+Q | Quit |
 
+In a note the editor's keys apply (Ctrl+B, Ctrl+I, Ctrl+F find, Ctrl+. fold, `/` for the block
+menu, `/template` for a template), with the link prompt on Ctrl+Shift+K since Ctrl+K is the
+palette.
+
 ## Build
 
 ```sh
@@ -192,7 +196,7 @@ Issues and pull requests are welcome at <https://github.com/taulit/sheaf>.
 - [taulit/visor](https://github.com/taulit/visor): a notch for GNOME Shell. "Visor: Notes"
   connects it to Sheaf.
 - [taulit/gpui-markdown-editor](https://github.com/taulit/gpui-markdown-editor): the
-  Markdown editor component of Sheaf, for any GPUI app.
+  Markdown editor component of Sheaf, for any GPUI app (Sheaf uses `v0.1.0`).
 
 ## License
 
