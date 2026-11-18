@@ -11,13 +11,14 @@
 #   --scheme dark|light colour scheme (default dark)
 #   --log FILE          copy the shell log to FILE when done
 #
-# Needs target/debug/sheaf and target/debug/sheaf-searchd (cargo build --workspace).
+# Needs target/debug/sheaf and target/debug/sheaf-searchd (cargo build --workspace);
+# SHEAF_BINDIR=target/release takes the release build instead.
 # Inside the command, scripts/lib/shell.sh offers shell_eval and shell_shot, and
 # SHEAF_NOTES_DIR points at an empty notes folder of the sandbox.
 set -euo pipefail
 
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-bindir="$repo/target/debug"
+bindir="${SHEAF_BINDIR:-$repo/target/debug}"
 size=1280x800 scheme=dark log=
 
 while [[ $# -gt 0 ]]; do

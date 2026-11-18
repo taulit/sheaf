@@ -1,0 +1,76 @@
+---
+title: Sheaf – fast, native notes for GNOME in plain Markdown
+description: Sheaf is a free, open-source notes app for GNOME written in Rust. A gallery of note cards, editing in place, search in milliseconds, and every note is an ordinary Markdown file in a folder you choose.
+template: splash
+hero:
+  title: Notes for GNOME, kept as plain Markdown
+  tagline: Sheaf shows your notes as a gallery of cards, edits them in place and finds them in milliseconds. Every note is an ordinary .md file in a folder you choose.
+  image:
+    file: ../../assets/icon.svg
+  actions:
+    - text: Install
+      link: install/
+      icon: right-arrow
+    - text: View on GitHub
+      link: https://github.com/taulit/sheaf
+      icon: github
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+<video class="hero-media" autoplay muted loop playsinline poster="screenshots/gallery-light.webp" aria-label="Demo: the gallery, editing a note, searching and the Markdown files in the notes folder">
+  <source src="media/sheaf-demo.mp4" type="video/mp4" />
+</video>
+
+## What Sheaf is
+
+Sheaf is a notes app for the GNOME desktop, written in Rust with [GPUI](https://www.gpui.rs),
+the UI framework of the Zed editor. In GNOME it is simply called **Notes**. It is free software
+under the GPL-3.0-or-later.
+
+<CardGrid>
+  <Card title="A gallery of cards" icon="seti:image">
+    Each note is a card with a miniature of its first lines, grouped by date. Folders, tags,
+    pinned notes, smart folders and a list view.
+  </Card>
+  <Card title="Edit in place" icon="pencil">
+    Checklists, tables, images and links between notes, a format bar and a slash menu. Notes
+    save themselves a moment after you stop typing.
+  </Card>
+  <Card title="Search in milliseconds" icon="magnifier">
+    Forgives typos, understands `#tag`, `folder:`, `has:checklist` and more. About 6 ms (p95)
+    with 10,000 notes.
+  </Card>
+  <Card title="Just Markdown files" icon="document">
+    One `.md` file per note, subfolders as folders. Sync them with any tool and open them in
+    any editor. No database, no lock-in.
+  </Card>
+</CardGrid>
+
+## Screenshots
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="screenshots/gallery-dark.webp" />
+  <img class="hero-media" src="screenshots/gallery-light.webp" alt="The Sheaf gallery on GNOME with pinned notes and cards grouped by day" width="1600" height="1027" loading="lazy" />
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="screenshots/edit-dark.webp" />
+  <img class="hero-media" src="screenshots/edit-light.webp" alt="A note open in Sheaf with a checklist, a heading and a table" width="1600" height="1027" loading="lazy" />
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="screenshots/search-dark.webp" />
+  <img class="hero-media" src="screenshots/search-light.webp" alt="Searching for “banan bred” in Sheaf finds the note Banana bread despite the typos" width="1600" height="1027" loading="lazy" />
+</picture>
+
+## Also included
+
+- **Quick Note** window on a global shortcut (Ctrl+Shift+N).
+- **Notes in the GNOME overview** through a search provider: press Super and type.
+- **Recently Deleted** keeps removed notes for 30 days.
+- **Export** to Markdown and PDF, and printing.
+- **A command line** with JSON output for scripts and AI agents.
+- **Ten languages**: English, German, Spanish, French, Brazilian Portuguese, Italian, Polish,
+  Russian, Simplified Chinese and Japanese.

@@ -7,6 +7,10 @@ Sheaf is a notes app for the GNOME desktop, written in Rust with
 place and finds them in milliseconds. Every note is an ordinary Markdown file in a folder
 you choose. In GNOME it is called "Notes" ("Notizen" in German).
 
+![Sheaf: the gallery, a search with typos, and editing a note in place](docs/screenshots/sheaf-demo.gif)
+
+Documentation and a longer demo: <https://taulit.github.io/sheaf/>
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/app-gallery-dark.png">
   <img alt="The gallery of Sheaf with cards, folders and search" src="docs/screenshots/app-gallery-light.png">
