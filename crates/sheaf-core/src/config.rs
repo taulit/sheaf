@@ -231,7 +231,9 @@ impl FolderConfig {
                 self.folders.insert(new, view);
             }
         }
-        if let Some(folder) = self.quick_note.folder.as_deref().and_then(moved) {
+        // The default "Quick Notes" is written out once renamed, or the next Quick Note
+        // would make the old folder again.
+        if let Some(folder) = moved(&self.quick_note.folder_name()) {
             self.quick_note.folder = Some(folder);
         }
         for smart in &mut self.smart_folders {
@@ -391,6 +393,16 @@ mod tests {
         assert_eq!(config.folders["Büro"].view, View::List);
         assert_eq!(config.quick_note.folder.as_deref(), Some("Büro/Schnell"));
         assert_eq!(config.smart_folders[0].query, "folder:/Büro open:");
+    }
+
+    #[test]
+    fn the_default_quick_notes_folder_follows_a_rename() {
+        let mut config = FolderConfig::default();
+        config.rename_folder("Arbeit", "Büro");
+        assert_eq!(config.quick_note.folder, None);
+
+        config.rename_folder("Quick Notes", "Inbox");
+        assert_eq!(config.quick_note.folder.as_deref(), Some("Inbox"));
     }
 
     const FULL: &str = r##"
