@@ -7,8 +7,8 @@ Other sessions read only this file. Updated at the end of every phase.
 | S0 Setup | merged | [#1](https://github.com/taulit/sheaf/pull/1) |
 | S1 Core, searchd, CLI | merged | [#2](https://github.com/taulit/sheaf/pull/2), [#3](https://github.com/taulit/sheaf/pull/3) |
 | S2 App | merged | [#4](https://github.com/taulit/sheaf/pull/4) |
-| S3 Features | gate green, in review | `phase/s3-features` |
-| S4 Release | gate green, in review | `phase/s4-release` |
+| S3 Features | merged | [#5](https://github.com/taulit/sheaf/pull/5) |
+| S4 Release | gate green, in review | [#6](https://github.com/taulit/sheaf/pull/6) |
 
 ## What works (S1)
 
