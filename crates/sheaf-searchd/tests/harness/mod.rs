@@ -128,9 +128,15 @@ impl Fixture {
 
     /// Starts a service and returns once it owns its bus name.
     pub async fn start(&mut self, idle_secs: u64) {
+        self.start_with_env(idle_secs, &[]).await;
+    }
+
+    /// [`start`](Self::start) with these variables added to the environment.
+    pub async fn start_with_env(&mut self, idle_secs: u64, vars: &[(&str, &str)]) {
         let log = fs::File::create(self.dir.path().join("searchd.log")).unwrap();
         let child = self
             .command()
+            .envs(vars.iter().copied())
             .env("SHEAF_SEARCHD_IDLE_SECS", idle_secs.to_string())
             .stdout(Stdio::null())
             .stderr(log)

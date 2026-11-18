@@ -370,6 +370,42 @@ fn rebuilds_an_index_removed_while_idle() {
     });
 }
 
+/// The environment of process `pid`, as `NAME=value` entries.
+fn environ(pid: u32) -> Vec<String> {
+    let environ = fs::read(format!("/proc/{pid}/environ")).unwrap();
+    environ
+        .split(|&byte| byte == 0)
+        .map(|entry| String::from_utf8_lossy(entry).into_owned())
+        .collect()
+}
+
+#[test]
+fn restarts_once_with_malloc_tunables() {
+    let Some(mut fx) = Fixture::new() else { return };
+    zbus::block_on(async {
+        fx.start(60).await;
+        let pid = fx.service().id();
+        let vars = environ(pid);
+        assert!(
+            vars.iter()
+                .any(|var| var.starts_with("GLIBC_TUNABLES=glibc.malloc.")),
+            "{vars:?}"
+        );
+        assert!(fx.stop().await.success(), "{}", fx.log());
+
+        // As in glibc's secure mode, which drops GLIBC_TUNABLES across the exec: the
+        // marker alone must stop a second restart.
+        fx.start_with_env(60, &[("SHEAF_SEARCHD_RESTARTED", "1")])
+            .await;
+        let pid = fx.service().id();
+        let vars = environ(pid);
+        assert!(
+            !vars.iter().any(|var| var.starts_with("GLIBC_TUNABLES=")),
+            "restarted again: {vars:?}"
+        );
+    });
+}
+
 #[test]
 fn catches_up_with_changes_made_while_stopped() {
     let Some(mut fx) = Fixture::new() else { return };

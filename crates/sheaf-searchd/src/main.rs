@@ -23,6 +23,11 @@ const IDLE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 /// instead of staying with the idle service (docs/ARCHITECTURE.md, "Index").
 const MALLOC_TUNABLES: &str = "glibc.malloc.arena_max=1:glibc.malloc.trim_threshold=131072";
 
+/// Set on the restart for the tunables. glibc drops `GLIBC_TUNABLES` in secure mode (file
+/// capabilities, setgid, an LSM transition), so its presence cannot tell that the
+/// restart already happened.
+const RESTARTED: &str = "SHEAF_SEARCHD_RESTARTED";
+
 const USAGE: &str = "\
 Usage: sheaf-searchd [--reindex | --version | --help]
 
@@ -75,7 +80,7 @@ fn main() -> ExitCode {
 /// nothing is to be done or the restart failed; call it while there is one thread.
 fn restart_with_malloc_tunables() {
     let set = std::env::var("GLIBC_TUNABLES").unwrap_or_default();
-    if set.contains("glibc.malloc.") {
+    if set.contains("glibc.malloc.") || std::env::var_os(RESTARTED).is_some() {
         return;
     }
     let tunables = if set.is_empty() {
@@ -90,6 +95,7 @@ fn restart_with_malloc_tunables() {
             .arg0(arg0)
             .args(args)
             .env("GLIBC_TUNABLES", tunables)
+            .env(RESTARTED, "1")
             .exec(),
         Err(err) => err,
     };

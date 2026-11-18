@@ -64,7 +64,7 @@ write returns. See `NoteId` in `crates/sheaf-core/src/model.rs`.
 - The rest of the service's idle memory budget (< 15 MB RSS) is held in three places. It
   is built with the Cargo profile `service` (`opt-level = "s"`, fat LTO), because its own
   code is most of what stays resident. It lets go of the index 5 s after the last request.
-  And it restarts itself once at start with `GLIBC_TUNABLES` set to
+  And it restarts itself once at start (marked by `SHEAF_SEARCHD_RESTARTED`) with `GLIBC_TUNABLES` set to
   `glibc.malloc.arena_max=1:glibc.malloc.trim_threshold=131072`, so that malloc gives the
   searches' memory back instead of keeping it in one arena per thread. glibc reads the
   variable only when a process starts. The service sets it itself, not the D-Bus service
