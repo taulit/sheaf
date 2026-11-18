@@ -834,3 +834,43 @@ fn reindex_runs_the_service_binary_next_to_it_or_in_path() {
     let run = reindex(&sandbox, &binary, in_path.to_str().unwrap());
     assert_eq!(run.code, 1);
 }
+
+#[test]
+fn messages_and_errors_are_in_the_language_of_the_user() {
+    let locales = std::process::Command::new("locale").arg("-a").output();
+    let has_german = locales.is_ok_and(|out| {
+        String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .any(|locale| locale.eq_ignore_ascii_case("de_DE.utf8"))
+    });
+    let sandbox = Sandbox::seeded();
+    let messages = sandbox.notes.parent().unwrap().join("locale/de/LC_MESSAGES");
+    fs::create_dir_all(&messages).unwrap();
+    let compiled = std::process::Command::new("msgfmt")
+        .arg("-o")
+        .arg(messages.join("sheaf.mo"))
+        .arg(concat!(env!("CARGO_MANIFEST_DIR"), "/../../po/de.po"))
+        .status();
+    if !has_german || !compiled.is_ok_and(|status| status.success()) {
+        eprintln!("skipping: no de_DE.UTF-8 locale or no msgfmt");
+        return;
+    }
+    let german = |args: &[&str]| {
+        let output = sandbox
+            .command()
+            .env("LC_ALL", "de_DE.UTF-8")
+            .env("SHEAF_LOCALEDIR", messages.parent().unwrap().parent().unwrap())
+            .args(args)
+            .output()
+            .unwrap();
+        String::from_utf8(output.stderr).unwrap()
+    };
+    assert_eq!(
+        german(&["show", "No such note"]),
+        "sheaf: nicht gefunden: No such note\n"
+    );
+    assert_eq!(
+        german(&["help", "bogus"]),
+        "sheaf: unbekannter Befehl: bogus\n"
+    );
+}

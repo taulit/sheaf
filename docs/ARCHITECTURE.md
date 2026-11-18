@@ -111,4 +111,10 @@ and exits.
 ## Text
 
 Every user-visible string goes through gettext (`sheaf_core::i18n`, text domain
-`sheaf`). English is the source language. JSON output of the CLI is not translated.
+`sheaf`). English is the source language. JSON output of the CLI is not translated,
+except the `message` of an error, which is for people (`code` is for programs). The
+CLI's messages and errors are translated, also the core errors (`sheaf_core::Error`
+writes its own text, since xgettext does not read `tr` inside attributes). What stays
+English: the help texts of the commands (clap doc comments, which are also what
+`sheaf help --json` describes; clap has no hook for gettext) and clap's own usage
+errors.

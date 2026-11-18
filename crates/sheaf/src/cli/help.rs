@@ -4,6 +4,7 @@
 use clap::{Arg, ArgAction, Command, CommandFactory};
 use clap_complete::Shell as CompleteShell;
 use serde::Serialize;
+use sheaf_core::i18n::tr;
 
 use super::args::{Cli, HelpArgs, Shell};
 use super::context::{json_document, write_stdout};
@@ -19,7 +20,7 @@ pub fn help(args: HelpArgs, json: bool) -> Result {
     for name in &args.command {
         command = command
             .find_subcommand(name)
-            .ok_or_else(|| CliError::Usage(format!("unknown command: {name}")))?;
+            .ok_or_else(|| CliError::Usage(tr("unknown command: {}").replace("{}", name)))?;
     }
     Ok(write_stdout(
         &command.clone().render_long_help().to_string(),

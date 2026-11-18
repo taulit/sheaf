@@ -6771,7 +6771,6 @@ dependencies = [
  "serde_json",
  "tantivy",
  "tempfile",
- "thiserror 2.0.21",
  "toml 1.2.1+spec-1.1.0",
  "ulid",
  "unicode-normalization",

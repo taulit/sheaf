@@ -4,6 +4,7 @@
 use std::path::Path;
 use std::time::Duration;
 
+use sheaf_core::i18n::tr;
 use sheaf_searchd::api::{ACTION_OPEN_NOTE, ACTION_QUICK_NOTE, ApplicationProxy, action_parameter};
 use zbus::connection::Builder;
 use zbus::{Connection, Variant};
@@ -60,6 +61,7 @@ fn activate(action: &str, parameter: &[Variant<'_>]) -> Result {
             .activate_action(action, parameter, Default::default())
             .await
     };
-    zbus::block_on(call)
-        .map_err(|err| CliError::AppUnavailable(format!("the app does not answer: {err}")))
+    zbus::block_on(call).map_err(|err| {
+        CliError::AppUnavailable(tr("the app does not answer: {}").replace("{}", &err.to_string()))
+    })
 }
