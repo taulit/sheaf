@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: sheaf\n"
 "Report-Msgid-Bugs-To: https://github.com/taulit/sheaf/issues\n"
-"POT-Creation-Date: 2026-11-18 03:18+0100\n"
+"POT-Creation-Date: 2026-11-18 03:56+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -18,7 +18,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
 
-#: crates/sheaf-core/src/config.rs:164
+#: crates/sheaf-core/src/config.rs:156
 msgid "Quick Notes"
 msgstr ""
 
@@ -339,91 +339,79 @@ msgstr ""
 msgid "%b %-d, %Y"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/dates.rs:122
-#: crates/sheaf/src/app/note/date.rs:20
+#: crates/sheaf/src/app/gallery/dates.rs:123
 msgid "January"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/dates.rs:123
-#: crates/sheaf/src/app/note/date.rs:21
+#: crates/sheaf/src/app/gallery/dates.rs:124
 msgid "February"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/dates.rs:124
-#: crates/sheaf/src/app/note/date.rs:22
+#: crates/sheaf/src/app/gallery/dates.rs:125
 msgid "March"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/dates.rs:125
-#: crates/sheaf/src/app/note/date.rs:23
+#: crates/sheaf/src/app/gallery/dates.rs:126
 msgid "April"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/dates.rs:126
-#: crates/sheaf/src/app/note/date.rs:24
+#: crates/sheaf/src/app/gallery/dates.rs:127
 msgid "May"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/dates.rs:127
-#: crates/sheaf/src/app/note/date.rs:25
+#: crates/sheaf/src/app/gallery/dates.rs:128
 msgid "June"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/dates.rs:128
-#: crates/sheaf/src/app/note/date.rs:26
+#: crates/sheaf/src/app/gallery/dates.rs:129
 msgid "July"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/dates.rs:129
-#: crates/sheaf/src/app/note/date.rs:27
+#: crates/sheaf/src/app/gallery/dates.rs:130
 msgid "August"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/dates.rs:130
-#: crates/sheaf/src/app/note/date.rs:28
+#: crates/sheaf/src/app/gallery/dates.rs:131
 msgid "September"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/dates.rs:131
-#: crates/sheaf/src/app/note/date.rs:29
+#: crates/sheaf/src/app/gallery/dates.rs:132
 msgid "October"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/dates.rs:132
-#: crates/sheaf/src/app/note/date.rs:30
+#: crates/sheaf/src/app/gallery/dates.rs:133
 msgid "November"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/dates.rs:133
-#: crates/sheaf/src/app/note/date.rs:31
+#: crates/sheaf/src/app/gallery/dates.rs:134
 msgid "December"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/dates.rs:140
+#: crates/sheaf/src/app/gallery/dates.rs:141
 msgid "Monday"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/dates.rs:141
+#: crates/sheaf/src/app/gallery/dates.rs:142
 msgid "Tuesday"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/dates.rs:142
+#: crates/sheaf/src/app/gallery/dates.rs:143
 msgid "Wednesday"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/dates.rs:143
+#: crates/sheaf/src/app/gallery/dates.rs:144
 msgid "Thursday"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/dates.rs:144
+#: crates/sheaf/src/app/gallery/dates.rs:145
 msgid "Friday"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/dates.rs:145
+#: crates/sheaf/src/app/gallery/dates.rs:146
 msgid "Saturday"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/dates.rs:146
+#: crates/sheaf/src/app/gallery/dates.rs:147
 msgid "Sunday"
 msgstr ""
 
@@ -438,7 +426,7 @@ msgid "Could not delete the folder: {}"
 msgstr ""
 
 #: crates/sheaf/src/app/gallery/folders.rs:121
-#: crates/sheaf/src/app/gallery/render.rs:589
+#: crates/sheaf/src/app/gallery/render.rs:590
 msgid "Folder Name"
 msgstr ""
 
@@ -572,22 +560,22 @@ msgstr ""
 msgid "New Folder"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/render.rs:609
+#: crates/sheaf/src/app/gallery/render.rs:610
 #: crates/sheaf/src/app/settings/view.rs:433
 msgid "Date Edited"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/render.rs:610
+#: crates/sheaf/src/app/gallery/render.rs:611
 #: crates/sheaf/src/app/settings/view.rs:434
 msgid "Date Created"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/render.rs:611
+#: crates/sheaf/src/app/gallery/render.rs:612
 #: crates/sheaf/src/app/settings/view.rs:435
 msgid "Title"
 msgstr ""
 
-#: crates/sheaf/src/app/gallery/render.rs:624
+#: crates/sheaf/src/app/gallery/render.rs:625
 msgid "Sort By"
 msgstr ""
 
@@ -698,11 +686,11 @@ msgstr ""
 msgid "Cancel"
 msgstr ""
 
-#: crates/sheaf/src/app/mod.rs:78
+#: crates/sheaf/src/app/mod.rs:77
 msgid "the running app does not answer"
 msgstr ""
 
-#: crates/sheaf/src/app/mod.rs:83
+#: crates/sheaf/src/app/mod.rs:82
 msgid "cannot open a window: neither WAYLAND_DISPLAY nor DISPLAY is set"
 msgstr ""
 
@@ -733,7 +721,7 @@ msgstr[1] ""
 
 #. TRANSLATORS: a date with its time, such as "16 November 2026, 10:12". Keep the
 #. words in braces; German: "{day}. {month} {year} um {time}".
-#: crates/sheaf/src/app/note/date.rs:11
+#: crates/sheaf/src/app/note/date.rs:13
 #, rust-format
 msgid "{day} {month} {year}, {time}"
 msgstr ""
