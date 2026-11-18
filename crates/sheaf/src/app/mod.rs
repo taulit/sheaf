@@ -26,7 +26,6 @@ pub mod dialogs;
 pub mod gallery;
 pub mod instance;
 pub mod library;
-mod logger;
 pub mod note;
 pub mod overlays;
 pub mod portal;
@@ -67,7 +66,7 @@ pub struct Launch {
 /// the app quits.
 pub fn run(launch: Launch, dir: Option<PathBuf>) -> ExitCode {
     trace::mark(trace::Event::Run);
-    logger::init();
+    sheaf_core::logger::init("sheaf");
     let first = Activation::from_launch(launch.request);
     let (connection, requests) = match instance::start(Bus::Session, &first) {
         Ok(Instance::Forwarded) => return ExitCode::SUCCESS,

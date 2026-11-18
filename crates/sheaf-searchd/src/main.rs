@@ -2,7 +2,6 @@
 
 mod indexer;
 mod library;
-mod logger;
 mod service;
 
 use std::ffi::OsString;
@@ -114,7 +113,7 @@ fn exit_code(outcome: Outcome) -> ExitCode {
 
 fn init() {
     sheaf_core::i18n::init();
-    logger::init();
+    sheaf_core::logger::init("sheaf-searchd");
 }
 
 /// Resolves the notes folder (creating it) and its index folder, and runs `f` with them.
