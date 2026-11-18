@@ -1,6 +1,7 @@
 //! "Export as Markdown…", "Export as PDF…" and "Print…" of the share popover (plan 03
-//! §9). The file is chosen in the portal's save dialog, the PDF rendered by
-//! `sheaf-export` in the background; a toast tells how it went.
+//! §9), and "Export" of the gallery's context menu. The file, or for several notes the
+//! folder, is chosen in the portal's dialog, the PDF rendered by `sheaf-export` in the
+//! background; a toast tells how it went.
 //!
 //! A PDF opened in a viewer after printing failed is written to [`ViewerFiles`]: a
 //! folder only the user can read, emptied when the app starts and quits.
@@ -11,13 +12,15 @@ use std::os::unix::fs::{DirBuilderExt as _, OpenOptionsExt as _, PermissionsExt 
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
-use gpui::{App, AppContext as _, Context, Global, Task};
-use sheaf_core::i18n::tr;
+use gpui::{App, AppContext as _, Context, Global};
+use jiff::tz::TimeZone;
+use sheaf_core::Note;
+use sheaf_core::i18n::{ntr, tr};
 use sheaf_export::{FontFile, Fonts, Options, PageSetup};
 
 use super::{NoteEvent, NoteView, date};
 use crate::app::assets::FONTS;
-use crate::app::dialogs::{Filter, dialogs};
+use crate::app::dialogs::{Dialogs, Filter, dialogs};
 use crate::app::overlays::Toast;
 
 /// Inter, plus a monospaced face and fallbacks found on the system. The system is
@@ -30,15 +33,29 @@ fn fonts() -> &'static Fonts {
     })
 }
 
-/// What a PDF of the open note is made from.
-#[derive(Clone)]
-struct Source {
+/// What the export of a note is made from.
+#[derive(Clone, Debug)]
+pub struct Source {
+    title: String,
     body: String,
+    /// The note's folder, which its images are relative to.
     folder: PathBuf,
     date: Option<String>,
 }
 
 impl Source {
+    /// The note as stored in its file.
+    pub fn of(note: &Note, notes_dir: &Path, zone: &TimeZone) -> Self {
+        Source {
+            title: note.meta.title.clone(),
+            body: note.body().to_owned(),
+            folder: notes_dir.join(&note.meta.folder),
+            date: Some(date::long_date_time(
+                &note.meta.modified.to_zoned_datetime(zone.clone()),
+            )),
+        }
+    }
+
     fn render(&self, page: PageSetup) -> Result<Vec<u8>, String> {
         let options = Options {
             page,
@@ -51,8 +68,12 @@ impl Source {
     }
 }
 
+/// How long the title part of an export file name may be, in bytes: file names end
+/// at 255 bytes, and a number and the extension may follow.
+const STEM_BYTES: usize = 200;
+
 /// A file name for `title` with `extension`, without the characters file systems
-/// refuse.
+/// refuse and short enough for them.
 fn file_name(title: &str, extension: &str) -> String {
     let stem: String = title
         .chars()
@@ -62,8 +83,15 @@ fn file_name(title: &str, extension: &str) -> String {
             c => c,
         })
         .collect();
-    let stem = stem.split_whitespace().collect::<Vec<_>>().join(" ");
-    let stem = stem.trim_start_matches('.');
+    let mut stem = stem.split_whitespace().collect::<Vec<_>>().join(" ");
+    if stem.len() > STEM_BYTES {
+        let end = (0..=STEM_BYTES)
+            .rev()
+            .find(|&end| stem.is_char_boundary(end))
+            .unwrap_or(0);
+        stem.truncate(end);
+    }
+    let stem = stem.trim_end().trim_start_matches('.');
     let stem = if stem.is_empty() {
         tr("Untitled")
     } else {
@@ -74,6 +102,157 @@ fn file_name(title: &str, extension: &str) -> String {
 
 fn write(path: &Path, bytes: &[u8]) -> Result<(), String> {
     std::fs::write(path, bytes).map_err(|err| format!("{}: {err}", path.display()))
+}
+
+/// What an export writes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Format {
+    /// The text without its frontmatter, so that the copy does not carry the note's
+    /// id. Attachments stay where they are.
+    Markdown,
+    /// A4 with 20 mm margins (`docs/verified.md` §2).
+    Pdf,
+}
+
+impl Format {
+    fn extension(self) -> &'static str {
+        match self {
+            Format::Markdown => "md",
+            Format::Pdf => "pdf",
+        }
+    }
+
+    fn title(self) -> String {
+        match self {
+            Format::Markdown => tr("Export as Markdown"),
+            Format::Pdf => tr("Export as PDF"),
+        }
+    }
+
+    fn bytes(self, source: &Source) -> Result<Vec<u8>, String> {
+        match self {
+            Format::Markdown => Ok(source.body.clone().into_bytes()),
+            Format::Pdf => source.render(PageSetup::A4),
+        }
+    }
+}
+
+/// Where an export went.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Exported {
+    /// The file, or the folder of several notes.
+    All(PathBuf),
+    /// Into `folder`, but `failed` of the notes could not be written; `reason` says
+    /// why for the first of them.
+    Partly {
+        folder: PathBuf,
+        written: usize,
+        failed: usize,
+        reason: String,
+    },
+}
+
+/// Exports `sources`: one into the file the save dialog names, several into the
+/// folder the folder dialog names, each under its title. Blocks until the user has
+/// answered. Returns where the export went, or `None` if the dialog was cancelled.
+/// One note that cannot be written does not stop the others.
+pub fn run(
+    sources: &[Source],
+    format: Format,
+    dialogs: &Dialogs,
+) -> Result<Option<Exported>, String> {
+    if let [source] = sources {
+        let filter = match format {
+            Format::Markdown => Filter {
+                label: tr("Markdown"),
+                mime_type: "text/markdown".to_owned(),
+            },
+            Format::Pdf => Filter {
+                label: tr("PDF"),
+                mime_type: "application/pdf".to_owned(),
+            },
+        };
+        let name = file_name(&source.title, format.extension());
+        let Some(path) = dialogs.save_file(&format.title(), &name, &filter)? else {
+            return Ok(None);
+        };
+        write(&path, &format.bytes(source)?)?;
+        return Ok(Some(Exported::All(path)));
+    }
+    let Some(folder) = dialogs.choose_folder(&format.title())? else {
+        return Ok(None);
+    };
+    export_into(&folder, sources, format).map(Some)
+}
+
+/// Writes each of `sources` into `folder` under a free name.
+fn export_into(folder: &Path, sources: &[Source], format: Format) -> Result<Exported, String> {
+    let mut failures = Vec::new();
+    for source in sources {
+        let path = free_path(folder, &source.title, format.extension());
+        if let Err(reason) = format.bytes(source).and_then(|bytes| write(&path, &bytes)) {
+            log::error!("cannot export {}: {reason}", source.title);
+            failures.push(reason);
+        }
+    }
+    let written = sources.len() - failures.len();
+    match failures.into_iter().next() {
+        None => Ok(Exported::All(folder.to_owned())),
+        Some(reason) if written == 0 => Err(reason),
+        Some(reason) => Ok(Exported::Partly {
+            folder: folder.to_owned(),
+            written,
+            failed: sources.len() - written,
+            reason,
+        }),
+    }
+}
+
+/// A path in `folder` for `title` that no file has yet: ` 2`, ` 3`, … on a collision.
+fn free_path(folder: &Path, title: &str, extension: &str) -> PathBuf {
+    let first = folder.join(file_name(title, extension));
+    let stem = first
+        .file_stem()
+        .map(|stem| stem.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    std::iter::once(first)
+        .chain((2..).map(|n| folder.join(format!("{stem} {n}.{extension}"))))
+        .find(|path| !path.exists())
+        .unwrap_or_default()
+}
+
+/// How an export went, for a toast: "Exported" with "Open", or why it failed. A
+/// cancelled dialog says nothing.
+pub fn toast(exported: Result<Option<Exported>, String>) -> Option<Toast> {
+    let open = |message: String, path: PathBuf| {
+        Toast::new(message).action(tr("Open"), move |_, cx| cx.open_with_system(&path))
+    };
+    match exported {
+        Ok(None) => None,
+        Ok(Some(Exported::All(path))) => Some(open(tr("Exported"), path)),
+        Ok(Some(Exported::Partly {
+            folder,
+            written,
+            failed,
+            reason,
+        })) => {
+            let message = ntr(
+                "{written} exported, {failed} failed: {reason}",
+                "{written} exported, {failed} failed: {reason}",
+                u32::try_from(failed).unwrap_or(u32::MAX),
+            )
+            .replace("{written}", &written.to_string())
+            .replace("{failed}", &failed.to_string())
+            .replace("{reason}", &reason);
+            Some(open(message, folder))
+        }
+        Err(reason) => {
+            log::error!("cannot export: {reason}");
+            Some(Toast::new(
+                tr("Could not export: {}").replace("{}", &reason),
+            ))
+        }
+    }
 }
 
 /// Where PDFs wait for the viewer they were opened in.
@@ -161,6 +340,7 @@ impl NoteView {
     fn source(&self, cx: &Context<Self>) -> Source {
         let zone = self.library.read(cx).now().time_zone().clone();
         Source {
+            title: self.title.clone(),
             body: self.editor.read(cx).markdown(),
             folder: self.notes_dir.join(self.folder()),
             date: self
@@ -170,46 +350,17 @@ impl NoteView {
         }
     }
 
-    /// "Export as Markdown…": the text of the note, without its frontmatter, so that
-    /// the copy does not carry the note's id. Attachments stay where they are.
-    pub fn export_markdown(&mut self, cx: &mut Context<Self>) {
-        self.popover = None;
-        let body = self.editor.read(cx).markdown();
-        let name = file_name(&self.title, "md");
-        let dialogs = dialogs(cx);
-        let exported = cx.background_spawn(async move {
-            let filter = Filter {
-                label: tr("Markdown"),
-                mime_type: "text/markdown".to_owned(),
-            };
-            let Some(path) = dialogs.save_file(&tr("Export as Markdown"), &name, &filter)? else {
-                return Ok(None);
-            };
-            write(&path, body.as_bytes())?;
-            Ok(Some(path))
-        });
-        self.exported(exported, cx);
-        cx.notify();
-    }
-
-    /// "Export as PDF…": A4 with 20 mm margins (`docs/verified.md` §2).
-    pub fn export_pdf(&mut self, cx: &mut Context<Self>) {
+    /// "Export as Markdown…" and "Export as PDF…".
+    pub fn export(&mut self, format: Format, cx: &mut Context<Self>) {
         self.popover = None;
         let source = self.source(cx);
-        let name = file_name(&self.title, "pdf");
         let dialogs = dialogs(cx);
-        let exported = cx.background_spawn(async move {
-            let filter = Filter {
-                label: tr("PDF"),
-                mime_type: "application/pdf".to_owned(),
-            };
-            let Some(path) = dialogs.save_file(&tr("Export as PDF"), &name, &filter)? else {
-                return Ok(None);
-            };
-            write(&path, &source.render(PageSetup::A4)?)?;
-            Ok(Some(path))
+        let exported = cx.background_spawn(async move { run(&[source], format, &dialogs) });
+        self._export = cx.spawn(async move |this, cx| {
+            if let Some(toast) = toast(exported.await) {
+                let _ = this.update(cx, |_, cx| cx.emit(NoteEvent::Toast(toast)));
+            }
         });
-        self.exported(exported, cx);
         cx.notify();
     }
 
@@ -237,28 +388,6 @@ impl NoteView {
         });
         cx.notify();
     }
-
-    /// Tells how an export went: "Exported" with "Open", or why it failed. A cancelled
-    /// dialog says nothing.
-    fn exported(
-        &mut self,
-        exported: Task<Result<Option<PathBuf>, String>>,
-        cx: &mut Context<Self>,
-    ) {
-        self._export = cx.spawn(async move |this, cx| {
-            let toast = match exported.await {
-                Ok(None) => return,
-                Ok(Some(path)) => Toast::new(tr("Exported")).action(tr("Open"), move |_, cx| {
-                    cx.open_with_system(&path);
-                }),
-                Err(reason) => {
-                    log::error!("cannot export: {reason}");
-                    Toast::new(tr("Could not export: {}").replace("{}", &reason))
-                }
-            };
-            let _ = this.update(cx, |_, cx| cx.emit(NoteEvent::Toast(toast)));
-        });
-    }
 }
 
 #[cfg(test)]
@@ -283,6 +412,56 @@ mod tests {
         files.clear();
         assert!(!root.path().join("runtime/sheaf/pdf").exists());
         files.clear();
+    }
+
+    #[test]
+    fn several_notes_get_free_names_in_the_folder() {
+        let folder = tempfile::tempdir().unwrap();
+        let folder = folder.path();
+        assert_eq!(free_path(folder, "Reise", "md"), folder.join("Reise.md"));
+        fs::write(folder.join("Reise.md"), "").unwrap();
+        assert_eq!(free_path(folder, "Reise", "md"), folder.join("Reise 2.md"));
+        fs::write(folder.join("Reise 2.md"), "").unwrap();
+        assert_eq!(free_path(folder, "Reise", "md"), folder.join("Reise 3.md"));
+        assert_eq!(free_path(folder, "Reise", "pdf"), folder.join("Reise.pdf"));
+    }
+
+    #[test]
+    fn a_long_title_is_cut_to_a_file_name_that_fits() {
+        let name = file_name(&"Überlänge ".repeat(30), "pdf");
+        assert!(name.len() <= STEM_BYTES + 4, "{} bytes", name.len());
+        assert!(name.starts_with("Überlänge Überlänge") && name.ends_with(".pdf"));
+        assert_eq!(
+            file_name(&"ä".repeat(200), "md"),
+            format!("{}.md", "ä".repeat(100))
+        );
+    }
+
+    #[test]
+    fn several_notes_export_past_one_that_cannot_be_written() {
+        let folder = tempfile::tempdir().unwrap();
+        let source = |title: &str| Source {
+            title: title.to_owned(),
+            body: format!("{title}\n"),
+            folder: folder.path().to_owned(),
+            date: None,
+        };
+        let sources = [source("Eins"), source("Zwei"), source("Drei")];
+        // A link to nowhere is a free name that cannot be written.
+        std::os::unix::fs::symlink("fehlt/x", folder.path().join("Zwei.md")).unwrap();
+        let Ok(Exported::Partly {
+            written,
+            failed,
+            reason,
+            ..
+        }) = export_into(folder.path(), &sources, Format::Markdown)
+        else {
+            panic!("not a partial export");
+        };
+        assert_eq!((written, failed), (2, 1));
+        assert!(reason.contains("Zwei.md"), "{reason}");
+        assert!(folder.path().join("Eins.md").is_file());
+        assert!(folder.path().join("Drei.md").is_file());
     }
 
     #[test]

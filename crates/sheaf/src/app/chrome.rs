@@ -1,11 +1,11 @@
 //! The parts every view of the main window is built from: the pane that fills the
-//! window, the header bar, its flat buttons and the close button. Sizes are those of
-//! the prototype (`.hb`, `.fb`, `.close`).
+//! window, the header bar, its flat buttons, the close button and the text buttons.
+//! Sizes are those of the prototype (`.hb`, `.fb`, `.close`, `.btn`).
 
 use gpui::{
-    AnyElement, App, ClickEvent, Corners, Decorations, Div, ElementId, Global, Hsla,
+    AnyElement, App, ClickEvent, Corners, Decorations, Div, ElementId, FontWeight, Global, Hsla,
     InteractiveElement as _, IntoElement, MouseButton, MouseMoveEvent, ParentElement, Pixels,
-    RenderOnce, SharedString, StatefulInteractiveElement as _, Styled as _, Window, div,
+    RenderOnce, SharedString, Stateful, StatefulInteractiveElement as _, Styled as _, Window, div,
     prelude::FluentBuilder as _, px,
 };
 use gpui_component::tooltip::Tooltip;
@@ -14,7 +14,7 @@ use sheaf_core::i18n::tr;
 
 use super::actions::CloseWindow;
 use super::assets::{IconName, icon};
-use super::theme::{ActiveTokens as _, size};
+use super::theme::{ActiveTokens as _, Tokens, size};
 
 /// Says that windows are client-decorated where the platform cannot: an offscreen
 /// window has no compositor and reports server-side decorations, so the screenshot
@@ -295,4 +295,26 @@ fn close_button(cx: &App) -> impl IntoElement {
         .on_click(|_, window, cx| window.dispatch_action(Box::new(CloseWindow), cx))
         .tooltip(|window, cx| Tooltip::new(tr("Close")).build(window, cx))
         .child(icon(IconName::Close, fg).size(px(12.)))
+}
+
+/// `.btn` of the prototype; `primary` is `.btn.pri`.
+pub fn button(id: &'static str, label: String, primary: bool, tokens: &Tokens) -> Stateful<Div> {
+    div()
+        .id(id)
+        .flex()
+        .flex_none()
+        .items_center()
+        .h(px(30.))
+        .px(px(13.))
+        .rounded(px(8.))
+        .text_size(tokens.text(12.5))
+        .font_weight(FontWeight::BOLD)
+        .cursor_pointer()
+        .when(primary, |button| {
+            button.bg(tokens.accent).text_color(tokens.on_accent)
+        })
+        .when(!primary, |button| {
+            button.bg(tokens.selected).text_color(tokens.fg)
+        })
+        .child(SharedString::from(label))
 }

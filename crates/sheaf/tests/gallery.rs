@@ -7,94 +7,15 @@
 
 mod fixture;
 
-use std::time::Duration;
-
-use fixture::{Look, Notes};
-use gpui::{Entity, ListOffset, Modifiers, TestAppContext, VisualTestContext, WindowHandle, px};
-use gpui_component::Root;
+use fixture::{Look, Notes, TestApp, open_app, open_window};
+use gpui::{ListOffset, Modifiers, TestAppContext, VisualTestContext, px};
 use sheaf::app::gallery::dates::Group;
 use sheaf::app::gallery::{GalleryView, Popover, Scope};
-use sheaf::app::library::Library;
-use sheaf::app::window::{self, MainWindow, Route};
+use sheaf::app::window::{self, Route};
 use sheaf_core::config::{Sort as SortOrder, View};
 use sheaf_core::{CreateOptions, Feature, Filter, FolderConfig};
 
-struct TestApp {
-    library: Entity<Library>,
-    main: Entity<MainWindow>,
-    _window: WindowHandle<Root>,
-    cx: &'static mut VisualTestContext,
-}
-
-fn open_app(notes: &Notes, cx: &mut TestAppContext) -> TestApp {
-    let library = cx.update(|cx| {
-        fixture::init_app(Look::default(), cx);
-        fixture::open_library(notes, cx)
-    });
-    open_window(library, cx)
-}
-
-fn open_window(library: Entity<Library>, cx: &mut TestAppContext) -> TestApp {
-    let (window, main) = cx
-        .update(|cx| window::open(library.clone(), None, cx))
-        .unwrap();
-    let cx = VisualTestContext::from_window(window.into(), cx).into_mut();
-    cx.run_until_parked();
-    let mut app = TestApp {
-        library,
-        main,
-        _window: window,
-        cx,
-    };
-    app.draw();
-    app
-}
-
 impl TestApp {
-    fn gallery(&mut self) -> Entity<GalleryView> {
-        self.main
-            .read_with(self.cx, |main, _| main.gallery().clone())
-    }
-
-    fn read<R>(&mut self, read: impl FnOnce(&GalleryView) -> R) -> R {
-        let gallery = self.gallery();
-        gallery.read_with(self.cx, |gallery, _| read(gallery))
-    }
-
-    fn update(&mut self, update: impl FnOnce(&mut GalleryView, &mut gpui::Context<GalleryView>)) {
-        let gallery = self.gallery();
-        gallery.update(self.cx, update);
-        self.settle();
-    }
-
-    /// Lets tasks and the search's pause run out, then draws a frame.
-    fn settle(&mut self) {
-        self.cx.run_until_parked();
-        self.cx.executor().advance_clock(Duration::from_millis(50));
-        self.cx.run_until_parked();
-        self.draw();
-    }
-
-    fn draw(&mut self) {
-        self.cx.update(|window, cx| window.draw(cx).clear(cx));
-        self.cx.run_until_parked();
-    }
-
-    fn keys(&mut self, keys: &str) {
-        self.cx.simulate_keystrokes(keys);
-        self.settle();
-    }
-
-    fn titles(&mut self) -> Vec<String> {
-        self.read(|gallery| {
-            gallery
-                .notes()
-                .iter()
-                .map(|note| note.title.clone())
-                .collect()
-        })
-    }
-
     fn index_of(&mut self, title: &str) -> usize {
         let titles = self.titles();
         titles
@@ -130,19 +51,6 @@ impl TestApp {
     fn click(&mut self, title: &str, modifiers: Modifiers) {
         let index = self.index_of(title);
         self.update(|gallery, cx| gallery.click(index, modifiers, cx));
-    }
-
-    fn route(&mut self) -> Route {
-        self.main.read_with(self.cx, |main, cx| main.route(cx))
-    }
-
-    fn toast(&mut self) -> Option<String> {
-        self.main.read_with(self.cx, |main, cx| {
-            main.toasts()
-                .read(cx)
-                .shown()
-                .map(|toast| toast.message.to_string())
-        })
     }
 }
 
@@ -528,7 +436,7 @@ async fn the_view_is_remembered_per_folder(cx: &mut TestAppContext) {
 
     // A new window on the same folder starts with what was chosen.
     let library = app.library.clone();
-    let mut again = open_window(library, app.cx);
+    let mut again = open_window(library, None, app.cx);
     assert_eq!(again.read(|gallery| gallery.view()), View::List);
 }
 
@@ -797,4 +705,182 @@ async fn shift_click_after_the_anchor_was_deleted_does_not_crash(cx: &mut TestAp
     let third = app.titles()[2].clone();
     app.click(&third, Modifiers::shift());
     assert_eq!(app.selected().as_deref(), Some(third.as_str()));
+}
+
+#[gpui::test]
+async fn tags_are_pinned_to_the_chips_from_the_folder_popover(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let mut app = open_app(&notes, cx);
+    app.update(|gallery, cx| gallery.set_popover(Some(Popover::Folders), cx));
+    let tags = app.read(|gallery| gallery.tags().to_vec());
+    assert!(
+        tags.iter().any(|(tag, notes)| tag == "books" && *notes > 0),
+        "{tags:?}"
+    );
+    assert!(!app.read(|gallery| gallery.is_tag_pinned("books")));
+
+    let pin = app.cx.debug_bounds("tag-pin-books").expect("a pin");
+    app.cx.simulate_click(pin.center(), Modifiers::none());
+    app.settle();
+    assert!(app.read(|gallery| gallery.is_tag_pinned("books")));
+    assert_eq!(
+        FolderConfig::load(&notes.dir).unwrap().pinned_tags,
+        ["ausschreibung", "rezepte", "books"]
+    );
+    // The click pinned the tag without choosing it.
+    assert_eq!(app.read(|gallery| gallery.scope().clone()), Scope::All);
+
+    app.update(|gallery, cx| gallery.set_tag_pinned("Rezepte", false, cx));
+    assert_eq!(
+        FolderConfig::load(&notes.dir).unwrap().pinned_tags,
+        ["ausschreibung", "books"]
+    );
+}
+
+#[gpui::test]
+async fn a_renamed_folder_takes_its_settings_along(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    notes.write(
+        ".sheaf/config.toml",
+        "[folders.Arbeit]\nview = \"list\"\n\n[[smart_folders]]\nname = \"Offen\"\nquery = \"folder:/Arbeit open:\"\n",
+    );
+    let mut app = open_app(&notes, cx);
+    app.update(|gallery, cx| gallery.set_scope(Scope::Folder("Arbeit".into()), cx));
+    app.update(|gallery, cx| gallery.rename_folder("Arbeit", "Büro", cx));
+
+    let files = notes.files();
+    assert!(
+        files.iter().any(|file| file.starts_with("Büro/")),
+        "{files:?}"
+    );
+    assert!(
+        !files.iter().any(|file| file.starts_with("Arbeit/")),
+        "{files:?}"
+    );
+    assert_eq!(
+        app.read(|gallery| gallery.scope().clone()),
+        Scope::Folder("Büro".into())
+    );
+    let config = FolderConfig::load(&notes.dir).unwrap();
+    assert_eq!(config.folders["Büro"].view, View::List);
+    assert!(!config.folders.contains_key("Arbeit"));
+    assert_eq!(config.smart_folders[0].query, "folder:/Büro open:");
+    assert!(
+        app.titles()
+            .contains(&"Ausschreibung – offene Fragen".to_owned())
+    );
+
+    // A name taken by another folder is refused with a reason.
+    app.update(|gallery, cx| gallery.rename_folder("Büro", "Privat", cx));
+    assert!(notes.files().iter().any(|file| file.starts_with("Büro/")));
+    assert!(
+        app.toast()
+            .is_some_and(|toast| toast.starts_with("Could not rename the folder"))
+    );
+}
+
+#[gpui::test]
+async fn a_deleted_folder_asks_and_its_notes_go_to_the_trash(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let mut app = open_app(&notes, cx);
+    let in_folder = |notes: &Notes| {
+        notes
+            .files()
+            .into_iter()
+            .filter(|file| file.starts_with("Arbeit/"))
+            .count()
+    };
+    let before = in_folder(&notes);
+    assert!(before > 0);
+    app.update(|gallery, cx| gallery.set_scope(Scope::Folder("Arbeit".into()), cx));
+    app.update(|gallery, cx| gallery.ask_delete_folder("Arbeit", cx));
+    assert!(app.read(|gallery| gallery.confirming().is_some()));
+
+    // Enter says no, as in the trash: deleting takes a click.
+    app.keys("enter");
+    assert!(app.read(|gallery| gallery.confirming().is_none()));
+    assert_eq!(in_folder(&notes), before);
+
+    app.update(|gallery, cx| gallery.ask_delete_folder("Arbeit", cx));
+    app.update(|gallery, cx| gallery.confirm(cx));
+    assert_eq!(in_folder(&notes), 0);
+    assert!(!notes.dir.join("Arbeit").exists());
+    assert_eq!(app.read(|gallery| gallery.scope().clone()), Scope::All);
+    let toast = app.toast().unwrap();
+    assert!(toast.ends_with("moved to trash"), "{toast}");
+}
+
+#[gpui::test]
+async fn a_folder_with_an_unreadable_note_is_renamed_and_its_settings_follow(
+    cx: &mut TestAppContext,
+) {
+    let notes = Notes::seeded();
+    notes.write(
+        ".sheaf/config.toml",
+        "[folders.Arbeit]\nview = \"list\"\n\n[[smart_folders]]\nname = \"Offen\"\nquery = \"folder:/Arbeit open:\"\n",
+    );
+    std::fs::write(notes.dir.join("Arbeit/Café.md"), b"Caf\xe9\n").unwrap();
+    let mut app = open_app(&notes, cx);
+    app.update(|gallery, cx| gallery.set_scope(Scope::Folder("Arbeit".into()), cx));
+    app.update(|gallery, cx| gallery.rename_folder("Arbeit", "Büro", cx));
+
+    assert!(notes.dir.join("Büro/Café.md").is_file());
+    assert_eq!(
+        app.read(|gallery| gallery.scope().clone()),
+        Scope::Folder("Büro".into())
+    );
+    let config = FolderConfig::load(&notes.dir).unwrap();
+    assert!(config.folders.contains_key("Büro"));
+    assert_eq!(config.smart_folders[0].query, "folder:/Büro open:");
+    let toast = app.toast().unwrap();
+    assert!(
+        toast.starts_with("Renamed; 1 note could not be read"),
+        "{toast}"
+    );
+}
+
+#[gpui::test]
+async fn a_deleted_folder_keeps_an_unreadable_note_and_offers_undo(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    std::fs::write(notes.dir.join("Arbeit/Café.md"), b"Caf\xe9\n").unwrap();
+    let mut app = open_app(&notes, cx);
+    app.update(|gallery, cx| gallery.ask_delete_folder("Arbeit", cx));
+    app.update(|gallery, cx| gallery.confirm(cx));
+
+    assert_eq!(
+        notes
+            .files()
+            .into_iter()
+            .filter(|file| file.starts_with("Arbeit/"))
+            .collect::<Vec<_>>(),
+        ["Arbeit/Café.md"]
+    );
+    assert_eq!(
+        app.toast().unwrap(),
+        "3 notes moved to trash · 1 file stayed in the folder"
+    );
+}
+
+#[gpui::test]
+async fn a_folder_kept_by_other_files_says_so_and_stays_shown(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    std::fs::create_dir(notes.dir.join("Leer")).unwrap();
+    std::fs::write(notes.dir.join("Leer/only.pdf"), b"%PDF").unwrap();
+    let mut app = open_app(&notes, cx);
+    app.update(|gallery, cx| gallery.set_scope(Scope::Folder("Leer".into()), cx));
+    app.update(|gallery, cx| gallery.ask_delete_folder("Leer", cx));
+    app.update(|gallery, cx| gallery.confirm(cx));
+
+    assert!(notes.dir.join("Leer/only.pdf").is_file());
+    assert_eq!(
+        app.read(|gallery| gallery.scope().clone()),
+        Scope::Folder("Leer".into())
+    );
+    assert_eq!(
+        app.toast_with_action(),
+        Some((
+            "The folder still holds 1 other file and was kept".to_owned(),
+            Some("Show in Files".to_owned())
+        ))
+    );
 }

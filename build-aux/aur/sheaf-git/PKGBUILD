@@ -1,0 +1,70 @@
+# Maintainer: taulit
+pkgname=sheaf-git
+pkgver=0.1.0.r0.g0000000
+pkgrel=1
+pkgdesc='Fast native notes for GNOME in plain Markdown files, with a command line (git version)'
+arch=(x86_64 aarch64)
+url='https://github.com/taulit/sheaf'
+license=(GPL-3.0-or-later)
+# See build-aux/aur/sheaf/PKGBUILD for where the list comes from.
+depends=(
+  fontconfig
+  freetype2
+  gcc-libs
+  glibc
+  libglvnd
+  libxcb
+  libxkbcommon
+  libxkbcommon-x11
+  vulkan-driver
+  vulkan-icd-loader
+  wayland
+)
+makedepends=(cargo dbus gettext git pkgconf)
+optdepends=(
+  'xdg-desktop-portal: theme, file dialogs, printing and the global shortcut'
+  'xdg-desktop-portal-gnome: portal backend for GNOME'
+  'gnome-shell: search in the overview'
+)
+provides=(sheaf)
+conflicts=(sheaf)
+source=("$pkgname::git+$url.git")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd "$pkgname"
+  # v0.1.0-5-gabc1234 becomes 0.1.0.r5.gabc1234; without a tag: r<commits>.g<hash>.
+  if git describe --long --tags --abbrev=7 >/dev/null 2>&1; then
+    git describe --long --tags --abbrev=7 | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g'
+  else
+    printf '0.0.0.r%s.g%s' "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+  fi
+}
+
+prepare() {
+  cd "$pkgname"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+  cd "$pkgname"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR=target
+  cargo build --frozen --release -p sheaf
+  cargo build --frozen --profile service -p sheaf-searchd
+}
+
+check() {
+  cd "$pkgname"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR=target
+  cargo test --frozen --release --workspace --all-features
+}
+
+package() {
+  cd "$pkgname"
+  SHEAF_BUILD_DIR="$PWD/target/release" SHEAF_SERVICE_BUILD_DIR="$PWD/target/service" \
+    SHEAF_LICENSE_NAME="$pkgname" \
+    build-aux/install.sh /usr "$pkgdir"
+}

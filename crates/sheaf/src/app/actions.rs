@@ -13,7 +13,9 @@
 //! 4. Name it in [`commands`], so that the command palette offers it and the list of
 //!    shortcuts shows its keys. A test fails for a key whose action is missing there.
 
-use gpui::{Action, App, KeyBinding, actions};
+use std::rc::Rc;
+
+use gpui::{Action, App, KeyBinding, KeyBindingContextPredicate, actions};
 use sheaf_core::i18n::tr;
 
 actions!(
@@ -82,6 +84,8 @@ pub const NOTE: &str = "Note";
 pub const EDITOR: &str = "MarkdownEditor";
 /// Key context of the Quick Note window.
 pub const QUICK_NOTE: &str = "QuickNote";
+/// Key context of the menu of templates that `/vorlage` opens in the text.
+pub const TEMPLATE_MENU: &str = "TemplateMenu";
 /// The editor inside the Quick Note window, where Ctrl+Enter is not the editor's.
 const QUICK_NOTE_EDITOR: &str = "QuickNote > MarkdownEditor";
 
@@ -92,7 +96,8 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl-n", NewNote, Some(WINDOW)),
         KeyBinding::new("ctrl-shift-n", QuickNote, Some(WINDOW)),
         KeyBinding::new("ctrl-k", OpenCommandPalette, Some(WINDOW)),
-        // The editor binds Ctrl+K to links; in Sheaf it is the palette (plan 03 §5).
+        // The editor binds Ctrl+K to its link prompt; in Sheaf it is the palette (plan
+        // 03 §5), and the link prompt moves to Ctrl+Shift+K.
         KeyBinding::new("ctrl-k", OpenCommandPalette, Some(EDITOR)),
         KeyBinding::new("ctrl-,", OpenSettings, Some(WINDOW)),
         KeyBinding::new("ctrl-?", ShowShortcuts, Some(WINDOW)),
@@ -115,7 +120,27 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl-enter", QuickNoteOpen, Some(QUICK_NOTE_EDITOR)),
         // The editor pastes text only; files and images on the clipboard are ours.
         KeyBinding::new("ctrl-v", PasteAttachment, Some(EDITOR)),
+        KeyBinding::new("down", SelectNext, Some(TEMPLATE_MENU)),
+        KeyBinding::new("up", SelectPrevious, Some(TEMPLATE_MENU)),
+        KeyBinding::new("enter", OpenSelected, Some(TEMPLATE_MENU)),
+        KeyBinding::new("escape", Back, Some(TEMPLATE_MENU)),
     ]);
+    bind_editor_action("ctrl-shift-k", "markdown_editor::ToggleLink", cx);
+}
+
+/// Binds one of the editor's actions, which it does not export, by its name.
+fn bind_editor_action(keys: &str, name: &str, cx: &mut App) {
+    let context = KeyBindingContextPredicate::parse(EDITOR).ok().map(Rc::new);
+    let binding = cx
+        .build_action(name, None)
+        .map_err(|err| err.to_string())
+        .and_then(|action| {
+            KeyBinding::load(keys, action, context, false, None, cx).map_err(|err| err.to_string())
+        });
+    match binding {
+        Ok(binding) => cx.bind_keys([binding]),
+        Err(err) => log::error!("cannot bind {keys} to {name}: {err}"),
+    }
 }
 
 /// An action as people see it: in the command palette and the list of shortcuts.

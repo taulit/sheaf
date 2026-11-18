@@ -6,7 +6,10 @@
 //! note's other writes; leaving or closing the note gives it up, and what was copied
 //! so far is removed.
 
-use gpui::{AppContext as _, ClipboardEntry, Context, Window};
+use gpui::{
+    AppContext as _, ClipboardEntry, Context, Entity, ExternalPaths, InteractiveElement as _,
+    IntoElement, Styled as _, Window, div,
+};
 use gpui_markdown_editor::Command;
 use sheaf_core::i18n::tr;
 
@@ -58,6 +61,19 @@ pub fn from_clipboard(entries: &[ClipboardEntry]) -> Option<Vec<Upload>> {
         }
     }
     (!uploads.is_empty()).then_some(uploads)
+}
+
+/// Takes files dropped onto the text before the editor does: the editor links a
+/// dropped file where it lies, the note keeps a copy in its attachments. Lay it over
+/// the editor while something is dragged, so that it is first to hear the drop.
+pub fn drop_layer(note: Entity<NoteView>) -> impl IntoElement {
+    div()
+        .absolute()
+        .inset_0()
+        .on_drop(move |paths: &ExternalPaths, window, cx| {
+            let files = paths.paths().iter().cloned().map(Upload::File).collect();
+            note.update(cx, |note, cx| note.attach(files, window, cx));
+        })
 }
 
 impl NoteView {

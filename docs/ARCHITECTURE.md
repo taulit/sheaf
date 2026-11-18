@@ -47,7 +47,7 @@ write returns. See `NoteId` in `crates/sheaf-core/src/model.rs`.
 |---|---|
 | Notes folder location | `$XDG_CONFIG_HOME/sheaf/config.toml` (`notes_dir`), overridden by `SHEAF_NOTES_DIR` or `--dir` |
 | App settings (default order, editor font and line width) | `$XDG_CONFIG_HOME/sheaf/config.toml` (`sort`, `[editor]`) |
-| Default notes folder | `$XDG_DOCUMENTS_DIR/Notes` (localised: `Notizen`), chosen on first run |
+| Default notes folder | `$XDG_DOCUMENTS_DIR/Notes` (localised: `Notizen`; an existing one of either name is taken), recorded as `notes_dir` by whichever of app, service and CLI runs first |
 | Per-folder state | `<notes>/.sheaf/config.toml`: smart folders, sort order, per-note view state |
 | Templates | `<notes>/.sheaf/templates/*.md` |
 | Trash | `<notes>/.trash/`, each file with `deleted:` and `from:` in its frontmatter |
@@ -58,8 +58,18 @@ write returns. See `NoteId` in `crates/sheaf-core/src/model.rs`.
 - `sheaf-searchd` is the only writer. It watches the notes folder, re-indexes changed
   files and commits within 300 ms. Each write runs in a short-lived child process
   (`sheaf-searchd --index`): tantivy's writer leaves about 7 MB behind in the process
-  that created it, which would break the 15 MB idle budget of the service. On start it reconciles the index with the
-  folder (path + mtime + size), so changes made while it was not running are picked up.
+  that created it, which would break the 15 MB idle budget of the service. On start it
+  reconciles the index with the folder (path + mtime + size), so changes made while it was
+  not running are picked up.
+- The rest of the service's idle memory budget (< 15 MB RSS) is held in three places. It
+  is built with the Cargo profile `service` (`opt-level = "s"`, fat LTO), because its own
+  code is most of what stays resident. It lets go of the index 5 s after the last request.
+  And it restarts itself once at start (marked by `SHEAF_SEARCHD_RESTARTED`) with `GLIBC_TUNABLES` set to
+  `glibc.malloc.arena_max=1:glibc.malloc.trim_threshold=131072`, so that malloc gives the
+  searches' memory back instead of keeping it in one arena per thread. glibc reads the
+  variable only when a process starts. The service sets it itself, not the D-Bus service
+  file, so it holds however the service is started (D-Bus activation, Flatpak, AUR, by
+  hand). Malloc tunables the user set are left alone.
 - The app opens the same index read-only and reloads on commit. The gallery is drawn
   from stored index fields, not from the files.
 - The CLI reads and writes note files through `sheaf-core` directly. To search and
@@ -101,4 +111,10 @@ and exits.
 ## Text
 
 Every user-visible string goes through gettext (`sheaf_core::i18n`, text domain
-`sheaf`). English is the source language. JSON output of the CLI is not translated.
+`sheaf`). English is the source language. JSON output of the CLI is not translated,
+except the `message` of an error, which is for people (`code` is for programs). The
+CLI's messages and errors are translated, also the core errors (`sheaf_core::Error`
+writes its own text, since xgettext does not read `tr` inside attributes). What stays
+English: the help texts of the commands (clap doc comments, which are also what
+`sheaf help --json` describes; clap has no hook for gettext) and clap's own usage
+errors.

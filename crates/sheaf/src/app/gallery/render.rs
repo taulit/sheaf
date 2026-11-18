@@ -9,6 +9,7 @@ use gpui::{
     list, point, prelude::FluentBuilder as _, px, relative,
 };
 use gpui_component::input::{self as input, Input, InputEvent, InputState};
+use gpui_component::menu::ContextMenuExt as _;
 use sheaf_core::config::{Sort as SortOrder, View};
 use sheaf_core::i18n::tr;
 
@@ -17,8 +18,9 @@ use crate::app::actions::{
     self, NewNote, SaveSearchAsSmartFolder, ShowFolders, ShowSortOptions, ShowTemplates, ToggleView,
 };
 use crate::app::assets::{IconName, icon};
-use crate::app::chrome::{FlatButton, HeaderBar, pane};
+use crate::app::chrome::{FlatButton, HeaderBar, button, pane};
 use crate::app::theme::{ActiveTokens as _, Tokens, size};
+use crate::app::trace::{self, Event};
 
 /// The side padding of the grid (`.gal`).
 pub(super) const GRID_SIDE: f32 = 24.;
@@ -26,6 +28,7 @@ pub(super) const GRID_SIDE: f32 = 24.;
 impl Render for GalleryView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.covers.next_frame();
+        self.drawn = Default::default();
         if let Some(text) = self.pending_text.take() {
             self.search
                 .update(cx, |state, cx| state.set_value(text, window, cx));
@@ -255,12 +258,17 @@ impl GalleryView {
         if scopes.len() == 1 {
             return None;
         }
+        let gallery = cx.entity().downgrade();
         let chips = scopes
             .into_iter()
             .enumerate()
             .map(|(index, (scope, label))| {
                 let on = self.scope == scope;
-                div()
+                let pinned_tag = match &scope {
+                    Scope::Tag(tag) => Some(tag.clone()),
+                    _ => None,
+                };
+                let chip = div()
                     .id(("scope", index))
                     .flex()
                     .flex_none()
@@ -279,7 +287,17 @@ impl GalleryView {
                             .hover(|style| style.bg(tokens.selected))
                     })
                     .on_click(cx.listener(move |this, _, _, cx| this.set_scope(scope.clone(), cx)))
-                    .child(label)
+                    .child(label);
+                match pinned_tag {
+                    Some(tag) => {
+                        let gallery = gallery.clone();
+                        chip.context_menu(move |menu, _, _| {
+                            super::tags::pin_menu(menu, &gallery, &tag, true)
+                        })
+                        .into_any_element()
+                    }
+                    None => chip.into_any_element(),
+                }
             });
         let chips: Vec<_> = chips.collect();
         Some(
@@ -331,7 +349,31 @@ impl GalleryView {
                 .left_0()
                 .size_full(),
             )
+            .when(trace::pending(Event::Miniatures), |body| {
+                body.child(self.trace_frame(cx))
+            })
             .into_any_element()
+    }
+
+    /// Marks the frame in the startup trace once the list above it is painted.
+    fn trace_frame(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let gallery = cx.entity().downgrade();
+        canvas(
+            |_, _, _| {},
+            move |_, _, _, cx| {
+                let Some(gallery) = gallery.upgrade() else {
+                    return;
+                };
+                let drawn = &gallery.read(cx).drawn;
+                if drawn.notes.is_empty() {
+                    return;
+                }
+                trace::mark_with(Event::Cards, &drawn.notes);
+                if drawn.unready == 0 {
+                    trace::mark(Event::Miniatures);
+                }
+            },
+        )
     }
 
     fn render_empty(&self, tokens: &Tokens, cx: &mut Context<Self>) -> impl IntoElement {
@@ -352,7 +394,7 @@ impl GalleryView {
         };
         let button = if searching {
             filtered.then(|| {
-                pill(
+                button(
                     "without-filters",
                     tr("Search Without Filters"),
                     false,
@@ -364,7 +406,7 @@ impl GalleryView {
             None
         } else {
             Some(
-                pill("empty-new-note", tr("New Note"), true, tokens)
+                button("empty-new-note", tr("New Note"), true, tokens)
                     .on_click(|_, window, cx| window.dispatch_action(Box::new(NewNote), cx)),
             )
         };
@@ -459,14 +501,22 @@ impl GalleryView {
                 .filter(|other| other.path == folder.path || other.path.starts_with(&prefix))
                 .map(|other| other.notes)
                 .sum();
+            if let Some((field, renamed)) = self.renaming_folder()
+                && *renamed == folder.path
+            {
+                rows.push(super::folders::name_field(field, depth, tokens));
+                continue;
+            }
             let scope = Scope::Folder(folder.path.clone());
             let on = self.scope == scope;
+            let (gallery, path) = (cx.entity().downgrade(), folder.path.clone());
             rows.push(
                 menu_row(("folder", index), IconName::Folder, name, tokens)
                     .pl(px(12. + 18. * depth as f32))
                     .when(on, |row| row.bg(tokens.selected))
                     .child(count(notes, tokens))
                     .on_click(cx.listener(move |this, _, _, cx| this.set_scope(scope.clone(), cx)))
+                    .context_menu(move |menu, _, _| super::folders::menu(menu, &gallery, &path))
                     .into_any_element(),
             );
         }
@@ -504,20 +554,33 @@ impl GalleryView {
                 .on_click(cx.listener(|this, _, window, cx| this.start_new_folder(window, cx)))
                 .into_any_element(),
         };
+        let tags = self.render_tag_rows(tokens, cx);
         let smart = self.render_smart_rows(tokens, cx);
         let new_smart_folder = self.render_new_smart_folder(tokens, cx);
+        // What is created stays in view under the lists, which scroll.
+        let lists = div()
+            .id("folders-lists")
+            .flex()
+            .flex_col()
+            .flex_shrink(1.)
+            .min_h_0()
+            .overflow_y_scroll()
+            .children(rows)
+            .when(!smart.is_empty(), |lists| {
+                lists.child(separator(tokens)).children(smart)
+            })
+            .child(separator(tokens))
+            .child(trash)
+            // Last, as there can be many.
+            .when(!tags.is_empty(), |lists| {
+                lists.child(separator(tokens)).children(tags)
+            });
         surface(tokens)
             .id("folders-popover")
             .on_action(cx.listener(|this, _: &input::Escape, _, cx| this.set_popover(None, cx)))
             .w(px(250.))
             .max_h(px(520.))
-            .overflow_y_scroll()
-            .children(rows)
-            .when(!smart.is_empty(), |popover| {
-                popover.child(separator(tokens)).children(smart)
-            })
-            .child(separator(tokens))
-            .child(trash)
+            .child(lists)
             .child(separator(tokens))
             .child(new_folder)
             .child(new_smart_folder)
@@ -653,25 +716,4 @@ pub(super) fn separator(tokens: &Tokens) -> impl IntoElement {
         .mx(px(6.))
         .my(px(4.))
         .bg(tokens.hair)
-}
-
-/// `.btn` of the prototype; `primary` is `.btn.pri`.
-fn pill(id: &'static str, label: String, primary: bool, tokens: &Tokens) -> Stateful<Div> {
-    div()
-        .id(id)
-        .flex()
-        .items_center()
-        .h(px(30.))
-        .px(px(13.))
-        .rounded(px(8.))
-        .text_size(tokens.text(12.5))
-        .font_weight(FontWeight::BOLD)
-        .cursor_pointer()
-        .when(primary, |button| {
-            button.bg(tokens.accent).text_color(tokens.on_accent)
-        })
-        .when(!primary, |button| {
-            button.bg(tokens.selected).text_color(tokens.fg)
-        })
-        .child(label)
 }

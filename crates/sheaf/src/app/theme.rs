@@ -177,8 +177,7 @@ impl Appearance {
     }
 }
 
-/// `SHEAF_THEME` and `SHEAF_ACCENT`: fixed values that win over the desktop, for tests
-/// and screenshots.
+/// Fixed values that win over the desktop, for tests and screenshots.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Overrides {
     pub dark: Option<bool>,
@@ -186,38 +185,11 @@ pub struct Overrides {
 }
 
 impl Overrides {
-    pub fn from_process() -> Self {
-        Self::parse(
-            std::env::var("SHEAF_THEME").ok().as_deref(),
-            std::env::var("SHEAF_ACCENT").ok().as_deref(),
-        )
-    }
-
-    /// Values that do not parse are ignored.
-    pub fn parse(theme: Option<&str>, accent: Option<&str>) -> Self {
-        Overrides {
-            dark: match theme {
-                Some("dark") => Some(true),
-                Some("light") => Some(false),
-                _ => None,
-            },
-            accent: accent.and_then(parse_hex_color),
-        }
-    }
-
     fn apply(self, mut appearance: Appearance) -> Appearance {
         appearance.dark = self.dark.unwrap_or(appearance.dark);
         appearance.accent = self.accent.unwrap_or(appearance.accent);
         appearance
     }
-}
-
-/// `#rrggbb` as `0xRRGGBB`.
-fn parse_hex_color(text: &str) -> Option<u32> {
-    let digits = text.strip_prefix('#')?;
-    (digits.len() == 6 && digits.bytes().all(|byte| byte.is_ascii_hexdigit()))
-        .then(|| u32::from_str_radix(digits, 16).ok())
-        .flatten()
 }
 
 /// What the views draw with. Colours are the Sheaf column of 04, "Farben".
@@ -626,21 +598,19 @@ mod tests {
     }
 
     #[test]
-    fn overrides_parse_and_win() {
-        assert_eq!(Overrides::parse(None, None), Overrides::default());
-        assert_eq!(
-            Overrides::parse(Some("sepia"), Some("blue")),
-            Overrides::default()
-        );
-        assert_eq!(Overrides::parse(None, Some("#12345")), Overrides::default());
-        let overrides = Overrides::parse(Some("light"), Some("#E62D42"));
-        assert_eq!(overrides.dark, Some(false));
-        assert_eq!(overrides.accent, Some(0xe62d42));
-
+    fn overrides_win() {
+        let overrides = Overrides {
+            dark: Some(false),
+            accent: Some(0xe62d42),
+        };
         let applied = overrides.apply(Appearance::default());
         assert!(!applied.dark);
         assert_eq!(applied.accent, 0xe62d42);
         assert_eq!(applied.font_family, "Adwaita Sans");
+        assert_eq!(
+            Overrides::default().apply(Appearance::default()),
+            Appearance::default()
+        );
     }
 
     #[test]

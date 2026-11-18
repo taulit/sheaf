@@ -6,7 +6,19 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories = ["gui", "text-editors"]
 publish.workspace = true
+
+[features]
+# The measurements of scripts/budgets.sh: generated notes, the start, scrolling.
+budgets = ["sheaf-core/testgen"]
+
+[[bin]]
+name = "sheaf-budgets"
+path = "src/bin/sheaf-budgets.rs"
+required-features = ["budgets"]
 
 [dependencies]
 sheaf-core.workspace = true

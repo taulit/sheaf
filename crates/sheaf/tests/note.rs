@@ -10,82 +10,21 @@ use std::os::unix::fs::PermissionsExt as _;
 use std::path::Path;
 use std::time::Duration;
 
-use fixture::{Look, Notes};
-use gpui::{Entity, EntityInputHandler as _, TestAppContext, VisualTestContext, point, px};
+use fixture::{Notes, TestApp, open_app};
+use gpui::{Entity, EntityInputHandler as _, Focusable as _, TestAppContext, point, px};
 use gpui_component::ActiveTheme as _;
 use gpui_markdown_editor::{BlockId, DocMeta, EditorEvent, MarkdownEditor, TextPos};
 use sheaf::app::actions;
 use sheaf::app::instance::Request;
-use sheaf::app::library::{Library, LibraryEvent};
-use sheaf::app::note::{Banner, NoteView, Popover, RENAME_DELAY, SAVE_DELAY};
+use sheaf::app::library::LibraryEvent;
+use sheaf::app::note::{Banner, Popover, RENAME_DELAY, SAVE_DELAY};
 use sheaf::app::overlays::shortcuts;
 use sheaf::app::state::Recovery;
 use sheaf::app::theme::ActiveTokens as _;
-use sheaf::app::window::{self, MainWindow, Route};
-use sheaf_core::{NoteId, NoteMeta, Sort};
-
-struct TestApp {
-    library: Entity<Library>,
-    main: Entity<MainWindow>,
-    cx: &'static mut VisualTestContext,
-}
-
-fn open_app(notes: &Notes, cx: &mut TestAppContext) -> TestApp {
-    let library = cx.update(|cx| {
-        fixture::init_app(Look::default(), cx);
-        fixture::open_library(notes, cx)
-    });
-    let (window, main) = cx
-        .update(|cx| window::open(library.clone(), None, cx))
-        .unwrap();
-    let cx = VisualTestContext::from_window(window.into(), cx).into_mut();
-    cx.run_until_parked();
-    TestApp { library, main, cx }
-}
+use sheaf::app::window::Route;
+use sheaf_core::{NoteId, Sort};
 
 impl TestApp {
-    fn route(&mut self) -> Route {
-        self.main.read_with(self.cx, |main, cx| main.route(cx))
-    }
-
-    fn listed(&mut self) -> Vec<NoteMeta> {
-        self.main
-            .read_with(self.cx, |main, cx| main.gallery().read(cx).notes().to_vec())
-    }
-
-    fn id_of(&mut self, title: &str) -> NoteId {
-        let note = self.listed().into_iter().find(|note| note.title == title);
-        note.unwrap_or_else(|| panic!("no note titled {title}")).id
-    }
-
-    fn open(&mut self, title: &str) -> Entity<NoteView> {
-        let id = self.id_of(title);
-        self.request(Request::OpenNote {
-            id: id.to_string(),
-            query: String::new(),
-        });
-        self.note()
-    }
-
-    fn note(&mut self) -> Entity<NoteView> {
-        self.main
-            .read_with(self.cx, |main, _| main.note().cloned())
-            .expect("a note is open")
-    }
-
-    fn request(&mut self, request: Request) {
-        let main = self.main.clone();
-        self.cx.update(|window, cx| {
-            main.update(cx, |main, cx| main.handle(request, window, cx));
-        });
-        self.cx.run_until_parked();
-    }
-
-    fn editor_text(&mut self) -> String {
-        let note = self.note();
-        note.read_with(self.cx, |note, cx| note.editor().read(cx).markdown())
-    }
-
     /// The blocks of which some part is in the window. The editor has no getter for
     /// its scroll position, and it maps points to text only in the block of the
     /// caret; so the caret visits every block and the window is probed from top to
@@ -121,27 +60,12 @@ impl TestApp {
         self.cx.run_until_parked();
     }
 
-    fn note_do(&mut self, update: impl FnOnce(&mut NoteView, &mut gpui::Context<NoteView>)) {
-        let note = self.note();
-        note.update(self.cx, update);
-        self.cx.run_until_parked();
-    }
-
     /// What the editor would report after a click on a link, tag and so on.
     fn editor_emits(&mut self, event: EditorEvent) {
         let note = self.note();
         let editor = note.read_with(self.cx, |note, _| note.editor().clone());
         editor.update(self.cx, |_, cx| cx.emit(event));
         self.cx.run_until_parked();
-    }
-
-    fn toast(&mut self) -> Option<String> {
-        self.main.read_with(self.cx, |main, cx| {
-            main.toasts()
-                .read(cx)
-                .shown()
-                .map(|toast| toast.message.to_string())
-        })
     }
 
     /// Another program changed notes; this is what the service reports then.
@@ -322,7 +246,7 @@ async fn a_failed_save_says_so_keeps_the_view_and_saves_once_it_can(cx: &mut Tes
     assert_eq!(app.banner(), failed);
 
     chmod(&folder, 0o755);
-    app.note_do(|note, cx| note.retry_save(cx));
+    app.note_do(|note, _, cx| note.retry_save(cx));
     assert_eq!(app.banner(), None);
     let renamed = "Arbeit/Eins Zwei Notch-Ideen.md";
     assert!(
@@ -414,7 +338,7 @@ async fn own_saves_never_look_like_changes_elsewhere(cx: &mut TestAppContext) {
         app.changed_elsewhere(vec![id]);
         app.changed_elsewhere(Vec::new());
     }
-    app.note_do(|note, cx| note.toggle_pin(cx));
+    app.note_do(|note, _, cx| note.toggle_pin(cx));
     app.wait(RENAME_DELAY);
     assert_eq!(app.banner(), None);
     assert!(app.editor_text().starts_with("Eins Zwei Drei Notch-Ideen"));
@@ -443,7 +367,7 @@ async fn a_change_elsewhere_with_unsaved_edits_asks_and_reload_takes_the_disk(
     app.wait(RENAME_DELAY);
     assert!(notes.read(NOTCH).contains("Von Syncthing."));
 
-    app.note_do(|note, cx| note.reload_from_disk(cx));
+    app.note_do(|note, _, cx| note.reload_from_disk(cx));
     assert_eq!(app.banner(), None);
     assert_eq!(app.editor_text(), "Notch-Ideen\n\nVon Syncthing.\n");
     app.cx.simulate_keystrokes("escape");
@@ -462,7 +386,7 @@ async fn keep_mine_stores_the_edits_as_a_conflict_copy(cx: &mut TestAppContext) 
     app.wait(SAVE_DELAY);
     assert_eq!(app.banner(), Some(Banner::ChangedOnDisk));
 
-    app.note_do(|note, cx| note.keep_mine(cx));
+    app.note_do(|note, _, cx| note.keep_mine(cx));
     assert_eq!(app.banner(), None);
     assert!(notes.read(NOTCH).contains("Von Syncthing."), "theirs stays");
     let copy = "Arbeit/Meins Notch-Ideen (conflict).md";
@@ -556,7 +480,7 @@ async fn a_note_deleted_elsewhere_can_be_saved_as_new(cx: &mut TestAppContext) {
     assert_eq!(app.banner(), Some(Banner::DeletedOnDisk));
     assert!(app.editor_text().starts_with("Rettung "));
 
-    app.note_do(|note, cx| note.save_as_new(cx));
+    app.note_do(|note, _, cx| note.save_as_new(cx));
     assert_eq!(app.banner(), None);
     assert!(
         notes
@@ -573,12 +497,12 @@ async fn pin_move_copy_and_delete_with_undo(cx: &mut TestAppContext) {
     let mut app = open_app(&notes, cx);
     app.open("Notch-Ideen");
 
-    app.note_do(|note, cx| note.toggle_pin(cx));
+    app.note_do(|note, _, cx| note.toggle_pin(cx));
     assert!(notes.read(NOTCH).contains("pinned: true"));
-    app.note_do(|note, cx| note.toggle_pin(cx));
+    app.note_do(|note, _, cx| note.toggle_pin(cx));
     assert!(!notes.read(NOTCH).contains("pinned"));
 
-    app.note_do(|note, cx| note.copy_markdown(cx));
+    app.note_do(|note, _, cx| note.copy_markdown(cx));
     let copied = app.cx.read_from_clipboard().and_then(|item| item.text());
     assert!(copied.unwrap().starts_with("Notch-Ideen\n\n"));
     let toast = app.main.read_with(app.cx, |main, cx| {
@@ -589,7 +513,7 @@ async fn pin_move_copy_and_delete_with_undo(cx: &mut TestAppContext) {
     });
     assert_eq!(toast.as_deref(), Some("Copied as Markdown"));
 
-    app.note_do(|note, cx| note.set_popover(Some(Popover::Move(Vec::new())), cx));
+    app.note_do(|note, _, cx| note.set_popover(Some(Popover::Move(Vec::new())), cx));
     let folders = app
         .note()
         .read_with(app.cx, |note, _| match note.popover() {
@@ -597,7 +521,7 @@ async fn pin_move_copy_and_delete_with_undo(cx: &mut TestAppContext) {
             _ => 0,
         });
     assert_eq!(folders, 7, "the root and the six folders");
-    app.note_do(|note, cx| note.move_to("Privat", cx));
+    app.note_do(|note, _, cx| note.move_to("Privat", cx));
     assert!(notes.files().contains(&"Privat/Notch-Ideen.md".to_owned()));
     assert_eq!(
         app.note()
@@ -687,7 +611,7 @@ async fn delete_on_a_note_changed_elsewhere_asks_first(cx: &mut TestAppContext) 
     assert!(app.editor_text().starts_with("Meins Notch-Ideen"));
 
     // Once it is answered, Delete takes the note the view shows.
-    app.note_do(|note, cx| note.keep_mine(cx));
+    app.note_do(|note, _, cx| note.keep_mine(cx));
     app.cx.dispatch_action(actions::Trash);
     app.cx.run_until_parked();
     assert_eq!(app.route(), Route::Gallery);
@@ -705,7 +629,7 @@ async fn escape_closes_a_popover_before_it_leaves(cx: &mut TestAppContext) {
     let notes = Notes::seeded();
     let mut app = open_app(&notes, cx);
     app.open("Notch-Ideen");
-    app.note_do(|note, cx| note.set_popover(Some(Popover::Menu), cx));
+    app.note_do(|note, _, cx| note.set_popover(Some(Popover::Menu), cx));
     app.cx.simulate_keystrokes("escape");
     assert!(matches!(app.route(), Route::Note { .. }));
     assert_eq!(
@@ -722,7 +646,7 @@ async fn toasts_go_away_after_5_s(cx: &mut TestAppContext) {
     let notes = Notes::seeded();
     let mut app = open_app(&notes, cx);
     app.open("Notch-Ideen");
-    app.note_do(|note, cx| note.copy_markdown(cx));
+    app.note_do(|note, _, cx| note.copy_markdown(cx));
     let shown = |app: &mut TestApp| {
         app.main
             .read_with(app.cx, |main, cx| main.toasts().read(cx).shown().is_some())
@@ -921,6 +845,43 @@ async fn the_palette_lists_commands_and_notes_and_runs_them(cx: &mut TestAppCont
     assert_eq!(app.route(), Route::Gallery);
 }
 
+/// Inside the text Ctrl+K stays the palette (plan 03 §5); the editor's link prompt is
+/// on Ctrl+Shift+K.
+#[gpui::test]
+async fn ctrl_k_in_the_text_is_the_palette_and_ctrl_shift_k_links(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let mut app = open_app(&notes, cx);
+    let note = app.open("Notch-Ideen");
+    let editor = note.read_with(app.cx, |note, _| note.editor().clone());
+    app.cx.update(|window, cx| {
+        editor.update(cx, |editor, cx| {
+            let block = editor.document().blocks()[1].id();
+            let start = TextPos { block, offset: 4 };
+            let end = TextPos { block, offset: 9 };
+            editor.__set_selection(start, end, cx);
+        });
+        editor.focus_handle(cx).focus(window, cx);
+        cx.write_to_clipboard(gpui::ClipboardItem::new_string(
+            "https://example.org".to_owned(),
+        ));
+    });
+
+    app.cx.simulate_keystrokes("ctrl-k");
+    assert!(palette_entries(&mut app).is_some());
+    app.cx.simulate_keystrokes("escape");
+    assert!(palette_entries(&mut app).is_none());
+    assert!(!app.editor_text().contains("example.org"));
+
+    app.cx
+        .update(|window, cx| editor.focus_handle(cx).focus(window, cx));
+    app.cx.simulate_keystrokes("ctrl-shift-k enter");
+    let text = app.editor_text();
+    assert!(
+        text.contains("Was [die N](https://example.org)otch"),
+        "{text}"
+    );
+}
+
 #[gpui::test]
 async fn the_shortcuts_list_shows_every_binding(cx: &mut TestAppContext) {
     let notes = Notes::seeded();
@@ -1061,7 +1022,7 @@ async fn a_pin_or_move_that_fails_says_so_and_shows_the_real_state(cx: &mut Test
     // Unsaved edits and the file changed on disk: nothing is pinned.
     app.cx.simulate_input("Meins ");
     edit_elsewhere(&notes, "Notch-Ideen\n\nVon Syncthing.\n");
-    app.note_do(|note, cx| note.toggle_pin(cx));
+    app.note_do(|note, _, cx| note.toggle_pin(cx));
     assert!(!notes.read(NOTCH).contains("pinned"));
     assert!(!pinned(&mut app), "the icon flips back");
     assert_eq!(
@@ -1069,14 +1030,14 @@ async fn a_pin_or_move_that_fails_says_so_and_shows_the_real_state(cx: &mut Test
         Some("Could not pin the note: the file changed elsewhere")
     );
     assert_eq!(app.banner(), Some(Banner::ChangedOnDisk));
-    app.note_do(|note, cx| note.reload_from_disk(cx));
+    app.note_do(|note, _, cx| note.reload_from_disk(cx));
     let id = note.read_with(app.cx, |note, _| note.id().clone());
     app.changed_elsewhere(vec![id]);
 
     // A folder that cannot be written to.
     let target = notes.dir.join("Privat");
     chmod(&target, 0o555);
-    app.note_do(|note, cx| note.move_to("Privat", cx));
+    app.note_do(|note, _, cx| note.move_to("Privat", cx));
     chmod(&target, 0o755);
     assert!(notes.files().contains(&NOTCH.to_owned()));
     assert_eq!(
@@ -1110,4 +1071,69 @@ async fn a_note_found_for_an_earlier_query_opens_with_that_query(cx: &mut TestAp
             query: "shakshuka".to_owned()
         }
     );
+}
+
+#[gpui::test]
+async fn a_sync_conflict_copy_is_marked_in_the_gallery_and_the_note(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    notes.write(
+        "Privat/Einkauf.sync-conflict-20261116-132400-ABCDEFG.md",
+        "Einkauf\n\n- [ ] Milch\n- [ ] Brot\n",
+    );
+    let mut app = open_app(&notes, cx);
+    app.cx.update(|window, cx| window.draw(cx).clear(cx));
+    assert!(app.cx.debug_bounds("conflict-badge").is_some());
+    assert!(app.cx.debug_bounds("conflict-hint").is_none());
+
+    let copy = app
+        .listed()
+        .into_iter()
+        .find(|note| note.conflict)
+        .expect("the copy is listed");
+    app.request(Request::OpenNote {
+        id: copy.id.to_string(),
+        query: String::new(),
+    });
+    app.cx.update(|window, cx| window.draw(cx).clear(cx));
+    assert!(app.cx.debug_bounds("conflict-hint").is_some());
+}
+
+#[gpui::test]
+async fn a_swipe_to_the_right_on_the_touchpad_goes_back(cx: &mut TestAppContext) {
+    use gpui::{ScrollDelta, ScrollEvent};
+
+    let notes = Notes::seeded();
+    let mut app = open_app(&notes, cx);
+    let scroll = |app: &mut TestApp, dx: f32, dy: f32| {
+        let center = app.cx.update(|window, _| {
+            let size = window.viewport_size();
+            point(size.width / 2., size.height / 2.)
+        });
+        app.cx.simulate_event(ScrollEvent {
+            position: center,
+            delta: ScrollDelta::Pixels(point(px(dx), px(dy))),
+            ..ScrollEvent::default()
+        });
+        app.cx.executor().advance_clock(Duration::from_millis(10));
+        app.cx.run_until_parked();
+    };
+
+    app.open("Ausschreibung – offene Fragen");
+    app.cx.update(|window, cx| window.draw(cx).clear(cx));
+    for _ in 0..10 {
+        scroll(&mut app, 0., -30.);
+    }
+    for _ in 0..3 {
+        scroll(&mut app, 40., 0.);
+    }
+    assert!(
+        matches!(app.route(), Route::Note { .. }),
+        "scrolling, then drifting sideways, stays"
+    );
+
+    app.cx.executor().advance_clock(Duration::from_secs(1));
+    for _ in 0..6 {
+        scroll(&mut app, 30., 1.);
+    }
+    assert_eq!(app.route(), Route::Gallery);
 }

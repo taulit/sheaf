@@ -1,0 +1,154 @@
+name: Release
+
+# Push a tag vX.Y.Z and this builds the release tarball, the zip of the Visor module and
+# the release notes from CHANGELOG.md, and creates a DRAFT GitHub release. Nothing is
+# published: look at the draft, then publish it by hand (docs/release-checklist.md).
+#
+# Steps marked NEEDS EDITOR build or fetch taulit/gpui-markdown-editor, a private
+# repository. Without a token that can read it they cannot run, so they are off until the
+# repository variable FLATPAK_BUNDLE is 'true' and the secret EDITOR_TOKEN exists. Nothing
+# else in this file needs the editor.
+
+on:
+  push:
+    # A filter is a glob, not a regex; the first step checks the version strictly.
+    tags: ['v[0-9]+.[0-9]+.[0-9]+', 'v[0-9]+.[0-9]+.[0-9]+-[0-9A-Za-z]*']
+
+# Every job reads only; the draft release job asks for more itself. Values from the tag
+# reach shell only through env and quoted variables, never as ${{ }} inside run.
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  verify:
+    name: versions agree
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: version
+        name: Version from the tag, strict semver
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          semver='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'
+          if [[ ! "$v" =~ $semver ]]; then
+            echo "::error::tag $GITHUB_REF_NAME is not v<semver>"
+            exit 1
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+      - env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: scripts/check-release.sh "$VERSION"
+      - name: Release notes exist
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: scripts/release-notes.sh "$VERSION" > /dev/null
+
+  tarball:
+    name: source tarball
+    needs: verify
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Archive the tag
+        # The AUR package takes its checksum from this file, so it must not change between
+        # runs: git archive is deterministic and gzip -n leaves out the file time.
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          v="$VERSION"
+          mkdir dist
+          git archive --format=tar --prefix="sheaf-$v/" "$GITHUB_REF_NAME" | gzip -n -9 > "dist/sheaf-$v.tar.gz"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tarball
+          path: dist/
+
+  visor-module:
+    name: Visor module zip
+    needs: verify
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install system packages
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends gjs gettext jq zip
+      - run: scripts/test-visor-module.sh
+      - run: scripts/pack-visor-module.sh dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: visor-module
+          path: dist/*.zip
+
+  flatpak-bundle:
+    name: Flatpak bundle (NEEDS EDITOR)
+    needs: verify
+    # Off until the editor can be fetched (docs/release-checklist.md, blockers).
+    if: vars.FLATPAK_BUNDLE == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install Flatpak and the runtime
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends flatpak flatpak-builder
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y --noninteractive flathub \
+            org.freedesktop.Platform//26.08 org.freedesktop.Sdk//26.08 \
+            org.freedesktop.Sdk.Extension.rust-stable//26.08
+      - name: Let git read the private editor repository (NEEDS EDITOR)
+        env:
+          EDITOR_TOKEN: ${{ secrets.EDITOR_TOKEN }}
+        run: |
+          git config --global url."https://x-access-token:${EDITOR_TOKEN}@github.com/taulit/gpui-markdown-editor".insteadOf "https://github.com/taulit/gpui-markdown-editor"
+      - name: Build from this checkout instead of the tag's git source (NEEDS EDITOR)
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          python3 -I - <<'PY'
+          import yaml
+          path = "build-aux/flatpak/io.github.taulit.Sheaf.yml"
+          manifest = yaml.safe_load(open(path))
+          sources = manifest["modules"][0]["sources"]
+          sources[0] = {"type": "dir", "path": "../.."}
+          yaml.safe_dump(manifest, open("build-aux/flatpak/ci.yml", "w"), sort_keys=False)
+          PY
+          flatpak-builder --user --force-clean --disable-rofiles-fuse --repo=repo \
+            build build-aux/flatpak/ci.yml
+          flatpak build-bundle repo "sheaf-$VERSION.flatpak" io.github.taulit.Sheaf
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flatpak
+          path: sheaf-*.flatpak
+
+  draft-release:
+    name: draft release
+    needs: [verify, tarball, visor-module, flatpak-bundle]
+    # The Flatpak job is usually skipped; a failure of any job must still stop the release.
+    if: ${{ !cancelled() && !failure() }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums and notes
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          (cd dist && sha256sum * > SHA256SUMS)
+          scripts/release-notes.sh "$VERSION" > notes.md
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          v="$VERSION"
+          case "$v" in *-*) pre=--prerelease ;; *) pre= ;; esac
+          gh release create "$GITHUB_REF_NAME" --draft $pre \
+            --title "Sheaf $v" --notes-file notes.md dist/*

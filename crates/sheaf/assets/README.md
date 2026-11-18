@@ -12,6 +12,10 @@ text colour, so their own fill colour does not matter.
 
 | File | Adwaita name |
 |---|---|
+| `alarm.svg` | `status/alarm-symbolic` |
+| `applications-science.svg` | `categories/applications-science-symbolic` |
+| `camera-photo.svg` | `devices/camera-photo-symbolic` |
+| `dialog-warning.svg` | `status/dialog-warning-symbolic` |
 | `document-edit.svg` | `actions/document-edit-symbolic` |
 | `document-print.svg` | `actions/document-print-symbolic` |
 | `document-save-as.svg` | `actions/document-save-as-symbolic` |
@@ -20,6 +24,8 @@ text colour, so their own fill colour does not matter.
 | `edit-delete.svg` | `actions/edit-delete-symbolic` |
 | `edit-find.svg` | `actions/edit-find-symbolic` |
 | `edit-undo.svg` | `actions/edit-undo-symbolic` |
+| `emoji-food.svg` | `categories/emoji-food-symbolic` |
+| `emoji-travel.svg` | `categories/emoji-travel-symbolic` |
 | `folder.svg` | `places/folder-symbolic` |
 | `folder-new.svg` | `actions/folder-new-symbolic` |
 | `folder-saved-search.svg` | `places/folder-saved-search-symbolic` |
@@ -33,7 +39,9 @@ text colour, so their own fill colour does not matter.
 | `pan-down.svg` | `ui/pan-down-symbolic` |
 | `send-to.svg` | `actions/send-to-symbolic` |
 | `sidebar-show.svg` | `actions/sidebar-show-symbolic` |
+| `starred.svg` | `status/starred-symbolic` |
 | `text-x-generic.svg` | `mimetypes/text-x-generic-symbolic` |
+| `user-home.svg` | `places/user-home-symbolic` |
 | `user-trash.svg` | `places/user-trash-symbolic` |
 | `view-grid.svg` | `actions/view-grid-symbolic` |
 | `view-list.svg` | `actions/view-list-symbolic` |
@@ -41,6 +49,7 @@ text colour, so their own fill colour does not matter.
 | `view-pin.svg` | `actions/view-pin-symbolic` |
 | `view-sort-descending.svg` | `actions/view-sort-descending-symbolic` |
 | `window-close.svg` | `ui/window-close-symbolic` |
+| `x-office-calendar.svg` | `mimetypes/x-office-calendar-symbolic` |
 
 To add one: copy `<name>-symbolic.svg` here as `<name>.svg`, add a row above and a
 variant to `IconName` in `src/app/assets.rs`.

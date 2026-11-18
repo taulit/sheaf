@@ -29,6 +29,9 @@ use crate::library::Library;
 
 const GICON: &str = "io.github.taulit.Sheaf";
 const PROVIDER_RESULTS: u32 = 20;
+/// How long the service keeps the index open after the last request or change. The
+/// shell asks once per keystroke, so a search stays on one open index.
+const RELEASE_AFTER: Duration = Duration::from_secs(5);
 
 /// State shared by both interfaces and the background tasks.
 struct Shared {
@@ -366,6 +369,7 @@ pub async fn serve(
                 while let Ok(more) = batches.try_recv() {
                     batch.extend(more);
                 }
+                let _busy = shared.busy();
                 match shared.locked(move |library| library.apply(batch)).await {
                     Ok(ids) => emit_changed(&emitter, &ids).await,
                     Err(err) => log::error!("cannot index changed notes: {err}"),
@@ -384,12 +388,14 @@ pub async fn serve(
 enum Wake {
     Stop,
     Idle,
+    Release,
     Request,
     App(bool),
 }
 
 /// Returns on SIGTERM or SIGINT, when the bus goes away, or once `idle_timeout` passed
-/// without a request while the app is not running. Sleeps in between.
+/// without a request while the app is not running. Sleeps in between, and lets go of
+/// the index [`RELEASE_AFTER`] the last request.
 async fn wait_for_exit(
     conn: &Connection,
     shared: &Shared,
@@ -402,9 +408,11 @@ async fn wait_for_exit(
         .receive_name_owner_changed_with_args(&[(0, APP_NAME)])
         .await?;
     let mut app_running = dbus.name_has_owner(BusName::try_from(APP_NAME)?).await?;
+    let mut released = false;
     loop {
         let mut activity = pin!(shared.activity.listen());
         let mut timer = pin!(runtime.sleep(idle_timeout));
+        let mut release = pin!(runtime.sleep(RELEASE_AFTER));
         let wake = poll_fn(|cx| {
             if stop.poll_recv(cx).is_ready() {
                 return Poll::Ready(Wake::Stop);
@@ -423,6 +431,9 @@ async fn wait_for_exit(
             if !app_running && timer.as_mut().poll(cx).is_ready() {
                 return Poll::Ready(Wake::Idle);
             }
+            if !released && release.as_mut().poll(cx).is_ready() {
+                return Poll::Ready(Wake::Release);
+            }
             Poll::Pending
         })
         .await;
@@ -432,7 +443,11 @@ async fn wait_for_exit(
                 log::info!("idle for {} s, exiting", idle_timeout.as_secs());
                 return Ok(());
             }
-            Wake::Request => {}
+            Wake::Release => {
+                shared.locked(Library::release).await;
+                released = true;
+            }
+            Wake::Request => released = false,
             Wake::App(running) => app_running = running,
         }
     }

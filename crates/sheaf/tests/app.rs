@@ -9,11 +9,9 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Duration;
 
-use fixture::{Look, Notes};
-use gpui::{
-    Background, Entity, Hsla, ListOffset, TestAppContext, VisualTestContext, WindowHandle, px, size,
-};
-use gpui_component::{Root, Theme, WindowExt as _};
+use fixture::{Look, Notes, TestApp, open_app, open_app_with_state, open_window};
+use gpui::{Background, Entity, Hsla, ListOffset, TestAppContext, px, size};
+use gpui_component::{Theme, WindowExt as _};
 use gpui_markdown_editor::EditorEvent;
 use sheaf::app::actions::{self, CloseWindow};
 use sheaf::app::instance::Request;
@@ -21,85 +19,49 @@ use sheaf::app::library::{Library, LibraryEvent, LibraryMode};
 use sheaf::app::quick;
 use sheaf::app::state::{StateFile, WindowState};
 use sheaf::app::theme::{self, ActiveTokens as _, Appearance, Overrides};
-use sheaf::app::window::{self, MainWindow, Route};
+use sheaf::app::window::Route;
 use sheaf_core::config::View;
-use sheaf_core::{CreateOptions, Error, Filter, NoteId, NoteMeta, Sort};
-
-/// The app with its main window on `notes`.
-struct TestApp {
-    library: Entity<Library>,
-    window: WindowHandle<Root>,
-    main: Entity<MainWindow>,
-    cx: &'static mut VisualTestContext,
-}
-
-fn open_app(notes: &Notes, state_file: Option<StateFile>, cx: &mut TestAppContext) -> TestApp {
-    let library = cx.update(|cx| {
-        fixture::init_app(Look::default(), cx);
-        fixture::open_library(notes, cx)
-    });
-    open_window(library, state_file, cx)
-}
-
-fn open_window(
-    library: Entity<Library>,
-    state_file: Option<StateFile>,
-    cx: &mut TestAppContext,
-) -> TestApp {
-    let (window, main) = cx
-        .update(|cx| window::open(library.clone(), state_file, cx))
-        .unwrap();
-    let cx = VisualTestContext::from_window(window.into(), cx).into_mut();
-    cx.run_until_parked();
-    TestApp {
-        library,
-        window,
-        main,
-        cx,
-    }
-}
+use sheaf_core::{CreateOptions, Error, Filter, Fingerprint, NoteId, NoteMeta, Sort, WriteOptions};
 
 impl TestApp {
-    fn route(&mut self) -> Route {
-        self.main.read_with(self.cx, |main, cx| main.route(cx))
-    }
-
-    fn listed(&mut self) -> Vec<NoteMeta> {
-        self.main
-            .read_with(self.cx, |main, cx| main.gallery().read(cx).notes().to_vec())
-    }
-
-    fn titles(&mut self) -> Vec<String> {
-        self.listed().into_iter().map(|note| note.title).collect()
-    }
-
     fn selected(&mut self) -> Option<String> {
         self.main.read_with(self.cx, |main, cx| {
             let gallery = main.gallery().read(cx);
             gallery.selected().map(|note| note.title.clone())
         })
     }
+}
 
-    /// The Markdown in the editor of the open note.
-    fn editor_text(&mut self) -> String {
-        self.main.read_with(self.cx, |main, cx| {
-            let note = main.note().expect("a note is open").read(cx);
-            note.editor().read(cx).markdown()
+/// What a note is after [`save`], and the state of its file then.
+#[derive(Debug)]
+struct Saved {
+    meta: NoteMeta,
+    fingerprint: Fingerprint,
+}
+
+/// What the note view's save does: `body` into the note, unless its file changed since
+/// `expected`.
+fn save(
+    library: &Entity<Library>,
+    id: &NoteId,
+    body: &str,
+    expected: Option<Fingerprint>,
+    cx: &mut TestAppContext,
+) -> gpui::Task<sheaf_core::Result<Saved>> {
+    let (id, body) = (id.clone(), body.to_owned());
+    library.update(cx, |library, cx| {
+        library.run(cx, move |store, touched| {
+            let before = (id.clone(), store.path_of(&id)?);
+            let options = WriteOptions {
+                rename: false,
+                expected,
+            };
+            let meta = store.write_body(&id, &body, &options)?;
+            touched.wrote(Some(before), &meta);
+            let fingerprint = store.fingerprint(&meta.id)?;
+            Ok(Saved { meta, fingerprint })
         })
-    }
-
-    fn request(&mut self, request: Request) {
-        let main = self.main.clone();
-        self.cx.update(|window, cx| {
-            main.update(cx, |main, cx| main.handle(request, window, cx));
-        });
-        self.cx.run_until_parked();
-    }
-
-    fn id_of(&mut self, title: &str) -> NoteId {
-        let note = self.listed().into_iter().find(|note| note.title == title);
-        note.unwrap_or_else(|| panic!("no note titled {title}")).id
-    }
+    })
 }
 
 fn record_events(
@@ -253,13 +215,15 @@ async fn library_writes_update_the_lists_and_tell_listeners(cx: &mut TestAppCont
         .await
         .unwrap();
     assert_eq!(loaded.body(), "Neue Idee\n\nNoch roh.\n");
-    let saved = library
-        .update(cx, |library, cx| {
-            let body = "Bessere Idee\n\nAusgearbeitet. #einfall".to_owned();
-            library.save_body(&created.id, body, Some(loaded.fingerprint), cx)
-        })
-        .await
-        .unwrap();
+    let saved = save(
+        &library,
+        &created.id,
+        "Bessere Idee\n\nAusgearbeitet. #einfall",
+        Some(loaded.fingerprint),
+        cx,
+    )
+    .await
+    .unwrap();
     assert_eq!(saved.meta.title, "Bessere Idee");
     assert_eq!(
         saved.meta.rel_path, "Neue Idee.md",
@@ -273,29 +237,37 @@ async fn library_writes_update_the_lists_and_tell_listeners(cx: &mut TestAppCont
     assert_eq!(hits.total, 1);
 
     // The file has moved on since `loaded`: nothing is written.
-    let stale = library
-        .update(cx, |library, cx| {
-            library.save_body(
-                &created.id,
-                "Überschrieben".to_owned(),
-                Some(loaded.fingerprint),
-                cx,
-            )
-        })
-        .await;
+    let stale = save(
+        &library,
+        &created.id,
+        "Überschrieben",
+        Some(loaded.fingerprint),
+        cx,
+    )
+    .await;
     assert!(matches!(stale, Err(Error::Conflict(_))), "{stale:?}");
     assert!(notes.read("Neue Idee.md").contains("Ausgearbeitet."));
-    let again = library
-        .update(cx, |library, cx| {
-            let body = "Bessere Idee\n\nFertig.".to_owned();
-            library.save_body(&created.id, body, Some(saved.fingerprint), cx)
-        })
-        .await
-        .unwrap();
+    let again = save(
+        &library,
+        &created.id,
+        "Bessere Idee\n\nFertig.",
+        Some(saved.fingerprint),
+        cx,
+    )
+    .await
+    .unwrap();
     assert_eq!(again.meta.id, created.id);
 
     let renamed = library
-        .update(cx, |library, cx| library.sync_filename(&created.id, cx))
+        .update(cx, |library, cx| {
+            let id = created.id.clone();
+            library.run(cx, move |store, touched| {
+                let before = (id.clone(), store.path_of(&id)?);
+                let meta = store.sync_filename(&id)?;
+                touched.wrote(Some(before), &meta);
+                Ok(meta)
+            })
+        })
         .await
         .unwrap();
     assert_eq!(renamed.rel_path, "Bessere Idee.md");
@@ -380,7 +352,7 @@ async fn a_file_from_another_editor_gets_its_id_with_the_first_write(cx: &mut Te
 #[gpui::test]
 async fn opening_a_note_and_going_back_keeps_the_gallery_as_it_was(cx: &mut TestAppContext) {
     let notes = Notes::seeded();
-    let mut app = open_app(&notes, None, cx);
+    let mut app = open_app(&notes, cx);
     app.cx.simulate_resize(size(px(1100.), px(420.)));
     app.cx.run_until_parked();
     assert_eq!(app.route(), Route::Gallery);
@@ -438,7 +410,7 @@ async fn opening_a_note_and_going_back_keeps_the_gallery_as_it_was(cx: &mut Test
 #[gpui::test]
 async fn with_animations_the_note_stays_until_it_has_slid_out(cx: &mut TestAppContext) {
     let notes = Notes::seeded();
-    let mut app = open_app(&notes, None, cx);
+    let mut app = open_app(&notes, cx);
     app.cx
         .update(|_, cx| theme::set_appearance(Appearance::default(), cx));
     assert!(app.cx.update(|_, cx| cx.tokens().animations));
@@ -464,7 +436,7 @@ async fn with_animations_the_note_stays_until_it_has_slid_out(cx: &mut TestAppCo
 #[gpui::test]
 async fn ctrl_n_creates_and_opens_a_note_and_escape_saves_it(cx: &mut TestAppContext) {
     let notes = Notes::empty();
-    let mut app = open_app(&notes, None, cx);
+    let mut app = open_app(&notes, cx);
     assert!(app.titles().is_empty());
 
     app.cx.simulate_keystrokes("ctrl-n");
@@ -493,7 +465,7 @@ async fn ctrl_n_creates_and_opens_a_note_and_escape_saves_it(cx: &mut TestAppCon
 #[gpui::test]
 async fn header_titles_sit_in_the_middle_of_the_window(cx: &mut TestAppContext) {
     let notes = Notes::seeded();
-    let mut app = open_app(&notes, None, cx);
+    let mut app = open_app(&notes, cx);
     let off_centre = |app: &mut TestApp| {
         let middle = |bounds: gpui::Bounds<gpui::Pixels>| bounds.origin.x + bounds.size.width / 2.;
         let bar = app.cx.debug_bounds("header-bar").expect("a header bar");
@@ -513,7 +485,7 @@ async fn header_titles_sit_in_the_middle_of_the_window(cx: &mut TestAppContext) 
 #[gpui::test]
 async fn keys_of_the_gallery_pin_trash_and_focus_the_search(cx: &mut TestAppContext) {
     let notes = Notes::seeded();
-    let mut app = open_app(&notes, None, cx);
+    let mut app = open_app(&notes, cx);
 
     app.cx.simulate_keystrokes("down down ctrl-p");
     let pinned: Vec<String> = app
@@ -548,7 +520,7 @@ async fn keys_of_the_gallery_pin_trash_and_focus_the_search(cx: &mut TestAppCont
 #[gpui::test]
 async fn the_pin_button_of_a_note_goes_through_its_worker(cx: &mut TestAppContext) {
     let notes = Notes::seeded();
-    let app = open_app(&notes, None, cx);
+    let app = open_app(&notes, cx);
     app.cx.simulate_keystrokes("down down enter");
     app.cx.simulate_input("Vorab: ");
     app.cx.simulate_keystrokes("ctrl-p");
@@ -581,7 +553,7 @@ impl TestApp {
 #[gpui::test]
 async fn delete_in_the_gallery_shows_the_window_toast_and_undo_restores(cx: &mut TestAppContext) {
     let notes = Notes::seeded();
-    let mut app = open_app(&notes, None, cx);
+    let mut app = open_app(&notes, cx);
     app.cx.simulate_keystrokes("down down delete");
     app.cx.run_until_parked();
     assert_eq!(app.titles().len(), 13);
@@ -611,7 +583,7 @@ async fn delete_in_the_gallery_shows_the_window_toast_and_undo_restores(cx: &mut
 #[gpui::test]
 async fn the_palette_acts_on_the_gallery(cx: &mut TestAppContext) {
     let notes = Notes::seeded();
-    let mut app = open_app(&notes, None, cx);
+    let mut app = open_app(&notes, cx);
     assert_eq!(app.view(), View::Gallery);
     app.palette("toggle view");
     assert_eq!(app.view(), View::List);
@@ -637,7 +609,7 @@ async fn the_palette_acts_on_the_gallery(cx: &mut TestAppContext) {
 #[gpui::test]
 async fn a_tag_or_search_in_a_note_ends_in_the_gallery_search_field(cx: &mut TestAppContext) {
     let notes = Notes::seeded();
-    let mut app = open_app(&notes, None, cx);
+    let mut app = open_app(&notes, cx);
     let search = |app: &mut TestApp| {
         app.main.read_with(app.cx, |main, cx| {
             let gallery = main.gallery().read(cx);
@@ -681,7 +653,7 @@ async fn a_tag_or_search_in_a_note_ends_in_the_gallery_search_field(cx: &mut Tes
 #[gpui::test]
 async fn requests_of_other_launches_reach_the_window(cx: &mut TestAppContext) {
     let notes = Notes::seeded();
-    let mut app = open_app(&notes, None, cx);
+    let mut app = open_app(&notes, cx);
 
     app.request(Request::Activate);
     assert_eq!(app.route(), Route::Gallery);
@@ -804,11 +776,15 @@ async fn a_change_of_the_desktop_theme_reaches_tokens_components_and_views(
 fn theme_overrides_win_over_the_desktop(cx: &mut TestAppContext) {
     cx.update(|cx| {
         gpui_component::init(cx);
-        theme::init(Overrides::parse(Some("light"), Some("#9141ac")), cx);
+        let overrides = Overrides {
+            dark: Some(false),
+            accent: Some(0x9141ac),
+        };
+        theme::init(overrides, cx);
         assert!(!cx.tokens().dark);
 
         theme::set_appearance(Appearance::default(), cx);
-        assert!(!cx.tokens().dark, "SHEAF_THEME stays");
+        assert!(!cx.tokens().dark, "the override stays");
         assert_eq!(cx.tokens().accent, Hsla::from(gpui::rgb(0x9141ac)));
         assert!(theme::appearance(cx).dark, "what the desktop said is kept");
     });
@@ -823,7 +799,7 @@ async fn the_window_opens_at_the_size_it_was_closed_with(cx: &mut TestAppContext
     let viewport = |app: &mut TestApp| app.cx.update(|window, _| window.viewport_size());
 
     // First run: the default frame of 1100×720 inside its shadow.
-    let mut app = open_app(&notes, Some(state_file.clone()), cx);
+    let mut app = open_app_with_state(&notes, Some(state_file.clone()), cx);
     assert_eq!(viewport(&mut app), size(px(1140.), px(760.)));
     assert_eq!(state_file.load(), None);
 

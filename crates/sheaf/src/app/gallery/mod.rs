@@ -38,10 +38,12 @@ mod cards;
 pub mod chips;
 mod covers;
 pub mod dates;
+mod folders;
 pub mod layout;
 pub mod preview;
 mod render;
 pub mod smart;
+mod tags;
 mod templates;
 pub mod trash;
 
@@ -60,12 +62,16 @@ use jiff::Timestamp;
 use sheaf_core::config::{FolderView, Sort as SortOrder, View};
 use sheaf_core::i18n::tr;
 use sheaf_core::query::{self, ItemKind};
-use sheaf_core::{Filter, FolderConfig, NoteId, NoteMeta, Snippet, Sort};
+use sheaf_core::{Filter, FolderConfig, NoteId, NoteMeta, Snippet};
 
 use super::actions::{
     ClearSearch, OpenSelected, Search, SelectLeft, SelectNext, SelectPrevious, SelectRight, Trash,
 };
+use super::dialogs::dialogs;
 use super::library::{Folder, Library, LibraryEvent};
+use super::note::export::{self, Format, Source};
+use super::overlays::Toast;
+use super::trace;
 use covers::{Covers, Wanted};
 use layout::{Layout, Row, Section};
 use preview::Preview;
@@ -78,18 +84,24 @@ const SEARCH_DELAY: Duration = Duration::from_millis(30);
 /// What a row of cards is about to measure, for the list to estimate its length.
 const ROW_HEIGHT_HINT: f32 = 270.;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub enum GalleryEvent {
     /// Open this note; `query` is the search it was found with, or empty.
     Open { id: NoteId, query: String },
-    /// These notes went to the trash; the window offers to undo it.
-    Trashed(Vec<NoteId>),
+    /// These notes went to the trash; the window offers to undo it. `kept` is what
+    /// the toast adds, such as the files that stayed in a deleted folder.
+    Trashed {
+        ids: Vec<NoteId>,
+        kept: Option<String>,
+    },
     /// A change failed; the message says why, for a toast.
     Failed(String),
     /// A change worth telling, such as notes restored, for a toast.
     Notice(String),
     /// Create a note from this template and open it.
     NewFromTemplate(String),
+    /// Something to tell with an action, such as "Exported" with "Open".
+    Toast(Toast),
 }
 
 /// Which notes the gallery shows: chosen in the chip row or the folder popover.
@@ -161,6 +173,13 @@ struct Listing {
     marks: HashMap<NoteId, Marks>,
 }
 
+/// The cards of the frame being drawn, by path, and how many lack their miniature.
+#[derive(Debug, Default)]
+struct Drawn {
+    notes: Vec<String>,
+    unready: usize,
+}
+
 /// The miniature of a note at one modification time; `None` while it is read.
 struct CachedPreview {
     modified: Timestamp,
@@ -208,13 +227,18 @@ pub struct GalleryView {
     /// Notes picked with Ctrl or Shift; when empty, the selection is the cursor.
     marked: BTreeSet<NoteId>,
     previews: HashMap<NoteId, CachedPreview>,
+    /// What the frame being drawn shows, while the startup trace waits for it.
+    drawn: Drawn,
     covers: Covers,
     hover: Hover,
     popover: Option<Popover>,
     /// The name field of "New Folder" in the folder popover, while it is open.
     new_folder: Option<Entity<InputState>>,
+    /// The name field of a folder being renamed, and its path.
+    renaming: Option<(Entity<InputState>, String)>,
     trash: trash::TrashState,
     smart: smart::SmartState,
+    tags: tags::TagsState,
     templates: templates::TemplatesState,
     generation: u64,
     focus_handle: FocusHandle,
@@ -269,12 +293,15 @@ impl GalleryView {
             anchor: None,
             marked: BTreeSet::new(),
             previews: HashMap::new(),
+            drawn: Drawn::default(),
             covers: Covers::default(),
             hover: Hover::default(),
             popover: None,
             new_folder: None,
+            renaming: None,
             trash: trash::TrashState::default(),
             smart: smart::SmartState::default(),
+            tags: tags::TagsState::default(),
             templates: templates::TemplatesState::default(),
             generation: 0,
             focus_handle: cx.focus_handle(),
@@ -615,9 +642,9 @@ impl GalleryView {
         let listing: Task<sheaf_core::Result<Listing>> = if text.is_empty() {
             let sort = self.sort();
             let now = library.now();
-            let notes = library.notes(filters, index_sort(sort), cx);
+            let notes = library.notes(filters, sort, cx);
             cx.background_spawn(async move {
-                let (notes, sections) = layout::group(notes.await?, index_sort(sort), &now);
+                let (notes, sections) = layout::group(notes.await?, sort, &now);
                 Ok(Listing {
                     notes,
                     sections,
@@ -789,6 +816,15 @@ impl GalleryView {
         .detach();
     }
 
+    /// Notes a card of the frame being drawn for the startup trace; `ready` if it shows
+    /// its miniature.
+    fn count_drawn(&mut self, note: &NoteMeta, ready: bool) {
+        if trace::pending(trace::Event::Miniatures) {
+            self.drawn.notes.push(note.rel_path.clone());
+            self.drawn.unready += usize::from(!ready);
+        }
+    }
+
     /// The miniature of `note`, or `None` while it is read in the background.
     fn preview(&mut self, note: &NoteMeta, cx: &mut Context<Self>) -> Option<Arc<Preview>> {
         if let Some(cached) = self.previews.get(&note.id)
@@ -878,12 +914,14 @@ impl GalleryView {
     pub fn set_popover(&mut self, popover: Option<Popover>, cx: &mut Context<Self>) {
         if popover == Some(Popover::Folders) {
             self.count_trash(cx);
+            self.load_tags(cx);
         }
         if popover == Some(Popover::Templates) {
             self.load_templates(cx);
         }
         self.popover = popover;
         self.new_folder = None;
+        self.renaming = None;
         self.stop_smart_edit();
         cx.notify();
     }
@@ -1098,6 +1136,37 @@ impl GalleryView {
         Self::report(changes, tr("Could not duplicate the note: {}"), cx);
     }
 
+    /// "Export": the selected notes as their files are now, one into a file, several
+    /// into a folder, each chosen in the portal's dialog.
+    pub fn export_selection(&mut self, format: Format, cx: &mut Context<Self>) {
+        let library = self.library.read(cx);
+        let loads: Vec<_> = self
+            .selection_ids()
+            .iter()
+            .map(|id| library.load(id, cx))
+            .collect();
+        if loads.is_empty() {
+            return;
+        }
+        let notes_dir = library.notes_dir().to_owned();
+        let zone = library.now().time_zone().clone();
+        let dialogs = dialogs(cx);
+        let exported = cx.background_spawn(async move {
+            let mut sources = Vec::with_capacity(loads.len());
+            for load in loads {
+                let note = load.await.map_err(|err| err.to_string())?;
+                sources.push(Source::of(&note, &notes_dir, &zone));
+            }
+            export::run(&sources, format, &dialogs)
+        });
+        cx.spawn(async move |this, cx| {
+            if let Some(toast) = export::toast(exported.await) {
+                let _ = this.update(cx, |_, cx| cx.emit(GalleryEvent::Toast(toast)));
+            }
+        })
+        .detach();
+    }
+
     /// Waits for `changes` and, if one failed, says why in a toast: `message` with
     /// the reason for `{}`. The Library has looked at the note's file again by then,
     /// so the gallery shows it as it is.
@@ -1150,7 +1219,10 @@ impl GalleryView {
                     GalleryEvent::Failed(tr("Could not move to trash: {}").replace("{}", &reason))
                 }
                 None if trashed.is_empty() => return,
-                None => GalleryEvent::Trashed(trashed),
+                None => GalleryEvent::Trashed {
+                    ids: trashed,
+                    kept: None,
+                },
             };
             let _ = this.update(cx, |_, cx| cx.emit(event));
         })
@@ -1189,14 +1261,6 @@ fn searchable_text(text: &str) -> String {
         .map(|item| &text[item.span.clone()])
         .collect::<Vec<_>>()
         .join(" ")
-}
-
-fn index_sort(sort: SortOrder) -> Sort {
-    match sort {
-        SortOrder::Modified => Sort::Modified,
-        SortOrder::Created => Sort::Created,
-        SortOrder::Title => Sort::Title,
-    }
 }
 
 impl GalleryView {

@@ -36,8 +36,11 @@ macro_rules! icons {
 }
 
 icons! {
+    Alarm => "alarm",
     Attachment => "mail-attachment",
     Back => "go-previous",
+    Calendar => "x-office-calendar",
+    Camera => "camera-photo",
     Check => "object-select",
     Clear => "edit-clear",
     Close => "window-close",
@@ -45,9 +48,11 @@ icons! {
     Delete => "edit-delete",
     Edit => "document-edit",
     Folder => "folder",
+    Food => "emoji-food",
     FolderNew => "folder-new",
     Forward => "go-next",
     Grid => "view-grid",
+    Home => "user-home",
     Image => "image-x-generic",
     List => "view-list",
     Menu => "open-menu",
@@ -56,15 +61,19 @@ icons! {
     Pin => "view-pin",
     Plus => "list-add",
     Print => "document-print",
+    Science => "applications-science",
     SaveAs => "document-save-as",
     Search => "edit-find",
     Share => "send-to",
     Sidebar => "sidebar-show",
     SmartFolder => "folder-saved-search",
     Sort => "view-sort-descending",
+    Star => "starred",
     Text => "text-x-generic",
     Trash => "user-trash",
+    Travel => "emoji-travel",
     Undo => "edit-undo",
+    Warning => "dialog-warning",
 }
 
 /// The app icon in colour; draw it with `gpui::img(APP_ICON)`.

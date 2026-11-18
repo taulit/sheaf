@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Translations are inline (xml:lang="de"). The repository has no gettext flow for
+  XML, only for the Rust sources (scripts/update-pot.sh). Add a language here with
+  the same elements when a .po file is added.
+
+  Screenshots point at the release tag of the <release> below. Change both together
+  (docs/release-checklist.md, release day).
+-->
+<component type="desktop-application">
+  <id>io.github.taulit.Sheaf</id>
+  <launchable type="desktop-id">io.github.taulit.Sheaf.desktop</launchable>
+
+  <name>Notes</name>
+  <name xml:lang="de">Notizen</name>
+  <summary>Fast notes in plain Markdown files</summary>
+  <summary xml:lang="de">Schnelle Notizen als Markdown-Dateien</summary>
+
+  <developer id="io.github.taulit">
+    <name>taulit</name>
+  </developer>
+
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+
+  <description>
+    <p>
+      Notes keeps every note as a Markdown file in a folder you choose. It shows
+      the notes as a gallery of cards, edits them in place and finds them in
+      milliseconds.
+    </p>
+    <p xml:lang="de">
+      Notizen speichert jede Notiz als Markdown-Datei in einem Ordner deiner Wahl.
+      Die Notizen erscheinen als Galerie aus Karten, lassen sich an Ort und Stelle
+      bearbeiten und sind in Millisekunden gefunden.
+    </p>
+    <ul>
+      <li>Gallery and list view, folders, tags, smart folders and pinned notes</li>
+      <li xml:lang="de">Galerie und Liste, Ordner, Tags, intelligente Ordner und angeheftete Notizen</li>
+      <li>Search that forgives typos and knows #tags, folder:, has: and open:</li>
+      <li xml:lang="de">Suche, die Tippfehler verzeiht und #Tags, ordner:, hat: und offen: kennt</li>
+      <li>Editing in place, with checklists, tables, images and links between notes</li>
+      <li xml:lang="de">Bearbeiten an Ort und Stelle, mit Checklisten, Tabellen, Bildern und Verweisen zwischen Notizen</li>
+      <li>A Quick Note window and a global shortcut</li>
+      <li xml:lang="de">Ein Schnellnotiz-Fenster und ein globales Tastenkürzel</li>
+      <li>Export to Markdown and PDF, and printing</li>
+      <li xml:lang="de">Export als Markdown und PDF sowie Drucken</li>
+      <li>Recently Deleted keeps removed notes for 30 days</li>
+      <li xml:lang="de">Zuletzt gelöscht behält entfernte Notizen 30 Tage</li>
+      <li>Search in the GNOME overview</li>
+      <li xml:lang="de">Suche in der GNOME-Übersicht</li>
+      <li>A command line with JSON output for scripts and agents</li>
+      <li xml:lang="de">Eine Befehlszeile mit JSON-Ausgabe für Skripte und Agenten</li>
+    </ul>
+    <p>
+      The notes are ordinary files. Sync them with the tool you already use and
+      open them in any other editor.
+    </p>
+    <p xml:lang="de">
+      Die Notizen sind gewöhnliche Dateien. Sie lassen sich mit einem beliebigen
+      Werkzeug synchronisieren und in jedem anderen Editor öffnen.
+    </p>
+  </description>
+
+  <screenshots>
+    <screenshot type="default">
+      <caption>All notes as a gallery of cards</caption>
+      <caption xml:lang="de">Alle Notizen als Galerie aus Karten</caption>
+      <image type="source" width="2360" height="1600">https://raw.githubusercontent.com/taulit/sheaf/v0.1.0/docs/screenshots/app-gallery-light.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>A note, edited in place</caption>
+      <caption xml:lang="de">Eine Notiz, bearbeitet an Ort und Stelle</caption>
+      <image type="source" width="2360" height="1600">https://raw.githubusercontent.com/taulit/sheaf/v0.1.0/docs/screenshots/app-note-light.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Search with filters and highlighted hits</caption>
+      <caption xml:lang="de">Suche mit Filtern und hervorgehobenen Treffern</caption>
+      <image type="source" width="2360" height="1600">https://raw.githubusercontent.com/taulit/sheaf/v0.1.0/docs/screenshots/app-gallery-search-light.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>The Quick Note window</caption>
+      <caption xml:lang="de">Das Schnellnotiz-Fenster</caption>
+      <image type="source" width="920" height="760">https://raw.githubusercontent.com/taulit/sheaf/v0.1.0/docs/screenshots/app-quick-light.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Notes in the GNOME overview</caption>
+      <caption xml:lang="de">Notizen in der GNOME-Übersicht</caption>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/taulit/sheaf/v0.1.0/docs/screenshots/gnome-search-dark.png</image>
+    </screenshot>
+  </screenshots>
+
+  <url type="homepage">https://github.com/taulit/sheaf</url>
+  <url type="bugtracker">https://github.com/taulit/sheaf/issues</url>
+  <url type="vcs-browser">https://github.com/taulit/sheaf</url>
+  <url type="help">https://github.com/taulit/sheaf#readme</url>
+
+  <branding>
+    <color type="primary" scheme_preference="light">#f8e45c</color>
+    <color type="primary" scheme_preference="dark">#e5a50a</color>
+  </branding>
+
+  <categories>
+    <category>Utility</category>
+    <category>TextEditor</category>
+  </categories>
+
+  <keywords>
+    <keyword>notes</keyword>
+    <keyword>markdown</keyword>
+    <keyword>memo</keyword>
+    <keyword>checklist</keyword>
+    <keyword>todo</keyword>
+    <keyword>note-taking</keyword>
+    <keyword xml:lang="de">notizen</keyword>
+    <keyword xml:lang="de">markdown</keyword>
+    <keyword xml:lang="de">memo</keyword>
+    <keyword xml:lang="de">checkliste</keyword>
+    <keyword xml:lang="de">aufgaben</keyword>
+  </keywords>
+
+  <content_rating type="oars-1.1"/>
+
+  <provides>
+    <binary>sheaf</binary>
+    <binary>sheaf-searchd</binary>
+    <mediatype>text/markdown</mediatype>
+    <dbus type="user">io.github.taulit.Sheaf</dbus>
+    <dbus type="user">io.github.taulit.Sheaf.SearchProvider</dbus>
+  </provides>
+
+  <requires>
+    <display_length compare="ge">360</display_length>
+  </requires>
+  <recommends>
+    <control>keyboard</control>
+    <control>pointing</control>
+    <control>touch</control>
+  </recommends>
+
+  <translation type="gettext">sheaf</translation>
+
+  <releases>
+    <!-- Release day: set the date to the day of the tag (docs/release-checklist.md). -->
+    <release version="0.1.0" date="2026-11-17">
+      <description>
+        <p>First release.</p>
+        <p xml:lang="de">Erste Veröffentlichung.</p>
+      </description>
+    </release>
+  </releases>
+</component>

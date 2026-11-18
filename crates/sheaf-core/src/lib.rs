@@ -15,6 +15,7 @@ pub mod error;
 pub mod frontmatter;
 pub mod i18n;
 pub mod index;
+pub mod logger;
 pub mod model;
 pub mod paths;
 pub mod query;

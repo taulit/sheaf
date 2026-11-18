@@ -418,42 +418,6 @@ fn folders_are_counted_without_their_subfolders() {
 }
 
 #[test]
-fn titles_complete_from_a_prefix() {
-    let mut notes = corpus();
-    notes.push(note("a.md", "Reisekosten 2026"));
-    notes.push(note("b.md", "Ärzte"));
-    notes.push(note("c.md", "Aerztehaus"));
-    let reader = index_of(&notes).reader();
-    let complete = |prefix: &str, limit| {
-        let notes = reader.titles_with_prefix(prefix, limit).unwrap();
-        notes.into_iter().map(|note| note.title).collect::<Vec<_>>()
-    };
-    assert_eq!(
-        complete("reise", 10),
-        ["Reise nach Zürich", "Reisekosten 2026"]
-    );
-    assert_eq!(complete("Reise nach Zür", 10), ["Reise nach Zürich"]);
-    assert_eq!(complete("reise nach zuer", 10), ["Reise nach Zürich"]);
-    assert_eq!(complete("REISE", 1), ["Reise nach Zürich"]);
-    // Umlauts sort as in a German phone book: ä next to ae.
-    assert_eq!(
-        complete("a", 10),
-        [
-            "Ärzte",
-            "Aerztehaus",
-            "Apfelkuchen",
-            "Ausschreibung Serverraum"
-        ]
-    );
-    assert_eq!(complete("är", 10), ["Ärzte", "Aerztehaus"]);
-    assert_eq!(complete("aer", 10), ["Ärzte", "Aerztehaus"]);
-    assert_eq!(complete("arz", 10), ["Ärzte"]);
-    assert_eq!(complete("nach", 10), [""; 0]);
-    assert_eq!(complete("", 3).len(), 3);
-    assert_eq!(complete("", 100).len(), notes.len());
-}
-
-#[test]
 fn backlinks_find_notes_linking_to_a_title() {
     let mut notes = corpus();
     notes.push(

@@ -9,6 +9,7 @@ use gpui::{
 };
 use sheaf_core::i18n::tr;
 
+use super::export::Format;
 use super::{Banner, NoteView, Popover, date};
 use crate::app::actions::Back;
 use crate::app::assets::{IconName, icon};
@@ -146,12 +147,12 @@ fn share_popover(cx: &mut Context<NoteView>) -> AnyElement {
         .child(
             MenuRow::new("export-markdown", tr("Export as Markdown…"))
                 .icon(IconName::Text)
-                .on_click(cx.listener(|this, _, _, cx| this.export_markdown(cx))),
+                .on_click(cx.listener(|this, _, _, cx| this.export(Format::Markdown, cx))),
         )
         .child(
             MenuRow::new("export-pdf", tr("Export as PDF…"))
                 .icon(IconName::SaveAs)
-                .on_click(cx.listener(|this, _, _, cx| this.export_pdf(cx))),
+                .on_click(cx.listener(|this, _, _, cx| this.export(Format::Pdf, cx))),
         )
         .child(
             MenuRow::new("print", tr("Print…"))

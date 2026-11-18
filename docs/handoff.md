@@ -15,21 +15,22 @@ Written 2026-11-17 for whoever continues without the session's context. Read
 
 ## Running
 
-Nothing. S2 is merged (#4). S3 is in review as a PR against `main` (see `gh pr list`).
-Its three review rounds left no blocking or major finding; what is still open is in
-`docs/STATUS.md` under "Open".
+Nothing. S2 (#4) and S3 (#5) are merged. S4
+(https://github.com/taulit/sheaf/pull/6) is in review against `main`. PR checks are red because CI
+cannot fetch the private editor; the gate was run locally on 2026-11-18 at the head of
+`phase/s4-release`: fmt, clippy, `cargo deny` clean, 487 tests passed, Visor tests 23 of
+23, `scripts/check-po.sh`, `check-install.sh`, `check-release.sh 0.1.0`, all budgets
+(`scripts/budgets.sh`) and both end-to-end scenarios (`scripts/e2e.sh`) pass.
 
 ## Next
 
-1. S4 on `phase/s4-release`, branching from `phase/s3-features` (or from `main` once the
-   S3 PR is merged; `main` gets squash merges, so sync a branch that was built on the
-   unsquashed commits with `git merge -s ours origin/main` only after checking that the
-   trees match, as done for S3): budgets (start time, memory, search), translations
-   check, a final review, Flatpak manifest, AUR `PKGBUILD`, metainfo, README, release
-   notes. `flatpak-builder` and `git-cliff` are not installed on this machine.
-2. Check for newer editor tags (`gh api repos/taulit/gpui-markdown-editor/git/refs/tags`)
-   and bump from `v0.0.3`; the editor still lacks format bar, slash menu, completions,
-   image loading, `MetaChanged` and the APIs listed in `docs/STATUS.md`.
+Only release work that needs the user (details in `docs/release-checklist.md`):
+make the repositories public (Flathub, AUR users and CI cannot fetch them; metainfo
+screenshot URLs 404), build the Flatpak once (`flatpak-builder` is not installed here),
+run the manual desktop checklist in `docs/testing.md`, set the release date in metainfo
+and changelog, tag, AUR, Flathub, extension upload. The nine translations other than
+German were not read by native speakers. What the editor still lacks for Sheaf is listed
+in `docs/STATUS.md`; bump the editor tag when a newer one exists.
 
 ## Waiting for the user
 
@@ -53,5 +54,5 @@ completions.
 - Sub-agents: Opus for implementation, Sonnet for mechanical work, Fable for reviews and
   gates. Worktree agents should use `CARGO_TARGET_DIR=~/development/sheaf/target`.
 - Phase PRs target `main` directly (a stacked base sent #2 into the wrong branch).
-- The editor is pinned at `v0.0.3` (WYSIWYG). Check for a newer tag with
+- The editor is pinned at `v0.1.0`. Check for a newer tag with
   `gh api repos/taulit/gpui-markdown-editor/git/refs/tags` and bump it in `Cargo.toml`.

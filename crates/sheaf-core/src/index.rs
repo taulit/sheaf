@@ -15,6 +15,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use jiff::{SignedDuration, Timestamp, ZonedDateTime};
+use serde::{Deserialize, Serialize};
 use tantivy::indexer::IndexWriterOptions;
 use tantivy::postings::TermInfo;
 use tantivy::query::{AllQuery, BooleanQuery, EnableScoring, Query, RangeQuery, TermQuery, Weight};
@@ -31,7 +32,7 @@ use unicode_normalization::UnicodeNormalization;
 use crate::analysis::{self, fold};
 use crate::error::{Error, Result};
 use crate::model::{NoteDoc, NoteId, NoteMeta};
-use crate::query::{Feature, Filter, Period};
+use crate::query::{Feature, Filter, Period, folder_key, folder_runs};
 use crate::snippet::body_without_title;
 
 /// Bumped whenever the schema or the analysis changes. An index with another version
@@ -194,6 +195,13 @@ impl SearchIndex {
         // add a thread that polls the directory twice a second, which a service that
         // must not wake up while idle cannot afford.
         Self::new(index, ReloadPolicy::Manual, false)
+    }
+
+    /// Whether `dir` holds a complete index of the current version, the one
+    /// [`open_or_create`](Self::open_or_create) would keep. Someone may have cleared the
+    /// cache since it was last opened.
+    pub fn exists(dir: impl AsRef<Path>) -> bool {
+        open_existing(dir.as_ref()).is_some()
     }
 
     /// Opens the index in `dir` without ever writing to it. `None` if there is no usable
@@ -387,42 +395,6 @@ fn from_nanos(nanos: i64) -> Timestamp {
     Timestamp::from_nanosecond(i128::from(nanos)).unwrap_or(Timestamp::UNIX_EPOCH)
 }
 
-/// The folded segments of a folder path or of a `folder:` value.
-fn folder_segments(path: &str) -> Vec<String> {
-    path.split('/')
-        .map(str::trim)
-        .filter(|segment| !segment.is_empty())
-        .map(|segment| fold(segment).primary)
-        .collect()
-}
-
-/// Every run of consecutive segments of `folder`, so that `folder:b` and `folder:b/c`
-/// find a note in `a/b/c` with one term lookup. Runs that start at the root are also
-/// listed with a leading `/`, for anchored values.
-fn folder_runs(folder: &str) -> Vec<String> {
-    let segments = folder_segments(folder);
-    let mut runs = Vec::new();
-    for start in 0..segments.len() {
-        for end in start + 1..=segments.len() {
-            let run = segments[start..end].join("/");
-            if start == 0 {
-                runs.push(format!("/{run}"));
-            }
-            runs.push(run);
-        }
-    }
-    runs
-}
-
-fn folder_key(value: &str) -> String {
-    let run = folder_segments(value).join("/");
-    if value.starts_with('/') {
-        format!("/{run}")
-    } else {
-        run
-    }
-}
-
 fn tag_key(tag: &str) -> String {
     fold(tag.trim_matches('/')).primary
 }
@@ -454,10 +426,12 @@ fn link_key(target: &str) -> String {
     target.trim().nfc().collect::<String>().to_lowercase()
 }
 
-/// How a listing is ordered.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+/// How a listing is ordered; also what the settings store as `sort`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Sort {
     /// Most recently modified first.
+    #[default]
     Modified,
     /// Most recently created first.
     Created,
@@ -599,39 +573,6 @@ impl Reader {
             }
         }
         Ok(counts)
-    }
-
-    /// Notes whose title starts with `prefix`, ignoring case, accents and punctuation,
-    /// ordered by title. This is what completes `[[`.
-    pub fn titles_with_prefix(&self, prefix: &str, limit: usize) -> Result<Vec<NoteMeta>> {
-        let searcher = self.inner.searcher();
-        let prefix = analysis::key(prefix);
-        let mut found: Vec<(Vec<u8>, DocAddress)> = Vec::new();
-        for (ordinal, segment) in searcher.segment_readers().iter().enumerate() {
-            let inverted = segment.inverted_index(self.fields.title_key)?;
-            for form in prefix.forms() {
-                let mut taken = 0;
-                for_each_term_with_prefix(inverted.terms(), form.as_bytes(), |key, term| {
-                    for_each_live_doc(segment, &inverted, term, |doc| {
-                        found.push((key.to_vec(), DocAddress::new(ordinal as u32, doc)));
-                        taken += 1;
-                    })?;
-                    Ok(taken < limit)
-                })?;
-            }
-        }
-        found.sort();
-        let mut addresses: Vec<DocAddress> = Vec::new();
-        for (_, address) in found {
-            // A title with umlauts is listed under both of its forms.
-            if !addresses.contains(&address) {
-                addresses.push(address);
-            }
-            if addresses.len() == limit {
-                break;
-            }
-        }
-        self.metas(&searcher, &addresses)
     }
 
     /// Notes with a `[[wiki link]]` to `title`, compared case-insensitively. Most
@@ -957,33 +898,6 @@ fn first_match(searcher: &Searcher, term: &Term) -> Result<Option<DocAddress>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn folder_runs_list_every_run_of_segments() {
-        assert_eq!(folder_runs(""), Vec::<String>::new());
-        assert_eq!(folder_runs("Arbeit"), ["/arbeit", "arbeit"]);
-        assert_eq!(
-            folder_runs("Firma/Büro/Projekte"),
-            [
-                "/firma",
-                "firma",
-                "/firma/buro",
-                "firma/buro",
-                "/firma/buro/projekte",
-                "firma/buro/projekte",
-                "buro",
-                "buro/projekte",
-                "projekte",
-            ]
-        );
-    }
-
-    #[test]
-    fn folder_keys_fold_and_keep_the_anchor() {
-        assert_eq!(folder_key("Arbeit"), "arbeit");
-        assert_eq!(folder_key("Büro/Projekte/"), "buro/projekte");
-        assert_eq!(folder_key("/Meine Notizen"), "/meine notizen");
-    }
 
     #[test]
     fn tag_paths_include_ancestors_once() {

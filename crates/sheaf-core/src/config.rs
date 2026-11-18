@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
 use crate::i18n::tr;
+pub use crate::index::Sort;
 use crate::model::NoteId;
 use crate::store::fsops;
 
@@ -118,15 +119,6 @@ pub struct FolderView {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum Sort {
-    #[default]
-    Modified,
-    Created,
-    Title,
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
 pub enum View {
     #[default]
     Gallery,
@@ -220,6 +212,34 @@ impl FolderConfig {
             write_table(&file, &path)?;
         }
         Ok(after)
+    }
+
+    /// Makes what names the folder `from`, or one inside it, name `to` instead: its
+    /// view, the Quick Notes folder and the smart folders' searches. `folders` are all
+    /// folders before the rename, which tell what a `folder:` filter found.
+    pub fn rename_folder(&mut self, from: &str, to: &str, folders: &[String]) {
+        let moved = |folder: &str| match folder.strip_prefix(from) {
+            Some(rest) if rest.is_empty() || rest.starts_with('/') => Some(format!("{to}{rest}")),
+            _ => None,
+        };
+        let renamed: Vec<(String, String)> = self
+            .folders
+            .keys()
+            .filter_map(|folder| Some((folder.clone(), moved(folder)?)))
+            .collect();
+        for (old, new) in renamed {
+            if let Some(view) = self.folders.remove(&old) {
+                self.folders.insert(new, view);
+            }
+        }
+        // The default "Quick Notes" is written out once renamed, or the next Quick Note
+        // would make the old folder again.
+        if let Some(folder) = moved(&self.quick_note.folder_name()) {
+            self.quick_note.folder = Some(folder);
+        }
+        for smart in &mut self.smart_folders {
+            smart.query = crate::query::rename_folder(&smart.query, from, to, folders);
+        }
     }
 
     /// How `folder` is shown; the defaults, with [`default_sort`](Self::default_sort),
@@ -346,6 +366,46 @@ fn patch_table(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn what_names_a_renamed_folder_follows_it() {
+        let mut config = FolderConfig {
+            quick_note: QuickNote {
+                folder: Some("Arbeit/Schnell".to_owned()),
+                ..QuickNote::default()
+            },
+            smart_folders: vec![SmartFolder {
+                name: "Offen".to_owned(),
+                query: "folder:/Arbeit open:".to_owned(),
+                ..SmartFolder::default()
+            }],
+            ..FolderConfig::default()
+        };
+        for folder in ["Arbeit", "Arbeit/Kunden", "Arbeitszeit", ""] {
+            config
+                .folders
+                .insert(folder.to_owned(), FolderView::default());
+        }
+        config.folders.get_mut("Arbeit").unwrap().view = View::List;
+
+        let all = ["Arbeit", "Arbeit/Kunden", "Arbeitszeit"].map(str::to_owned);
+        config.rename_folder("Arbeit", "Büro", &all);
+        let folders: Vec<&str> = config.folders.keys().map(String::as_str).collect();
+        assert_eq!(folders, ["", "Arbeitszeit", "Büro", "Büro/Kunden"]);
+        assert_eq!(config.folders["Büro"].view, View::List);
+        assert_eq!(config.quick_note.folder.as_deref(), Some("Büro/Schnell"));
+        assert_eq!(config.smart_folders[0].query, "folder:/Büro open:");
+    }
+
+    #[test]
+    fn the_default_quick_notes_folder_follows_a_rename() {
+        let mut config = FolderConfig::default();
+        config.rename_folder("Arbeit", "Büro", &[]);
+        assert_eq!(config.quick_note.folder, None);
+
+        config.rename_folder("Quick Notes", "Inbox", &[]);
+        assert_eq!(config.quick_note.folder.as_deref(), Some("Inbox"));
+    }
 
     const FULL: &str = r##"
 pinned_tags = ["rezepte", "büro"]

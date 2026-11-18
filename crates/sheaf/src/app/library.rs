@@ -8,17 +8,18 @@
 //!   [`folders`](Library::folders), [`tags`](Library::tags), [`meta`](Library::meta),
 //!   [`body`](Library::body) (text as indexed, for previews),
 //!   [`backlinks`](Library::backlinks) (notes that link to a title),
-//!   [`load`](Library::load) (the file, with the fingerprint a later save needs) and
+//!   [`load`](Library::load) (the file as it is now, as an export takes it) and
 //!   [`folder_config`](Library::folder_config) (what is remembered per folder).
-//! - **Change** with [`create`](Library::create), [`save_body`](Library::save_body),
-//!   [`sync_filename`](Library::sync_filename), [`set_pinned`](Library::set_pinned),
+//! - **Change** with [`create`](Library::create), [`set_pinned`](Library::set_pinned),
 //!   [`trash`](Library::trash), [`restore`](Library::restore),
 //!   [`move_to`](Library::move_to) and [`duplicate`](Library::duplicate). Each
 //!   resolves to the note as it is afterwards. Its id can differ from the one passed
 //!   in: a file Sheaf never wrote gets its real id on the first write, so keep using
-//!   the returned one.
-//!   [`create_folder`](Library::create_folder) and
-//!   [`update_folder_config`](Library::update_folder_config) change no note.
+//!   the returned one. Saving the text is the note view's, through [`run`](Library::run).
+//!   [`create_folder`](Library::create_folder),
+//!   [`rename_folder`](Library::rename_folder) and
+//!   [`delete_folder`](Library::delete_folder) change folders,
+//!   [`update_folder_config`](Library::update_folder_config) no note.
 //! - **Several steps on the store** in one go, such as a save with its fallbacks:
 //!   [`run`](Library::run), which says what it touched in a [`Touched`]. The open
 //!   note's last save when the window closes or the app quits uses
@@ -62,8 +63,8 @@ use gpui::{App, AppContext as _, Context, Entity, EventEmitter, Task};
 use jiff::tz::TimeZone;
 use jiff::{Timestamp, ZonedDateTime};
 use sheaf_core::{
-    CreateOptions, Filter, Fingerprint, FolderConfig, Note, NoteId, NoteMeta, NoteStore, Reader,
-    Result, SearchIndex, SearchResults, Sort, WriteOptions, query,
+    CreateOptions, Filter, FolderConfig, Note, NoteId, NoteMeta, NoteStore, Reader, Result,
+    SearchIndex, SearchResults, Sort, query,
 };
 use zbus::Connection;
 
@@ -95,14 +96,6 @@ pub struct Folder {
     pub path: String,
     /// Notes directly in this folder.
     pub notes: usize,
-}
-
-/// A note after [`Library::save_body`].
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Saved {
-    pub meta: NoteMeta,
-    /// The file as it is now; pass it to the next save.
-    pub fingerprint: Fingerprint,
 }
 
 /// The time the Library takes for "now": the date filters of a search, the deletion
@@ -212,6 +205,25 @@ impl Touched {
             self.ids.push(id);
         }
     }
+}
+
+/// What [`Library::rename_folder`] did.
+#[derive(Debug)]
+pub struct RenamedFolder {
+    /// All folders before the rename.
+    pub folders: Vec<String>,
+    /// The notes in the folder that could not be read and so are not indexed under
+    /// the new path.
+    pub unreadable: usize,
+}
+
+/// What [`Library::delete_folder`] did.
+#[derive(Debug)]
+pub struct DeletedFolder {
+    /// The notes now in the trash.
+    pub trashed: Vec<NoteMeta>,
+    /// The files that stayed in the folder, which stays with them.
+    pub kept: usize,
 }
 
 pub struct Library {
@@ -454,19 +466,11 @@ impl Library {
         cx.background_spawn(async move { lists.backlinks(&title) })
     }
 
-    /// Reads the note's file. This is what an editor starts from.
+    /// Reads the note's file as it is now.
     pub fn load(&self, id: &NoteId, cx: &App) -> Task<Result<Note>> {
         let store = self.store.clone();
         let id = id.clone();
         cx.background_spawn(async move { store.get(&id) })
-    }
-
-    /// The state of the note's file now, to tell a change by another program from one's
-    /// own write.
-    pub fn fingerprint(&self, id: &NoteId, cx: &App) -> Task<Result<Fingerprint>> {
-        let store = self.store.clone();
-        let id = id.clone();
-        cx.background_spawn(async move { store.fingerprint(&id) })
     }
 
     /// What a view remembered about a note, such as column widths; empty if nothing.
@@ -569,6 +573,67 @@ impl Library {
         })
     }
 
+    /// Renames or moves the folder `from` to `to` with every note in it. Once the
+    /// folder is renamed, that is done, also if some notes in it cannot be read.
+    pub fn rename_folder(
+        &mut self,
+        from: &str,
+        to: &str,
+        cx: &mut Context<Self>,
+    ) -> Task<Result<RenamedFolder>> {
+        let (from, to) = (from.to_owned(), to.to_owned());
+        self.run(cx, move |store, touched| {
+            for rel_path in paths_in(store, &from)? {
+                touched.paths.push(rel_path);
+            }
+            let folders = store.folders()?;
+            store.rename_folder(&from, &to)?;
+            let moved = paths_in(store, &to).unwrap_or_else(|err| {
+                log::warn!("cannot list the renamed folder: {err}");
+                Vec::new()
+            });
+            let mut unreadable = 0;
+            for rel_path in moved {
+                match store.load(&rel_path) {
+                    Ok(note) => touched.note(note.meta.id, rel_path),
+                    Err(err) => {
+                        log::warn!("cannot read {rel_path}: {err}");
+                        unreadable += 1;
+                    }
+                }
+            }
+            Ok(RenamedFolder {
+                folders,
+                unreadable,
+            })
+        })
+    }
+
+    /// Moves every note in `folder` to the trash and removes the folder, unless files
+    /// are left in it: files that are not notes, or notes that could not be read.
+    pub fn delete_folder(
+        &mut self,
+        folder: &str,
+        cx: &mut Context<Self>,
+    ) -> Task<Result<DeletedFolder>> {
+        let folder = folder.to_owned();
+        let now = self.now().timestamp();
+        self.run(cx, move |store, touched| {
+            let paths = paths_in(store, &folder)?;
+            let trashed = store.delete_folder(&folder, now)?;
+            for rel_path in paths {
+                if !store.root().join(&rel_path).exists() {
+                    touched.paths.push(rel_path);
+                }
+            }
+            for meta in &trashed {
+                touched.tell(meta.id.clone());
+            }
+            let kept = count_files(&store.root().join(&folder));
+            Ok(DeletedFolder { trashed, kept })
+        })
+    }
+
     /// Creates a note from `text`, whose first line is the title.
     pub fn create(
         &mut self,
@@ -579,41 +644,6 @@ impl Library {
         let text = text.to_owned();
         self.write(None, Effect::Keep, cx, move |store| {
             store.create(&text, &options)
-        })
-    }
-
-    /// Replaces the text of a note. With `expected`, the fingerprint from
-    /// [`load`](Self::load) or the previous save, nothing is written if the file changed
-    /// in between and the task fails with [`sheaf_core::Error::Conflict`]. The file
-    /// keeps its name; see [`sync_filename`](Self::sync_filename).
-    pub fn save_body(
-        &mut self,
-        id: &NoteId,
-        body: String,
-        expected: Option<Fingerprint>,
-        cx: &mut Context<Self>,
-    ) -> Task<Result<Saved>> {
-        let options = WriteOptions {
-            rename: false,
-            expected,
-        };
-        let store = self.store.clone();
-        let target = id.clone();
-        let written = self.write(Some(id.clone()), Effect::Keep, cx, move |store| {
-            store.write_body(&target, &body, &options)
-        });
-        cx.background_spawn(async move {
-            let meta = written.await?;
-            let fingerprint = store.fingerprint(&meta.id)?;
-            Ok(Saved { meta, fingerprint })
-        })
-    }
-
-    /// Renames the file so that it follows the title.
-    pub fn sync_filename(&mut self, id: &NoteId, cx: &mut Context<Self>) -> Task<Result<NoteMeta>> {
-        let target = id.clone();
-        self.write(Some(id.clone()), Effect::Keep, cx, move |store| {
-            store.sync_filename(&target)
         })
     }
 
@@ -770,6 +800,31 @@ impl Library {
     }
 }
 
+/// The notes in `folder` and the folders inside it, by path.
+fn paths_in(store: &NoteStore, folder: &str) -> Result<Vec<String>> {
+    let inside = format!("{folder}/");
+    Ok(store
+        .walk()?
+        .into_iter()
+        .map(|entry| entry.rel_path)
+        .filter(|rel_path| rel_path.starts_with(&inside))
+        .collect())
+}
+
+/// The files under `dir`, in its folders too; none if it is gone.
+fn count_files(dir: &Path) -> usize {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return 0;
+    };
+    entries
+        .flatten()
+        .map(|entry| match entry.file_type() {
+            Ok(kind) if kind.is_dir() => count_files(&entry.path()),
+            _ => 1,
+        })
+        .sum()
+}
+
 /// What a task of the Library resolves to when the app closed before it ran.
 fn closing<T>() -> Result<T> {
     Err(sheaf_core::Error::Invalid("the app is closing".into()))
@@ -810,28 +865,7 @@ pub(crate) fn decode_file_uri(uri: &str) -> String {
         return uri.to_owned();
     };
     // `file://host/path`: the path starts at the first slash.
-    let path = &path[path.find('/').unwrap_or(0)..];
-    let mut bytes = Vec::with_capacity(path.len());
-    let mut rest = path.as_bytes();
-    while let [first, tail @ ..] = rest {
-        let escaped = match (first, tail) {
-            (b'%', [high, low, ..]) => std::str::from_utf8(&[*high, *low])
-                .ok()
-                .and_then(|hex| u8::from_str_radix(hex, 16).ok()),
-            _ => None,
-        };
-        match escaped {
-            Some(byte) => {
-                bytes.push(byte);
-                rest = &tail[2..];
-            }
-            None => {
-                bytes.push(*first);
-                rest = tail;
-            }
-        }
-    }
-    String::from_utf8_lossy(&bytes).into_owned()
+    sheaf_core::scan::percent_decode(&path[path.find('/').unwrap_or(0)..])
 }
 
 #[cfg(test)]
@@ -937,6 +971,30 @@ mod tests {
             .collect()
     }
 
+    /// What the note view's save does: `body` into the note, then, if `rename`, the
+    /// file after the title.
+    fn save(
+        library: &Entity<Library>,
+        id: &NoteId,
+        body: &str,
+        rename: bool,
+        cx: &mut TestAppContext,
+    ) -> Task<Result<NoteMeta>> {
+        let (id, body) = (id.clone(), body.to_owned());
+        library.update(cx, |library, cx| {
+            library.run(cx, move |store, touched| {
+                let before = (id.clone(), store.path_of(&id)?);
+                let options = sheaf_core::WriteOptions::default();
+                let mut meta = store.write_body(&id, &body, &options)?;
+                if rename {
+                    meta = store.sync_filename(&meta.id)?;
+                }
+                touched.wrote(Some(before), &meta);
+                Ok(meta)
+            })
+        })
+    }
+
     fn done<T: 'static>(task: Task<Result<T>>, cx: &mut TestAppContext) -> T {
         cx.run_until_parked();
         cx.foreground_executor().block_test(task).expect("done")
@@ -953,21 +1011,15 @@ mod tests {
         assert!(provisional.is_provisional());
 
         // The first save gives the note its real id: listed once, under it.
-        let saved = library.update(cx, |library, cx| {
-            library.save_body(&provisional, "Lesen\n\nMehr Bücher\n".into(), None, cx)
-        });
-        let id = done(saved, cx).meta.id;
+        let saved = save(&library, &provisional, "Lesen\n\nMehr Bücher\n", false, cx);
+        let id = done(saved, cx).id;
         assert!(!id.is_provisional());
         assert_eq!(titles(&library, cx)[1], (id.clone(), "Lesen".into()));
         assert_eq!(titles(&library, cx).len(), 2);
 
         // A new title, and the file following it.
-        let saved = library.update(cx, |library, cx| {
-            library.save_body(&id, "Gelesen\n\nAlles\n".into(), None, cx)
-        });
+        let saved = save(&library, &id, "Gelesen\n\nAlles\n", true, cx);
         done(saved, cx);
-        let renamed = library.update(cx, |library, cx| library.sync_filename(&id, cx));
-        done(renamed, cx);
         let listed = titles(&library, cx);
         assert_eq!(listed[1], (id.clone(), "Gelesen".into()), "{listed:?}");
         assert_eq!(listed.len(), 2);

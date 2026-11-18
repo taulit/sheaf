@@ -32,13 +32,15 @@ use crate::app::theme::{ActiveTokens as _, Tokens};
 /// GNOME's colour of destructive buttons.
 const DESTRUCTIVE: u32 = 0xe01b24;
 
-/// What deleting for good waits for the user to confirm.
+/// What waits for the user to confirm: deleting for good, or a folder.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Confirm {
     /// These notes in the trash.
     Purge(Vec<NoteId>),
     /// Everything in the trash.
     Empty,
+    /// Moving the notes of this folder to the trash and removing it.
+    DeleteFolder(String),
 }
 
 /// A note of the trash shown read-only.
@@ -56,7 +58,7 @@ pub(super) struct TrashState {
     /// How many notes the trash holds, for the folder popover; `None` until counted.
     count: Option<usize>,
     page: Option<TrashPage>,
-    confirm: Option<Confirm>,
+    pub(super) confirm: Option<Confirm>,
     counting: Option<Task<()>>,
     opening: Option<Task<()>>,
 }
@@ -297,7 +299,7 @@ impl GalleryView {
         cx.notify();
     }
 
-    /// Does what was asked: deletes for good. A failure is a toast.
+    /// Does what was asked: deletes for good, or deletes the folder. A failure is a toast.
     pub fn confirm(&mut self, cx: &mut Context<Self>) {
         let Some(confirm) = self.trash.confirm.take() else {
             return;
@@ -322,6 +324,10 @@ impl GalleryView {
                     .library
                     .update(cx, |library, cx| library.empty_trash(cx));
                 vec![cx.background_spawn(async move { emptying.await.map(|_| ()) })]
+            }
+            Confirm::DeleteFolder(folder) => {
+                self.delete_folder(folder, cx);
+                return;
             }
         };
         cx.spawn(async move |this, cx| {
@@ -442,6 +448,7 @@ impl GalleryView {
     pub(super) fn render_confirm(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let confirm = self.trash.confirm.as_ref()?;
         let tokens = cx.tokens().clone();
+        let mut detail = tr("This cannot be undone.");
         let (question, action) = match confirm {
             Confirm::Purge(ids) => {
                 let count = u32::try_from(ids.len()).unwrap_or(u32::MAX);
@@ -459,6 +466,14 @@ impl GalleryView {
                 tr("Delete all notes in the trash permanently?"),
                 tr("Empty Trash"),
             ),
+            Confirm::DeleteFolder(folder) => {
+                detail = tr("Its notes move to Recently Deleted.");
+                let name = folder.rsplit('/').next().unwrap_or(folder);
+                (
+                    tr("Delete the folder “{}”?").replace("{}", name),
+                    tr("Delete Folder"),
+                )
+            }
         };
         let sheet = overlays::popover("confirm-purge", cx)
             .w(px(340.))
@@ -475,7 +490,7 @@ impl GalleryView {
                 div()
                     .text_size(tokens.text(13.5))
                     .text_color(tokens.muted)
-                    .child(tr("This cannot be undone.")),
+                    .child(detail),
             )
             .child(
                 div()

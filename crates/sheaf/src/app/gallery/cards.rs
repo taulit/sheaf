@@ -3,7 +3,6 @@
 
 use std::ops::Range;
 use std::path::{Path, PathBuf};
-use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui::{
@@ -25,6 +24,7 @@ use super::preview::{Line, Preview};
 use super::render::{GRID_SIDE, ring};
 use super::{GalleryView, Scope};
 use crate::app::assets::{IconName, icon};
+use crate::app::note::export::Format;
 use crate::app::theme::{ActiveTokens as _, Tokens, motion, size};
 
 /// The list view is a column of this width at most, as rows across a wide window
@@ -101,6 +101,7 @@ impl GalleryView {
         let selected = self.is_selected(index);
         let marks = self.marks.get(&note.id).cloned();
         let preview = self.preview(&note, cx);
+        self.count_drawn(&note, marks.is_some() || preview.is_some());
         let cover = self.cover_of(&note, preview.as_deref(), cx);
 
         let mut card = div()
@@ -168,6 +169,15 @@ impl GalleryView {
                     linear_color_stop(tokens.card, 1.),
                 )),
         );
+        let card = card.when(note.conflict, |card| {
+            card.child(
+                div()
+                    .absolute()
+                    .top(px(8.))
+                    .right(px(8.))
+                    .child(conflict_badge(tokens)),
+            )
+        });
         let card = self.lift(card, &note, tokens);
 
         let title = match &marks {
@@ -280,6 +290,7 @@ impl GalleryView {
             .is_none_or(|above| matches!(self.layout.rows()[above], Row::Header(_)));
         let marks = self.marks.get(&note.id).cloned();
         let preview = self.preview(&note, cx);
+        self.count_drawn(&note, marks.is_some() || preview.is_some());
         let now = self.library.read(cx).now();
         let date = DateLabel::of(self.date_of(&note), &now).format();
         let summary = match (&marks, &preview) {
@@ -360,6 +371,7 @@ impl GalleryView {
                                     .font_weight(FontWeight::BOLD)
                                     .child(title),
                             )
+                            .when(note.conflict, |line| line.child(conflict_badge(tokens)))
                             .when(note.pinned, |line| {
                                 line.child(icon(IconName::Pin, tokens.faint).size(px(12.)))
                             }),
@@ -431,14 +443,8 @@ impl GalleryView {
                 .context_menu(move |menu, _, _| super::trash::menu(menu, &gallery))
                 .into_any_element();
         }
-        let folders: Rc<Vec<String>> = Rc::new(
-            self.folders
-                .iter()
-                .map(|folder| folder.path.clone())
-                .collect(),
-        );
         element
-            .context_menu(move |menu, window, cx| note_menu(menu, &gallery, &folders, window, cx))
+            .context_menu(move |menu, window, cx| note_menu(menu, &gallery, window, cx))
             .into_any_element()
     }
 
@@ -484,17 +490,19 @@ impl GalleryView {
     }
 }
 
-/// Pin, move, duplicate and delete what is selected.
+/// Pin, move, duplicate, export and delete what is selected.
 fn note_menu(
     menu: PopupMenu,
     gallery: &WeakEntity<GalleryView>,
-    folders: &Rc<Vec<String>>,
     window: &mut Window,
     cx: &mut Context<PopupMenu>,
 ) -> PopupMenu {
-    let pinned = gallery.upgrade().is_some_and(|gallery| {
-        let selection = gallery.read(cx).selection();
-        !selection.is_empty() && selection.iter().all(|note| note.pinned)
+    let (pinned, targets) = gallery.upgrade().map_or((false, Vec::new()), |gallery| {
+        let gallery = gallery.read(cx);
+        let selection = gallery.selection();
+        let pinned = !selection.is_empty() && selection.iter().all(|note| note.pinned);
+        let folders = gallery.folders.iter().map(|folder| folder.path.clone());
+        (pinned, folders.collect::<Vec<_>>())
     });
     let act = |run: fn(&mut GalleryView, &mut Window, &mut Context<GalleryView>)| {
         let gallery = gallery.clone();
@@ -502,8 +510,7 @@ fn note_menu(
             let _ = gallery.update(cx, |gallery, cx| run(gallery, window, cx));
         }
     };
-    let targets = folders.clone();
-    let mover = gallery.clone();
+    let (mover, exporter) = (gallery.clone(), gallery.clone());
     menu.item(
         PopupMenuItem::new(if pinned { tr("Unpin") } else { tr("Pin") })
             .on_click(act(|gallery, _, cx| gallery.toggle_pin(cx))),
@@ -525,6 +532,19 @@ fn note_menu(
         PopupMenuItem::new(tr("Duplicate"))
             .on_click(act(|gallery, _, cx| gallery.duplicate_selection(cx))),
     )
+    .submenu(tr("Export"), window, cx, move |menu, _, _| {
+        [
+            (tr("Markdown…"), Format::Markdown),
+            (tr("PDF…"), Format::Pdf),
+        ]
+        .into_iter()
+        .fold(menu, |menu, (label, format)| {
+            let exporter = exporter.clone();
+            menu.item(PopupMenuItem::new(label).on_click(move |_, _, cx| {
+                let _ = exporter.update(cx, |gallery, cx| gallery.export_selection(format, cx));
+            }))
+        })
+    })
     .separator()
     .item(
         PopupMenuItem::new(tr("Delete"))
@@ -584,6 +604,26 @@ fn highlighted(text: &str, ranges: &[Range<usize>], tokens: &Tokens) -> StyledTe
         .map(|range| (range.clone(), style))
         .collect::<Vec<_>>();
     StyledText::new(SharedString::from(text.to_owned())).with_highlights(highlights)
+}
+
+/// Marks a copy a sync tool made of a note changed in two places at once.
+fn conflict_badge(tokens: &Tokens) -> impl IntoElement {
+    div()
+        .debug_selector(|| "conflict-badge".into())
+        .flex()
+        .flex_none()
+        .items_center()
+        .gap(px(4.))
+        .h(px(20.))
+        .px(px(7.))
+        .rounded_full()
+        .bg(tokens.popover)
+        .shadow(vec![ring(tokens.hair, 1.)])
+        .text_size(tokens.text(11.))
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(tokens.muted)
+        .child(icon(IconName::Warning, tokens.muted).size(px(11.)))
+        .child(tr("Conflict"))
 }
 
 fn title_of(note: &NoteMeta) -> String {

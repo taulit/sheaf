@@ -9,6 +9,7 @@ use gpui::App;
 use sheaf_searchd::api::APP_NAME;
 use zbus::{Connection, OwnedVariant};
 
+use super::shortcut;
 use super::theme::{self, Appearance};
 
 const APPEARANCE: &str = "org.freedesktop.appearance";
@@ -79,10 +80,15 @@ impl Setting {
 /// shortcut is bound on the same connection ([`shortcut`](super::shortcut)).
 pub fn follow(connection: Connection, cx: &mut App) {
     let (sender, settings) = async_channel::unbounded::<Vec<Setting>>();
-    let (pressed, presses) = async_channel::unbounded::<Option<String>>();
+    let (pressed, presses) = async_channel::unbounded::<shortcut::Message>();
     cx.spawn(async move |cx| {
-        while let Ok(token) = presses.recv().await {
-            super::show(super::instance::Request::QuickNote, token, cx).await;
+        while let Ok(message) = presses.recv().await {
+            match message {
+                shortcut::Message::Pressed(token) => {
+                    super::show(super::instance::Request::QuickNote, token, cx).await;
+                }
+                shortcut::Message::FromVisor => cx.update(|cx| cx.set_global(shortcut::FromVisor)),
+            }
         }
     })
     .detach();
@@ -114,7 +120,7 @@ pub fn follow(connection: Connection, cx: &mut App) {
 async fn read_and_watch(
     connection: Connection,
     sender: async_channel::Sender<Vec<Setting>>,
-    pressed: async_channel::Sender<Option<String>>,
+    pressed: async_channel::Sender<shortcut::Message>,
 ) -> ashpd::Result<()> {
     // Portals take the app id of a host app from this call, which must be the first
     // one on the connection (`docs/verified.md` §1). Sandboxed, it does nothing.
@@ -126,7 +132,7 @@ async fn read_and_watch(
     let spawned = std::thread::Builder::new()
         .name("sheaf-shortcut".to_owned())
         .spawn(move || {
-            if let Err(err) = zbus::block_on(super::shortcut::listen(shortcuts, pressed)) {
+            if let Err(err) = zbus::block_on(shortcut::listen(shortcuts, pressed)) {
                 log::info!("no global Quick Note shortcut: {err}");
             }
         });

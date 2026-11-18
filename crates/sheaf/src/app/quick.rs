@@ -31,23 +31,23 @@ use std::rc::Rc;
 use gpui::{
     AnyElement, App, AppContext as _, Bounds, ClickEvent, Context, Edges, Entity, FocusHandle,
     Focusable, FontWeight, Global, InteractiveElement as _, IntoElement, MouseButton,
-    ParentElement as _, Render, SharedString, StatefulInteractiveElement as _, Styled as _,
-    Subscription, Task, TitlebarOptions, Window, WindowBounds, WindowDecorations, WindowHandle,
-    WindowOptions, div, prelude::FluentBuilder as _, px, size as size_of,
+    ParentElement as _, Render, StatefulInteractiveElement as _, Styled as _, Subscription, Task,
+    TitlebarOptions, Window, WindowBounds, WindowDecorations, WindowHandle, WindowOptions, div,
+    prelude::FluentBuilder as _, px, size as size_of,
 };
 use gpui_component::{Root, Theme};
-use gpui_markdown_editor::EditorStyle;
+use gpui_markdown_editor::{EditorStyle, UiParts};
 use jiff::{SignedDuration, Timestamp};
 use sheaf_core::i18n::tr;
 use sheaf_core::{CreateOptions, NoteId};
 use sheaf_searchd::api::APP_NAME;
 
-use super::actions::{self, QuickNoteDone, QuickNoteOpen};
+use super::actions::{self, PasteAttachment, QuickNoteDone, QuickNoteOpen};
 use super::assets::{IconName, icon};
-use super::chrome::pane;
+use super::chrome::{button, pane};
 use super::instance::Request;
 use super::library::{Folder, Library};
-use super::note::{Banner, NoteEvent, NoteView, setup};
+use super::note::{Banner, NoteEvent, NoteView, attach, setup, template};
 use super::overlays::{self, MenuRow, Toast, ToastHost};
 use super::settings::Settings;
 use super::theme::ActiveTokens as _;
@@ -289,7 +289,12 @@ impl QuickNoteView {
     /// Takes the note `id` into the window; `fresh` if it was just created for it.
     fn attach(&mut self, id: NoteId, fresh: bool, window: &mut Window, cx: &mut Context<Self>) {
         let library = self.library.clone();
-        let note = cx.new(|cx| NoteView::new(library, id, String::new(), window, cx));
+        // Plan 03 §8: only the editor and the footer, no format bar over the text.
+        let ui = UiParts {
+            format_bar: false,
+            ..UiParts::ALL
+        };
+        let note = cx.new(|cx| NoteView::new(library, id, String::new(), ui, window, cx));
         if fresh {
             note.update(cx, |note, _| note.mark_new());
         }
@@ -605,33 +610,6 @@ impl QuickNoteView {
     }
 }
 
-/// `.btn` of the prototype; `primary` is `.btn.pri`.
-fn button(
-    id: &'static str,
-    label: String,
-    primary: bool,
-    tokens: &super::theme::Tokens,
-) -> gpui::Stateful<gpui::Div> {
-    div()
-        .id(id)
-        .flex()
-        .flex_none()
-        .items_center()
-        .h(px(30.))
-        .px(px(13.))
-        .rounded(px(8.))
-        .text_size(tokens.text(12.5))
-        .font_weight(FontWeight::BOLD)
-        .cursor_pointer()
-        .when(primary, |button| {
-            button.bg(tokens.accent).text_color(tokens.on_accent)
-        })
-        .when(!primary, |button| {
-            button.bg(tokens.selected).text_color(tokens.fg)
-        })
-        .child(SharedString::from(label))
-}
-
 /// The note view's editor style at the size of 04 "Schnellnotiz": text 15/1.55 and a
 /// title no larger than the text, in the window's padding. The font follows the
 /// settings; their line widths are all wider than this window.
@@ -685,15 +663,30 @@ impl Render for QuickNoteView {
             .on_action(cx.listener(|this, _: &QuickNoteOpen, window, cx| {
                 this.end(Ending::Open, window, cx);
             }))
+            .on_action(cx.listener(|this, _: &PasteAttachment, window, cx| {
+                if let Some(note) = &this.note {
+                    note.update(cx, |note, cx| note.paste(window, cx));
+                }
+            }))
             .child(self.render_header(cx))
             .child(
                 div()
+                    .relative()
                     .flex_1()
                     .min_h_0()
-                    .when_some(editor, |body, editor| body.child(editor)),
+                    .when_some(editor, |body, editor| body.child(editor))
+                    .when_some(
+                        self.note.clone().filter(|_| cx.has_active_drag()),
+                        |body, note| body.child(attach::drop_layer(note)),
+                    ),
             )
             .child(self.render_footer(cx))
             .children(folder_menu)
+            .children(
+                self.note
+                    .as_ref()
+                    .and_then(|note| template::menu(note, note.read(cx).template_menu(), cx)),
+            )
             .child(self.toasts.clone())
     }
 }

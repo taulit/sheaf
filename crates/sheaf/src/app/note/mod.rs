@@ -32,15 +32,17 @@
 //! A save that fails shows a banner and is tried again with the next change, with "Try
 //! Again" and on leaving; leaving that fails keeps the view open.
 
-mod attach;
+pub(crate) mod attach;
 mod backlinks;
 mod date;
-mod export;
+pub mod export;
 pub use export::ViewerFiles;
 pub(crate) mod files;
 mod header;
 mod jump;
 pub(crate) mod setup;
+mod swipe;
+pub(crate) mod template;
 mod worker;
 
 use std::path::PathBuf;
@@ -51,24 +53,25 @@ use std::time::Duration;
 use async_channel::Sender;
 use gpui::{
     AnimationExt as _, App, AppContext as _, ClipboardItem, Context, Entity, EventEmitter,
-    ExternalPaths, FocusHandle, Focusable, InteractiveElement as _, IntoElement,
-    ParentElement as _, Render, Styled as _, Subscription, Task, Window, div,
-    prelude::FluentBuilder as _, px,
+    FocusHandle, Focusable, InteractiveElement as _, IntoElement, ParentElement as _, Render,
+    Styled as _, Subscription, Task, Window, div, prelude::FluentBuilder as _, px,
 };
 use gpui_component::Theme;
-use gpui_markdown_editor::{DocMeta, EditorEvent, MarkdownEditor};
+use gpui_markdown_editor::{DocMeta, EditorEvent, MarkdownEditor, UiParts};
 use sheaf_core::i18n::tr;
 use sheaf_core::{CreateOptions, Note, NoteId, NoteMeta, Sort};
 
 use super::actions::{
     self, AttachFile, Back, ExportMarkdown, ExportPdf, PasteAttachment, Print, Trash,
 };
+use super::assets::{IconName, icon};
 use super::chrome::pane;
 use super::library::{Folder, Library, LibraryEvent};
 use super::overlays::Toast;
 use super::settings::{self, Settings};
 use super::state::Recovery;
 use super::theme::ActiveTokens as _;
+use export::Format;
 use setup::{Lookup, SharedLookup};
 pub use worker::Upload;
 use worker::{Change, Job, Leave, Queued, Report, Shared};
@@ -148,6 +151,10 @@ pub struct NoteView {
     rename_pending: bool,
     banner: Option<Banner>,
     popover: Option<Popover>,
+    /// The touchpad gesture over the text, for swiping back.
+    swipe: swipe::Swipe,
+    template_menu: Option<template::TemplateMenu>,
+    _templates: Task<()>,
     /// Counts the saves; "Saved" fades in afresh after each one.
     saves: usize,
     saved_shown: bool,
@@ -179,10 +186,13 @@ impl std::fmt::Debug for NoteView {
 impl EventEmitter<NoteEvent> for NoteView {}
 
 impl NoteView {
+    /// The view of note `id`, opened from the search `query`. `ui` is what the editor
+    /// shows of its own: the Quick Note window is too small for the format bar.
     pub fn new(
         library: Entity<Library>,
         id: NoteId,
         query: String,
+        ui: UiParts,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -191,8 +201,10 @@ impl NoteView {
             folder: notes_dir.clone(),
             ..Lookup::default()
         }));
+        let note = cx.weak_entity();
         let editor = cx.new(|cx| {
-            let mut editor = MarkdownEditor::new(window, cx, setup::options(&lookup));
+            let slash = vec![template::slash_item(note)];
+            let mut editor = MarkdownEditor::new(window, cx, setup::options(&lookup, slash, ui));
             editor.set_style(setup::style(cx), cx);
             editor
         });
@@ -255,6 +267,9 @@ impl NoteView {
             rename_pending: false,
             banner: None,
             popover: None,
+            swipe: swipe::Swipe::default(),
+            template_menu: None,
+            _templates: Task::ready(()),
             saves: 0,
             saved_shown: false,
             _save_timer: Task::ready(()),
@@ -922,6 +937,7 @@ impl Render for NoteView {
             let zone = self.library.read(cx).now().time_zone().clone();
             date::long_date_time(&meta.modified.to_zoned_datetime(zone))
         });
+        let conflict = self.meta.as_ref().is_some_and(|meta| meta.conflict);
         let saved = self.saved_shown.then(|| {
             div()
                 .absolute()
@@ -950,8 +966,8 @@ impl Render for NoteView {
                 }
             }))
             .on_action(cx.listener(|this, _: &Trash, _, cx| this.trash(cx)))
-            .on_action(cx.listener(|this, _: &ExportMarkdown, _, cx| this.export_markdown(cx)))
-            .on_action(cx.listener(|this, _: &ExportPdf, _, cx| this.export_pdf(cx)))
+            .on_action(cx.listener(|this, _: &ExportMarkdown, _, cx| this.export(Format::Markdown, cx)))
+            .on_action(cx.listener(|this, _: &ExportPdf, _, cx| this.export(Format::Pdf, cx)))
             .on_action(cx.listener(|this, _: &Print, _, cx| this.print(cx)))
             .on_action(cx.listener(|this, _: &AttachFile, window, cx| this.attach_file(window, cx)))
             .on_action(cx.listener(|this, _: &PasteAttachment, window, cx| this.paste(window, cx)))
@@ -965,21 +981,42 @@ impl Render for NoteView {
                     .text_center()
                     .text_size(tokens.text(12.))
                     .text_color(tokens.faint)
-                    .child(date.unwrap_or_default()),
+                    .child(date.unwrap_or_default())
+                    .when(conflict, |line| {
+                        line.child(
+                            div()
+                                .debug_selector(|| "conflict-hint".into())
+                                .flex()
+                                .justify_center()
+                                .items_center()
+                                .gap(px(5.))
+                                .mt(px(4.))
+                                .child(icon(IconName::Warning, tokens.faint).size(px(12.)))
+                                .child(tr(
+                                    "Conflict copy from syncing: move what you need into the original, then delete it.",
+                                )),
+                        )
+                    }),
             )
             .child(
                 div()
                     .id("note-text")
+                    .relative()
                     .flex_1()
                     .min_h_0()
-                    .on_drop(cx.listener(|this, paths: &ExternalPaths, window, cx| {
-                        let files = paths.paths().iter().cloned().map(Upload::File).collect();
-                        this.attach(files, window, cx);
-                    }))
-                    .when(self.loaded, |area| area.child(self.editor.clone())),
+                    .when(self.loaded, |area| area.child(self.editor.clone()))
+                    .child(swipe::listener(cx.entity()))
+                    .when(cx.has_active_drag(), |area| {
+                        area.child(attach::drop_layer(cx.entity()))
+                    }),
             )
             .children(self.backlinks_section(cx))
             .children(saved)
+            .children(template::menu(
+                &cx.entity(),
+                self.template_menu.as_ref(),
+                cx,
+            ))
             .when(self.popover.is_some(), |pane| {
                 pane.child(header::dismiss_layer(cx))
             })

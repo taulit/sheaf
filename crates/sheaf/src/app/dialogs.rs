@@ -62,26 +62,13 @@ impl Dialogs {
     pub fn new(backend: impl Backend + 'static) -> Self {
         Dialogs(Arc::new(backend))
     }
+}
 
-    pub fn save_file(
-        &self,
-        title: &str,
-        name: &str,
-        filter: &Filter,
-    ) -> Result<Option<PathBuf>, String> {
-        self.0.save_file(title, name, filter)
-    }
+impl std::ops::Deref for Dialogs {
+    type Target = dyn Backend;
 
-    pub fn open_files(&self, title: &str) -> Result<Vec<PathBuf>, String> {
-        self.0.open_files(title)
-    }
-
-    pub fn choose_folder(&self, title: &str) -> Result<Option<PathBuf>, String> {
-        self.0.choose_folder(title)
-    }
-
-    pub fn print(&self, title: &str, render: Renderer<'_>) -> Result<bool, String> {
-        self.0.print(title, render)
+    fn deref(&self) -> &Self::Target {
+        &*self.0
     }
 }
 

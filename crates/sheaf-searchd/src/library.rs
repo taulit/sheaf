@@ -34,7 +34,8 @@ pub struct ResultMeta {
 pub struct Library {
     store: NoteStore,
     index_dir: PathBuf,
-    reader: Reader,
+    /// `None` while idle: see [`release`](Library::release).
+    reader: Option<Reader>,
     /// The snippet of the most recent search that returned a note, by id.
     snippets: HashMap<String, String>,
 }
@@ -46,7 +47,7 @@ impl Library {
         Ok(Library {
             store: NoteStore::new(notes_dir),
             index_dir: index_dir.to_owned(),
-            reader: index.reader(),
+            reader: Some(index.reader()),
             snippets: HashMap::new(),
         })
     }
@@ -70,7 +71,7 @@ impl Library {
     /// full build. Returns the ids of the notes whose index entry changed.
     pub fn reconcile(&mut self) -> Result<Vec<String>> {
         let mut indexed: HashMap<String, (NoteId, Timestamp)> = self
-            .reader
+            .reader()?
             .manifest()?
             .into_iter()
             .map(|(path, id, modified)| (path, (id, modified)))
@@ -115,7 +116,7 @@ impl Library {
             match change {
                 Change::Upsert(path) => ops.push(Op::Upsert(path)),
                 Change::Remove(path) => {
-                    if let Some(meta) = self.reader.get_by_path(&path)? {
+                    if let Some(meta) = self.reader()?.get_by_path(&path)? {
                         ids.push(meta.id.to_string());
                     }
                     ops.push(Op::Remove(path));
@@ -145,7 +146,7 @@ impl Library {
             limit => usize::try_from(limit).map_or(MAX_LIMIT, |limit| limit.min(MAX_LIMIT)),
         };
         let results = self
-            .reader
+            .reader()?
             .search(&parse(query), limit, &ZonedDateTime::now())?;
         if self.snippets.len() + results.hits.len() > MAX_SNIPPETS {
             self.snippets.clear();
@@ -170,21 +171,19 @@ impl Library {
     }
 
     /// The notes `ids` names that still exist, as the shell shows them.
-    pub fn result_metas(&self, ids: &[String]) -> Result<Vec<ResultMeta>> {
+    pub fn result_metas(&mut self, ids: &[String]) -> Result<Vec<ResultMeta>> {
+        let reader = self.reader()?;
         let mut metas = Vec::with_capacity(ids.len());
         for id in ids {
             let Ok(note_id) = id.parse::<NoteId>() else {
                 continue;
             };
-            let Some(meta) = self.reader.get(&note_id)? else {
+            let Some(meta) = reader.get(&note_id)? else {
                 continue;
             };
             let description = match self.snippets.get(id) {
                 Some(snippet) => snippet.clone(),
-                None => preview(
-                    &self.reader.body(&note_id)?.unwrap_or_default(),
-                    SNIPPET_CHARS,
-                ),
+                None => preview(&reader.body(&note_id)?.unwrap_or_default(), SNIPPET_CHARS),
             };
             let name = if meta.title.is_empty() {
                 tr("Untitled")
@@ -229,14 +228,54 @@ impl Library {
     }
 
     /// Applies `ops` and shows their result to the following reads. Returns the ids of
-    /// the notes that were indexed.
-    fn write(&self, ops: &[Op]) -> Result<Vec<String>> {
+    /// the notes that were indexed. If the index is gone, the indexer starts a new one
+    /// with just these notes, so the rest of the folder is indexed right after.
+    fn write(&mut self, ops: &[Op]) -> Result<Vec<String>> {
         if ops.is_empty() {
             return Ok(Vec::new());
         }
+        let lost = !SearchIndex::exists(&self.index_dir);
         let ids = indexer::apply(self.store.root(), &self.index_dir, ops)?;
-        self.reader.reload()?;
+        if lost {
+            self.rebuild()?;
+        } else if let Some(reader) = &self.reader {
+            reader.reload()?;
+        }
         Ok(ids)
+    }
+
+    /// The reader of the index, opened again if it was released. An index that was
+    /// cleared or broken meanwhile is built again before anything is read from it, so
+    /// a search never answers from an empty index.
+    fn reader(&mut self) -> Result<Reader> {
+        if let Some(reader) = &self.reader {
+            return Ok(reader.clone());
+        }
+        if !SearchIndex::exists(&self.index_dir) {
+            return self.rebuild();
+        }
+        let reader = SearchIndex::open_or_create(&self.index_dir)?.reader();
+        self.reader = Some(reader.clone());
+        Ok(reader)
+    }
+
+    /// Opens the index again, creating it if it is gone, and catches up with the folder.
+    fn rebuild(&mut self) -> Result<Reader> {
+        log::warn!("the index is gone or broken, indexing the notes folder again");
+        let reader = SearchIndex::open_or_create(&self.index_dir)?.reader();
+        self.reader = Some(reader.clone());
+        self.snippets.clear();
+        self.reconcile()?;
+        Ok(reader)
+    }
+
+    /// Lets go of the index and what was read from it, while nobody asks: the pages of
+    /// the index that searches touched count towards the resident size for as long as
+    /// it is open (`SearchIndex`). The next call opens it again, which takes a few
+    /// milliseconds.
+    pub fn release(&mut self) {
+        self.reader = None;
+        self.snippets = HashMap::new();
     }
 }
 

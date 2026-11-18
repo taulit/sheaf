@@ -9,6 +9,7 @@ rust-version = "1.95"
 license = "GPL-3.0-or-later"
 repository = "https://github.com/taulit/sheaf"
 homepage = "https://github.com/taulit/sheaf"
+keywords = ["notes", "markdown", "gnome", "gpui", "note-taking"]
 publish = false
 
 [workspace.dependencies]
@@ -39,7 +40,7 @@ gpui = { package = "gpui-pre", version = "=0.3.12" }
 gpui_platform = { package = "gpui-pre-platform", version = "=0.3.12", features = ["font-kit", "wayland", "x11"] }
 gpui-component = "=0.10.0"
 gpui-kit-assets = "=0.10.0"
-gpui-markdown-editor = { git = "https://github.com/taulit/gpui-markdown-editor", tag = "v0.0.3", features = ["serde"] }
+gpui-markdown-editor = { git = "https://github.com/taulit/gpui-markdown-editor", tag = "v0.1.0", features = ["serde"] }
 ashpd = { version = "0.14", default-features = false, features = ["async-io", "settings", "global_shortcuts", "file_chooser", "print"] }
 anyhow = "1"
 async-channel = "2.5"
@@ -69,6 +70,15 @@ unwrap_used = "warn"
 lto = "thin"
 codegen-units = 4
 strip = "debuginfo"
+
+# sheaf-searchd runs all session long, mostly idle: built for size, its resident code is
+# what its memory budget (< 15 MB) is mostly made of. Search through it stays within
+# noise of the release build (docs/testing.md, "Budgets").
+[profile.service]
+inherits = "release"
+opt-level = "s"
+lto = "fat"
+codegen-units = 1
 
 [profile.bench]
 debug = false

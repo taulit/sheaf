@@ -117,7 +117,8 @@ fn days_between(from: Date, to: Date) -> i32 {
     to.since(from).map_or(0, |span| span.get_days())
 }
 
-fn month_name(month: i8) -> String {
+/// The name of month `month` (1 to 12) in the language of the app.
+pub(crate) fn month_name(month: i8) -> String {
     match month {
         1 => tr("January"),
         2 => tr("February"),

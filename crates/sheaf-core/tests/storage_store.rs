@@ -968,3 +968,20 @@ fn deleting_a_folder_never_deletes_other_files() {
     assert_eq!(store.folders().unwrap(), ["Mix"]);
     assert_eq!(read(&dir, "Mix/vertrag.pdf"), "pdf");
 }
+
+#[test]
+fn deleting_a_folder_leaves_unreadable_notes_and_trashes_the_rest() {
+    let (dir, store) = store();
+    create_in(&store, "Arbeit", "Plan\n");
+    fs::write(dir.path().join("Arbeit/Café.md"), b"Caf\xe9\n").unwrap();
+    create_in(&store, "Arbeit", "Zweiter\n");
+
+    let trashed = store
+        .delete_folder("Arbeit", time("2026-11-16T12:00:00Z"))
+        .unwrap();
+    assert_eq!(trashed.len(), 2);
+    assert_eq!(
+        fs::read(dir.path().join("Arbeit/Café.md")).unwrap(),
+        b"Caf\xe9\n"
+    );
+}

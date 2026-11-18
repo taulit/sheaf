@@ -70,24 +70,42 @@ impl Env {
         Ok(self.config_home()?.join("sheaf/config.toml"))
     }
 
-    /// The notes folder offered on first run: "Notes", localised, in the documents folder.
+    /// The notes folder taken on first run: "Notes", localised, in the documents folder.
+    /// A notes folder that is already there under another language's name is taken
+    /// instead of making a second one.
     pub fn default_notes_dir(&self) -> Result<PathBuf> {
-        Ok(self.documents_dir()?.join(tr("Notes")))
+        Ok(default_in(&self.documents_dir()?, &tr("Notes")))
     }
 
     /// The notes folder to use: `explicit` (the `--dir` option), else `SHEAF_NOTES_DIR`,
-    /// else `notes_dir` of the app configuration, else the default.
+    /// else `notes_dir` of the app configuration, else the default. Whoever comes to
+    /// the default first (app, service or CLI) records it in the app configuration, so
+    /// the folder stays where it is when the language changes.
     pub fn notes_dir(&self, explicit: Option<&Path>) -> Result<PathBuf> {
         if let Some(dir) = explicit.or(self.notes_dir.as_deref()) {
             return Ok(dir.to_owned());
         }
-        match AppConfig::load(&self.app_config_path()?)?.notes_dir {
-            Some(dir) => match dir.strip_prefix("~") {
+        let path = self.app_config_path()?;
+        let config = AppConfig::load(&path)?;
+        if let Some(dir) = config.notes_dir {
+            return match dir.strip_prefix("~") {
                 Ok(below_home) => Ok(self.home()?.join(below_home)),
                 Err(_) => Ok(dir),
-            },
-            None => self.default_notes_dir(),
+            };
         }
+        let dir = self.default_notes_dir()?;
+        let stored = match dir.strip_prefix(self.home()?) {
+            Ok(below_home) => Path::new("~").join(below_home),
+            Err(_) => dir.clone(),
+        };
+        let chosen = AppConfig {
+            notes_dir: Some(stored),
+            ..config.clone()
+        };
+        if let Err(err) = AppConfig::save_changes(&path, &config, &chosen) {
+            log::warn!("cannot record the notes folder: {err}");
+        }
+        Ok(dir)
     }
 
     /// Where the search index of a notes folder lives:
@@ -114,6 +132,19 @@ impl Env {
             None => Ok(self.home()?.join(fallback)),
         }
     }
+}
+
+/// What the translations call the notes folder; see [`Env::default_notes_dir`].
+const NOTES_NAMES: [&str; 2] = ["Notes", "Notizen"];
+
+/// The notes folder in `documents`: the one named `localized`, else one there under
+/// another language's name, else `localized`, which does not exist yet.
+fn default_in(documents: &Path, localized: &str) -> PathBuf {
+    std::iter::once(localized)
+        .chain(NOTES_NAMES)
+        .map(|name| documents.join(name))
+        .find(|dir| dir.is_dir())
+        .unwrap_or_else(|| documents.join(localized))
 }
 
 /// The value of `key` in a `user-dirs.dirs` file: `KEY="$HOME/relative"` or `KEY="/absolute"`.
@@ -168,10 +199,6 @@ mod tests {
         );
         assert_eq!(
             env.default_notes_dir().unwrap(),
-            Path::new("/home/me/Documents/Notes")
-        );
-        assert_eq!(
-            env.notes_dir(None).unwrap(),
             Path::new("/home/me/Documents/Notes")
         );
 
@@ -252,6 +279,55 @@ mod tests {
         assert!(matches!(env.notes_dir(None), Err(Error::Config(_))));
         // An explicit folder works even with a broken configuration.
         assert_eq!(env.notes_dir(Some(Path::new("x"))).unwrap(), Path::new("x"));
+    }
+
+    #[test]
+    fn the_first_run_records_the_default_folder() {
+        let home = tempfile::tempdir().unwrap();
+        let env = env(home.path());
+        let notes = home.path().join("Documents/Notes");
+        assert_eq!(env.notes_dir(None).unwrap(), notes);
+        let recorded = AppConfig::load(&env.app_config_path().unwrap()).unwrap();
+        assert_eq!(
+            recorded.notes_dir.as_deref(),
+            Some(Path::new("~/Documents/Notes"))
+        );
+
+        // A later run in another language finds the recorded folder, not its own name,
+        // even where a folder of that name turned up.
+        fs::create_dir_all(home.path().join("Documents/Notizen")).unwrap();
+        assert_eq!(env.notes_dir(None).unwrap(), notes);
+    }
+
+    #[test]
+    fn the_first_run_takes_a_notes_folder_of_another_language() {
+        let documents = tempfile::tempdir().unwrap();
+        let documents = documents.path();
+        assert_eq!(default_in(documents, "Notizen"), documents.join("Notizen"));
+
+        fs::create_dir(documents.join("Notes")).unwrap();
+        assert_eq!(default_in(documents, "Notizen"), documents.join("Notes"));
+        assert_eq!(default_in(documents, "Notas"), documents.join("Notes"));
+
+        fs::create_dir(documents.join("Notizen")).unwrap();
+        assert_eq!(default_in(documents, "Notizen"), documents.join("Notizen"));
+        assert_eq!(default_in(documents, "Notes"), documents.join("Notes"));
+    }
+
+    #[test]
+    fn the_first_run_with_an_existing_folder_records_it() {
+        let home = tempfile::tempdir().unwrap();
+        let env = env(home.path());
+        fs::create_dir_all(home.path().join("Documents/Notizen")).unwrap();
+        assert_eq!(
+            env.notes_dir(None).unwrap(),
+            home.path().join("Documents/Notizen")
+        );
+        let recorded = AppConfig::load(&env.app_config_path().unwrap()).unwrap();
+        assert_eq!(
+            recorded.notes_dir.as_deref(),
+            Some(Path::new("~/Documents/Notizen"))
+        );
     }
 
     #[test]

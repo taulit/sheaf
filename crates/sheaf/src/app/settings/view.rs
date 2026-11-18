@@ -25,6 +25,7 @@ use crate::app::chrome::{HeaderBar, pane};
 use crate::app::dialogs::dialogs;
 use crate::app::library::Library;
 use crate::app::overlays::{self, shortcuts};
+use crate::app::shortcut::{self, FromVisor};
 use crate::app::theme::ActiveTokens as _;
 
 const WIDTH: f32 = 640.;
@@ -77,6 +78,7 @@ impl SettingsView {
                 },
             ),
             cx.observe_global::<super::Settings>(|_, cx| cx.notify()),
+            cx.observe_global::<FromVisor>(|_, cx| cx.notify()),
         ];
         let focus_handle = cx.focus_handle();
         focus_handle.focus(window, cx);
@@ -569,22 +571,29 @@ impl Render for SettingsView {
                     resume_control,
                     cx,
                 ),
-                row(
-                    tr("Shortcut from Anywhere"),
-                    Some(tr(
-                        "While Notes runs. Otherwise add a custom shortcut for “sheaf --quick” in GNOME Settings, Keyboard",
-                    )),
-                    key_caps(
-                        // The keys the global shortcut proposes to GNOME, see `shortcut`.
-                        overlays::format_keys(&KeyBinding::new(
-                            "ctrl-shift-n",
-                            QuickNoteAction,
-                            None,
-                        )),
+                if cx.has_global::<FromVisor>() {
+                    row(
+                        tr("Shortcut from Anywhere"),
+                        Some(tr("Visor supplies it: open Visor and type “note”")),
+                        div(),
                         cx,
-                    ),
-                    cx,
-                ),
+                    )
+                } else {
+                    row(
+                        tr("Shortcut from Anywhere"),
+                        Some(shortcut::fallback_hint(shortcut::in_flatpak())),
+                        key_caps(
+                            // The keys the global shortcut proposes to GNOME, see `shortcut`.
+                            overlays::format_keys(&KeyBinding::new(
+                                "ctrl-shift-n",
+                                QuickNoteAction,
+                                None,
+                            )),
+                            cx,
+                        ),
+                        cx,
+                    )
+                },
             ],
             cx,
         );
