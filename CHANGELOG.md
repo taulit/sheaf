@@ -7,7 +7,7 @@ All notable changes are listed here. The format follows
 The release workflow takes the notes of a release from the section of its version. On release
 day the date after the version is set to the day of the tag.
 
-## [0.1.0] - 2026-11-17
+## [0.1.0] - 2026-11-18
 
 First release.
 

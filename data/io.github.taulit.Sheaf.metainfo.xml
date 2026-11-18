@@ -142,7 +142,7 @@
 
   <releases>
     <!-- Release day: set the date to the day of the tag (docs/release-checklist.md). -->
-    <release version="0.1.0" date="2026-11-17">
+    <release version="0.1.0" date="2026-11-18">
       <description>
         <p>First release.</p>
         <p xml:lang="de">Erste Veröffentlichung.</p>

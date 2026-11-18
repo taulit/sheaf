@@ -75,6 +75,14 @@ shell completions. Use `/usr` or `/usr/local`: GNOME Shell reads search provider
 the system data directories, so a prefix under your home folder gives no search in the
 overview.
 
+The session's D-Bus does not see the new service files until it reads its configuration
+again. Until then the app does not open from the app grid and the overview finds no notes
+("The name is not activatable" in the journal). Log out and in once, or run:
+
+```sh
+busctl --user call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus ReloadConfig
+```
+
 ## Search in the GNOME overview
 
 Sheaf adds a search provider, so typing in the overview finds notes under "Notes". The
