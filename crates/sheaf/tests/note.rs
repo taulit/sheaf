@@ -11,7 +11,9 @@ use std::path::Path;
 use std::time::Duration;
 
 use fixture::{Look, Notes};
-use gpui::{Entity, EntityInputHandler as _, TestAppContext, VisualTestContext, point, px};
+use gpui::{
+    Entity, EntityInputHandler as _, Focusable as _, TestAppContext, VisualTestContext, point, px,
+};
 use gpui_component::ActiveTheme as _;
 use gpui_markdown_editor::{BlockId, DocMeta, EditorEvent, MarkdownEditor, TextPos};
 use sheaf::app::actions;
@@ -919,6 +921,43 @@ async fn the_palette_lists_commands_and_notes_and_runs_them(cx: &mut TestAppCont
     app.cx.simulate_input("back to");
     app.cx.simulate_keystrokes("enter");
     assert_eq!(app.route(), Route::Gallery);
+}
+
+/// Inside the text Ctrl+K stays the palette (plan 03 §5); the editor's link prompt is
+/// on Ctrl+Shift+K.
+#[gpui::test]
+async fn ctrl_k_in_the_text_is_the_palette_and_ctrl_shift_k_links(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let mut app = open_app(&notes, cx);
+    let note = app.open("Notch-Ideen");
+    let editor = note.read_with(app.cx, |note, _| note.editor().clone());
+    app.cx.update(|window, cx| {
+        editor.update(cx, |editor, cx| {
+            let block = editor.document().blocks()[1].id();
+            let start = TextPos { block, offset: 4 };
+            let end = TextPos { block, offset: 9 };
+            editor.__set_selection(start, end, cx);
+        });
+        editor.focus_handle(cx).focus(window, cx);
+        cx.write_to_clipboard(gpui::ClipboardItem::new_string(
+            "https://example.org".to_owned(),
+        ));
+    });
+
+    app.cx.simulate_keystrokes("ctrl-k");
+    assert!(palette_entries(&mut app).is_some());
+    app.cx.simulate_keystrokes("escape");
+    assert!(palette_entries(&mut app).is_none());
+    assert!(!app.editor_text().contains("example.org"));
+
+    app.cx
+        .update(|window, cx| editor.focus_handle(cx).focus(window, cx));
+    app.cx.simulate_keystrokes("ctrl-shift-k enter");
+    let text = app.editor_text();
+    assert!(
+        text.contains("Was [die N](https://example.org)otch"),
+        "{text}"
+    );
 }
 
 #[gpui::test]
