@@ -1175,3 +1175,43 @@ async fn a_sync_conflict_copy_is_marked_in_the_gallery_and_the_note(cx: &mut Tes
     app.cx.update(|window, cx| window.draw(cx).clear(cx));
     assert!(app.cx.debug_bounds("conflict-hint").is_some());
 }
+
+#[gpui::test]
+async fn a_swipe_to_the_right_on_the_touchpad_goes_back(cx: &mut TestAppContext) {
+    use gpui::{ScrollDelta, ScrollEvent};
+
+    let notes = Notes::seeded();
+    let mut app = open_app(&notes, cx);
+    let scroll = |app: &mut TestApp, dx: f32, dy: f32| {
+        let center = app.cx.update(|window, _| {
+            let size = window.viewport_size();
+            point(size.width / 2., size.height / 2.)
+        });
+        app.cx.simulate_event(ScrollEvent {
+            position: center,
+            delta: ScrollDelta::Pixels(point(px(dx), px(dy))),
+            ..ScrollEvent::default()
+        });
+        app.cx.executor().advance_clock(Duration::from_millis(10));
+        app.cx.run_until_parked();
+    };
+
+    app.open("Ausschreibung – offene Fragen");
+    app.cx.update(|window, cx| window.draw(cx).clear(cx));
+    for _ in 0..10 {
+        scroll(&mut app, 0., -30.);
+    }
+    for _ in 0..3 {
+        scroll(&mut app, 40., 0.);
+    }
+    assert!(
+        matches!(app.route(), Route::Note { .. }),
+        "scrolling, then drifting sideways, stays"
+    );
+
+    app.cx.executor().advance_clock(Duration::from_secs(1));
+    for _ in 0..6 {
+        scroll(&mut app, 30., 1.);
+    }
+    assert_eq!(app.route(), Route::Gallery);
+}

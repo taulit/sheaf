@@ -41,6 +41,7 @@ pub(crate) mod files;
 mod header;
 mod jump;
 pub(crate) mod setup;
+mod swipe;
 pub(crate) mod template;
 mod worker;
 
@@ -150,6 +151,8 @@ pub struct NoteView {
     rename_pending: bool,
     banner: Option<Banner>,
     popover: Option<Popover>,
+    /// The touchpad gesture over the text, for swiping back.
+    swipe: swipe::Swipe,
     template_menu: Option<template::TemplateMenu>,
     _templates: Task<()>,
     /// Counts the saves; "Saved" fades in afresh after each one.
@@ -264,6 +267,7 @@ impl NoteView {
             rename_pending: false,
             banner: None,
             popover: None,
+            swipe: swipe::Swipe::default(),
             template_menu: None,
             _templates: Task::ready(()),
             saves: 0,
@@ -1001,6 +1005,7 @@ impl Render for NoteView {
                     .flex_1()
                     .min_h_0()
                     .when(self.loaded, |area| area.child(self.editor.clone()))
+                    .child(swipe::listener(cx.entity()))
                     .when(cx.has_active_drag(), |area| {
                         area.child(attach::drop_layer(cx.entity()))
                     }),
