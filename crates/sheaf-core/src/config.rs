@@ -222,6 +222,31 @@ impl FolderConfig {
         Ok(after)
     }
 
+    /// Makes what names the folder `from`, or one inside it, name `to` instead: its
+    /// view, the Quick Notes folder and the smart folders' searches.
+    pub fn rename_folder(&mut self, from: &str, to: &str) {
+        let moved = |folder: &str| match folder.strip_prefix(from) {
+            Some(rest) if rest.is_empty() || rest.starts_with('/') => Some(format!("{to}{rest}")),
+            _ => None,
+        };
+        let renamed: Vec<(String, String)> = self
+            .folders
+            .keys()
+            .filter_map(|folder| Some((folder.clone(), moved(folder)?)))
+            .collect();
+        for (old, new) in renamed {
+            if let Some(view) = self.folders.remove(&old) {
+                self.folders.insert(new, view);
+            }
+        }
+        if let Some(folder) = self.quick_note.folder.as_deref().and_then(moved) {
+            self.quick_note.folder = Some(folder);
+        }
+        for smart in &mut self.smart_folders {
+            smart.query = crate::query::rename_folder(&smart.query, from, to);
+        }
+    }
+
     /// How `folder` is shown; the defaults, with [`default_sort`](Self::default_sort),
     /// if nothing was stored for it.
     pub fn view(&self, folder: &str) -> FolderView {
@@ -346,6 +371,35 @@ fn patch_table(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn what_names_a_renamed_folder_follows_it() {
+        let mut config = FolderConfig {
+            quick_note: QuickNote {
+                folder: Some("Arbeit/Schnell".to_owned()),
+                ..QuickNote::default()
+            },
+            smart_folders: vec![SmartFolder {
+                name: "Offen".to_owned(),
+                query: "folder:/Arbeit open:".to_owned(),
+                ..SmartFolder::default()
+            }],
+            ..FolderConfig::default()
+        };
+        for folder in ["Arbeit", "Arbeit/Kunden", "Arbeitszeit", ""] {
+            config
+                .folders
+                .insert(folder.to_owned(), FolderView::default());
+        }
+        config.folders.get_mut("Arbeit").unwrap().view = View::List;
+
+        config.rename_folder("Arbeit", "Büro");
+        let folders: Vec<&str> = config.folders.keys().map(String::as_str).collect();
+        assert_eq!(folders, ["", "Arbeitszeit", "Büro", "Büro/Kunden"]);
+        assert_eq!(config.folders["Büro"].view, View::List);
+        assert_eq!(config.quick_note.folder.as_deref(), Some("Büro/Schnell"));
+        assert_eq!(config.smart_folders[0].query, "folder:/Büro open:");
+    }
 
     const FULL: &str = r##"
 pinned_tags = ["rezepte", "büro"]

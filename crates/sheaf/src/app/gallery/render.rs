@@ -501,14 +501,22 @@ impl GalleryView {
                 .filter(|other| other.path == folder.path || other.path.starts_with(&prefix))
                 .map(|other| other.notes)
                 .sum();
+            if let Some((field, renamed)) = self.renaming_folder()
+                && *renamed == folder.path
+            {
+                rows.push(super::folders::name_field(field, depth, tokens));
+                continue;
+            }
             let scope = Scope::Folder(folder.path.clone());
             let on = self.scope == scope;
+            let (gallery, path) = (cx.entity().downgrade(), folder.path.clone());
             rows.push(
                 menu_row(("folder", index), IconName::Folder, name, tokens)
                     .pl(px(12. + 18. * depth as f32))
                     .when(on, |row| row.bg(tokens.selected))
                     .child(count(notes, tokens))
                     .on_click(cx.listener(move |this, _, _, cx| this.set_scope(scope.clone(), cx)))
+                    .context_menu(move |menu, _, _| super::folders::menu(menu, &gallery, &path))
                     .into_any_element(),
             );
         }

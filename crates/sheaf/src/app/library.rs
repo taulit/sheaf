@@ -569,6 +569,53 @@ impl Library {
         })
     }
 
+    /// Renames or moves the folder `from` to `to` with every note in it.
+    pub fn rename_folder(
+        &mut self,
+        from: &str,
+        to: &str,
+        cx: &mut Context<Self>,
+    ) -> Task<Result<()>> {
+        let (from, to) = (from.to_owned(), to.to_owned());
+        self.run(cx, move |store, touched| {
+            for rel_path in paths_in(store, &from)? {
+                touched.paths.push(rel_path);
+            }
+            store.rename_folder(&from, &to)?;
+            for rel_path in paths_in(store, &to)? {
+                let id = store.load(&rel_path)?.meta.id;
+                touched.note(id, rel_path);
+            }
+            Ok(())
+        })
+    }
+
+    /// Moves every note in `folder` to the trash and removes the folder, unless files
+    /// that are not notes are left in it. Resolves to the trashed notes.
+    pub fn delete_folder(
+        &mut self,
+        folder: &str,
+        cx: &mut Context<Self>,
+    ) -> Task<Result<Vec<NoteMeta>>> {
+        let folder = folder.to_owned();
+        let now = self.now().timestamp();
+        self.run(cx, move |store, touched| {
+            let paths = paths_in(store, &folder)?;
+            let trashed = store.delete_folder(&folder, now);
+            // The notes trashed before a failure are gone from the folder too.
+            for rel_path in paths {
+                if !store.root().join(&rel_path).exists() {
+                    touched.paths.push(rel_path);
+                }
+            }
+            let trashed = trashed?;
+            for meta in &trashed {
+                touched.tell(meta.id.clone());
+            }
+            Ok(trashed)
+        })
+    }
+
     /// Creates a note from `text`, whose first line is the title.
     pub fn create(
         &mut self,
@@ -768,6 +815,17 @@ impl Library {
         }
         outcome
     }
+}
+
+/// The notes in `folder` and the folders inside it, by path.
+fn paths_in(store: &NoteStore, folder: &str) -> Result<Vec<String>> {
+    let inside = format!("{folder}/");
+    Ok(store
+        .walk()?
+        .into_iter()
+        .map(|entry| entry.rel_path)
+        .filter(|rel_path| rel_path.starts_with(&inside))
+        .collect())
 }
 
 /// What a task of the Library resolves to when the app closed before it ran.

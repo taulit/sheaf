@@ -38,6 +38,7 @@ mod cards;
 pub mod chips;
 mod covers;
 pub mod dates;
+mod folders;
 pub mod layout;
 pub mod preview;
 mod render;
@@ -229,6 +230,8 @@ pub struct GalleryView {
     popover: Option<Popover>,
     /// The name field of "New Folder" in the folder popover, while it is open.
     new_folder: Option<Entity<InputState>>,
+    /// The name field of a folder being renamed, and its path.
+    renaming: Option<(Entity<InputState>, String)>,
     trash: trash::TrashState,
     smart: smart::SmartState,
     tags: tags::TagsState,
@@ -291,6 +294,7 @@ impl GalleryView {
             hover: Hover::default(),
             popover: None,
             new_folder: None,
+            renaming: None,
             trash: trash::TrashState::default(),
             smart: smart::SmartState::default(),
             tags: tags::TagsState::default(),
@@ -913,6 +917,7 @@ impl GalleryView {
         }
         self.popover = popover;
         self.new_folder = None;
+        self.renaming = None;
         self.stop_smart_edit();
         cx.notify();
     }

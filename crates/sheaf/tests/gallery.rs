@@ -806,8 +806,7 @@ async fn tags_are_pinned_to_the_chips_from_the_folder_popover(cx: &mut TestAppCo
     app.update(|gallery, cx| gallery.set_popover(Some(Popover::Folders), cx));
     let tags = app.read(|gallery| gallery.tags().to_vec());
     assert!(
-        tags.iter()
-            .any(|(tag, notes)| tag == "books" && *notes > 0),
+        tags.iter().any(|(tag, notes)| tag == "books" && *notes > 0),
         "{tags:?}"
     );
     assert!(!app.read(|gallery| gallery.is_tag_pinned("books")));
@@ -828,4 +827,77 @@ async fn tags_are_pinned_to_the_chips_from_the_folder_popover(cx: &mut TestAppCo
         FolderConfig::load(&notes.dir).unwrap().pinned_tags,
         ["ausschreibung", "books"]
     );
+}
+
+#[gpui::test]
+async fn a_renamed_folder_takes_its_settings_along(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    notes.write(
+        ".sheaf/config.toml",
+        "[folders.Arbeit]\nview = \"list\"\n\n[[smart_folders]]\nname = \"Offen\"\nquery = \"folder:/Arbeit open:\"\n",
+    );
+    let mut app = open_app(&notes, cx);
+    app.update(|gallery, cx| gallery.set_scope(Scope::Folder("Arbeit".into()), cx));
+    app.update(|gallery, cx| gallery.rename_folder("Arbeit", "Büro", cx));
+
+    let files = notes.files();
+    assert!(
+        files.iter().any(|file| file.starts_with("Büro/")),
+        "{files:?}"
+    );
+    assert!(
+        !files.iter().any(|file| file.starts_with("Arbeit/")),
+        "{files:?}"
+    );
+    assert_eq!(
+        app.read(|gallery| gallery.scope().clone()),
+        Scope::Folder("Büro".into())
+    );
+    let config = FolderConfig::load(&notes.dir).unwrap();
+    assert_eq!(config.folders["Büro"].view, View::List);
+    assert!(!config.folders.contains_key("Arbeit"));
+    assert_eq!(config.smart_folders[0].query, "folder:/Büro open:");
+    assert!(
+        app.titles()
+            .contains(&"Ausschreibung – offene Fragen".to_owned())
+    );
+
+    // A name taken by another folder is refused with a reason.
+    app.update(|gallery, cx| gallery.rename_folder("Büro", "Privat", cx));
+    assert!(notes.files().iter().any(|file| file.starts_with("Büro/")));
+    assert!(
+        app.toast()
+            .is_some_and(|toast| toast.starts_with("Could not rename the folder"))
+    );
+}
+
+#[gpui::test]
+async fn a_deleted_folder_asks_and_its_notes_go_to_the_trash(cx: &mut TestAppContext) {
+    let notes = Notes::seeded();
+    let mut app = open_app(&notes, cx);
+    let in_folder = |notes: &Notes| {
+        notes
+            .files()
+            .into_iter()
+            .filter(|file| file.starts_with("Arbeit/"))
+            .count()
+    };
+    let before = in_folder(&notes);
+    assert!(before > 0);
+    app.update(|gallery, cx| gallery.set_scope(Scope::Folder("Arbeit".into()), cx));
+    app.update(|gallery, cx| gallery.ask_delete_folder("Arbeit", cx));
+    assert!(app.read(|gallery| gallery.confirming().is_some()));
+
+    // Enter says no, as in the trash: deleting takes a click.
+    app.keys("enter");
+    assert!(app.read(|gallery| gallery.confirming().is_none()));
+    assert_eq!(in_folder(&notes), before);
+
+    app.update(|gallery, cx| gallery.ask_delete_folder("Arbeit", cx));
+    app.update(|gallery, cx| gallery.confirm(cx));
+    assert_eq!(in_folder(&notes), 0);
+    assert!(!notes.dir.join("Arbeit").exists());
+    assert_eq!(app.read(|gallery| gallery.scope().clone()), Scope::All);
+    let toast = app.toast().unwrap();
+    assert!(toast.ends_with("moved to trash"), "{toast}");
 }

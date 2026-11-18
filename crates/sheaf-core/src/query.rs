@@ -301,6 +301,30 @@ fn token(input: &str, start: usize) -> (ItemKind, usize) {
     (kind, end)
 }
 
+/// `query` with every `folder:` filter that names the folder `from` (or one inside it)
+/// naming `to` instead, as a rename of the folder needs it. The rest stays as typed.
+pub fn rename_folder(query: &str, from: &str, to: &str) -> String {
+    let mut renamed = String::with_capacity(query.len());
+    let mut position = 0;
+    for item in parse(query).items {
+        let ItemKind::Filter(Filter::Folder(folder)) = &item.kind else {
+            continue;
+        };
+        let anchored = folder.starts_with('/');
+        let path = folder.trim_start_matches('/');
+        let rest = match path.strip_prefix(from) {
+            Some(rest) if rest.is_empty() || rest.starts_with('/') => rest,
+            _ => continue,
+        };
+        let new = format!("{}{to}{rest}", if anchored { "/" } else { "" });
+        renamed.push_str(&query[position..item.span.start]);
+        renamed.push_str(&Filter::Folder(new).to_string());
+        position = item.span.end;
+    }
+    renamed.push_str(&query[position..]);
+    renamed
+}
+
 /// Looks `value` up among the names of a filter's values: `Some(Some(_))` for a name,
 /// `Some(None)` for the beginning of one (still being typed), `None` for anything else.
 fn named<T: Copy>(names: &[(&str, T)], value: &str) -> Option<Option<T>> {
@@ -317,6 +341,28 @@ fn named<T: Copy>(names: &[(&str, T)], value: &str) -> Option<Option<T>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_folder_rename_follows_into_folder_filters() {
+        assert_eq!(
+            rename_folder("folder:/Arbeit open: plan", "Arbeit", "Büro"),
+            "folder:/Büro open: plan"
+        );
+        assert_eq!(
+            rename_folder("folder:Arbeit/Kunden #x", "Arbeit", "Alt/Arbeit"),
+            "folder:Alt/Arbeit/Kunden #x"
+        );
+        assert_eq!(
+            rename_folder("folder:/Arbeit", "Arbeit", "Neue Arbeit"),
+            "folder:\"/Neue Arbeit\""
+        );
+        // Other folders, and words that only look alike, stay.
+        assert_eq!(
+            rename_folder("folder:/Arbeitszeit Arbeit", "Arbeit", "Büro"),
+            "folder:/Arbeitszeit Arbeit"
+        );
+        assert_eq!(rename_folder("", "Arbeit", "Büro"), "");
+    }
 
     fn kinds(input: &str) -> Vec<ItemKind> {
         parse(input)
