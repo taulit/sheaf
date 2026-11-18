@@ -818,28 +818,7 @@ pub(crate) fn decode_file_uri(uri: &str) -> String {
         return uri.to_owned();
     };
     // `file://host/path`: the path starts at the first slash.
-    let path = &path[path.find('/').unwrap_or(0)..];
-    let mut bytes = Vec::with_capacity(path.len());
-    let mut rest = path.as_bytes();
-    while let [first, tail @ ..] = rest {
-        let escaped = match (first, tail) {
-            (b'%', [high, low, ..]) => std::str::from_utf8(&[*high, *low])
-                .ok()
-                .and_then(|hex| u8::from_str_radix(hex, 16).ok()),
-            _ => None,
-        };
-        match escaped {
-            Some(byte) => {
-                bytes.push(byte);
-                rest = &tail[2..];
-            }
-            None => {
-                bytes.push(*first);
-                rest = tail;
-            }
-        }
-    }
-    String::from_utf8_lossy(&bytes).into_owned()
+    sheaf_core::scan::percent_decode(&path[path.find('/').unwrap_or(0)..])
 }
 
 #[cfg(test)]
