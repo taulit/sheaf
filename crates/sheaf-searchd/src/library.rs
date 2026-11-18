@@ -228,28 +228,45 @@ impl Library {
     }
 
     /// Applies `ops` and shows their result to the following reads. Returns the ids of
-    /// the notes that were indexed.
-    fn write(&self, ops: &[Op]) -> Result<Vec<String>> {
+    /// the notes that were indexed. If the index is gone, the indexer starts a new one
+    /// with just these notes, so the rest of the folder is indexed right after.
+    fn write(&mut self, ops: &[Op]) -> Result<Vec<String>> {
         if ops.is_empty() {
             return Ok(Vec::new());
         }
+        let lost = !SearchIndex::exists(&self.index_dir);
         let ids = indexer::apply(self.store.root(), &self.index_dir, ops)?;
-        if let Some(reader) = &self.reader {
+        if lost {
+            self.rebuild()?;
+        } else if let Some(reader) = &self.reader {
             reader.reload()?;
         }
         Ok(ids)
     }
 
-    /// The reader of the index, opened again if it was released.
+    /// The reader of the index, opened again if it was released. An index that was
+    /// cleared or broken meanwhile is built again before anything is read from it, so
+    /// a search never answers from an empty index.
     fn reader(&mut self) -> Result<Reader> {
-        match &self.reader {
-            Some(reader) => Ok(reader.clone()),
-            None => {
-                let reader = SearchIndex::open_or_create(&self.index_dir)?.reader();
-                self.reader = Some(reader.clone());
-                Ok(reader)
-            }
+        if let Some(reader) = &self.reader {
+            return Ok(reader.clone());
         }
+        if !SearchIndex::exists(&self.index_dir) {
+            return self.rebuild();
+        }
+        let reader = SearchIndex::open_or_create(&self.index_dir)?.reader();
+        self.reader = Some(reader.clone());
+        Ok(reader)
+    }
+
+    /// Opens the index again, creating it if it is gone, and catches up with the folder.
+    fn rebuild(&mut self) -> Result<Reader> {
+        log::warn!("the index is gone or broken, indexing the notes folder again");
+        let reader = SearchIndex::open_or_create(&self.index_dir)?.reader();
+        self.reader = Some(reader.clone());
+        self.snippets.clear();
+        self.reconcile()?;
+        Ok(reader)
     }
 
     /// Lets go of the index and what was read from it, while nobody asks: the pages of

@@ -350,6 +350,27 @@ fn lets_go_of_the_index_while_idle() {
 }
 
 #[test]
+fn rebuilds_an_index_removed_while_idle() {
+    let Some(mut fx) = Fixture::new() else { return };
+    fx.write("figs.md", "Figs\n\nRipe figs from the market.\n");
+    zbus::block_on(async {
+        fx.start(60).await;
+        let conn = fx.connect().await;
+        let notes = notes_proxy(&conn).await;
+        assert_eq!(notes.search("market", 0).await.unwrap().len(), 1);
+        let pid = fx.service().id();
+        let released = eventually(async || (!maps_the_index(pid, &fx.cache())).then_some(())).await;
+        assert!(released.is_some(), "the index is still mapped while idle");
+
+        fs::remove_dir_all(fx.cache()).unwrap();
+        assert_eq!(
+            ids(&notes.search("market", 0).await.unwrap()),
+            [provisional("figs.md")]
+        );
+    });
+}
+
+#[test]
 fn catches_up_with_changes_made_while_stopped() {
     let Some(mut fx) = Fixture::new() else { return };
     fx.write("keep.md", "Keep\n\nolive\n");

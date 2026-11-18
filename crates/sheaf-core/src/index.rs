@@ -196,6 +196,13 @@ impl SearchIndex {
         Self::new(index, ReloadPolicy::Manual, false)
     }
 
+    /// Whether `dir` holds a complete index of the current version, the one
+    /// [`open_or_create`](Self::open_or_create) would keep. Someone may have cleared the
+    /// cache since it was last opened.
+    pub fn exists(dir: impl AsRef<Path>) -> bool {
+        open_existing(dir.as_ref()).is_some()
+    }
+
     /// Opens the index in `dir` without ever writing to it. `None` if there is no usable
     /// index there (yet): the directory is missing, the index is incomplete or it has
     /// another schema version. The reader follows the commits of the writing process.
