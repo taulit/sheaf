@@ -608,39 +608,6 @@ impl Reader {
         Ok(counts)
     }
 
-    /// Notes whose title starts with `prefix`, ignoring case, accents and punctuation,
-    /// ordered by title. This is what completes `[[`.
-    pub fn titles_with_prefix(&self, prefix: &str, limit: usize) -> Result<Vec<NoteMeta>> {
-        let searcher = self.inner.searcher();
-        let prefix = analysis::key(prefix);
-        let mut found: Vec<(Vec<u8>, DocAddress)> = Vec::new();
-        for (ordinal, segment) in searcher.segment_readers().iter().enumerate() {
-            let inverted = segment.inverted_index(self.fields.title_key)?;
-            for form in prefix.forms() {
-                let mut taken = 0;
-                for_each_term_with_prefix(inverted.terms(), form.as_bytes(), |key, term| {
-                    for_each_live_doc(segment, &inverted, term, |doc| {
-                        found.push((key.to_vec(), DocAddress::new(ordinal as u32, doc)));
-                        taken += 1;
-                    })?;
-                    Ok(taken < limit)
-                })?;
-            }
-        }
-        found.sort();
-        let mut addresses: Vec<DocAddress> = Vec::new();
-        for (_, address) in found {
-            // A title with umlauts is listed under both of its forms.
-            if !addresses.contains(&address) {
-                addresses.push(address);
-            }
-            if addresses.len() == limit {
-                break;
-            }
-        }
-        self.metas(&searcher, &addresses)
-    }
-
     /// Notes with a `[[wiki link]]` to `title`, compared case-insensitively. Most
     /// recently modified first.
     pub fn backlinks(&self, title: &str) -> Result<Vec<NoteMeta>> {

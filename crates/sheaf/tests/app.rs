@@ -21,7 +21,7 @@ use sheaf::app::state::{StateFile, WindowState};
 use sheaf::app::theme::{self, ActiveTokens as _, Appearance, Overrides};
 use sheaf::app::window::Route;
 use sheaf_core::config::View;
-use sheaf_core::{CreateOptions, Error, Filter, NoteId, Sort};
+use sheaf_core::{CreateOptions, Error, Filter, Fingerprint, NoteId, NoteMeta, Sort, WriteOptions};
 
 impl TestApp {
     fn selected(&mut self) -> Option<String> {
@@ -30,6 +30,38 @@ impl TestApp {
             gallery.selected().map(|note| note.title.clone())
         })
     }
+}
+
+/// What a note is after [`save`], and the state of its file then.
+#[derive(Debug)]
+struct Saved {
+    meta: NoteMeta,
+    fingerprint: Fingerprint,
+}
+
+/// What the note view's save does: `body` into the note, unless its file changed since
+/// `expected`.
+fn save(
+    library: &Entity<Library>,
+    id: &NoteId,
+    body: &str,
+    expected: Option<Fingerprint>,
+    cx: &mut TestAppContext,
+) -> gpui::Task<sheaf_core::Result<Saved>> {
+    let (id, body) = (id.clone(), body.to_owned());
+    library.update(cx, |library, cx| {
+        library.run(cx, move |store, touched| {
+            let before = (id.clone(), store.path_of(&id)?);
+            let options = WriteOptions {
+                rename: false,
+                expected,
+            };
+            let meta = store.write_body(&id, &body, &options)?;
+            touched.wrote(Some(before), &meta);
+            let fingerprint = store.fingerprint(&meta.id)?;
+            Ok(Saved { meta, fingerprint })
+        })
+    })
 }
 
 fn record_events(
@@ -183,13 +215,15 @@ async fn library_writes_update_the_lists_and_tell_listeners(cx: &mut TestAppCont
         .await
         .unwrap();
     assert_eq!(loaded.body(), "Neue Idee\n\nNoch roh.\n");
-    let saved = library
-        .update(cx, |library, cx| {
-            let body = "Bessere Idee\n\nAusgearbeitet. #einfall".to_owned();
-            library.save_body(&created.id, body, Some(loaded.fingerprint), cx)
-        })
-        .await
-        .unwrap();
+    let saved = save(
+        &library,
+        &created.id,
+        "Bessere Idee\n\nAusgearbeitet. #einfall",
+        Some(loaded.fingerprint),
+        cx,
+    )
+    .await
+    .unwrap();
     assert_eq!(saved.meta.title, "Bessere Idee");
     assert_eq!(
         saved.meta.rel_path, "Neue Idee.md",
@@ -203,29 +237,37 @@ async fn library_writes_update_the_lists_and_tell_listeners(cx: &mut TestAppCont
     assert_eq!(hits.total, 1);
 
     // The file has moved on since `loaded`: nothing is written.
-    let stale = library
-        .update(cx, |library, cx| {
-            library.save_body(
-                &created.id,
-                "Überschrieben".to_owned(),
-                Some(loaded.fingerprint),
-                cx,
-            )
-        })
-        .await;
+    let stale = save(
+        &library,
+        &created.id,
+        "Überschrieben",
+        Some(loaded.fingerprint),
+        cx,
+    )
+    .await;
     assert!(matches!(stale, Err(Error::Conflict(_))), "{stale:?}");
     assert!(notes.read("Neue Idee.md").contains("Ausgearbeitet."));
-    let again = library
-        .update(cx, |library, cx| {
-            let body = "Bessere Idee\n\nFertig.".to_owned();
-            library.save_body(&created.id, body, Some(saved.fingerprint), cx)
-        })
-        .await
-        .unwrap();
+    let again = save(
+        &library,
+        &created.id,
+        "Bessere Idee\n\nFertig.",
+        Some(saved.fingerprint),
+        cx,
+    )
+    .await
+    .unwrap();
     assert_eq!(again.meta.id, created.id);
 
     let renamed = library
-        .update(cx, |library, cx| library.sync_filename(&created.id, cx))
+        .update(cx, |library, cx| {
+            let id = created.id.clone();
+            library.run(cx, move |store, touched| {
+                let before = (id.clone(), store.path_of(&id)?);
+                let meta = store.sync_filename(&id)?;
+                touched.wrote(Some(before), &meta);
+                Ok(meta)
+            })
+        })
         .await
         .unwrap();
     assert_eq!(renamed.rel_path, "Bessere Idee.md");

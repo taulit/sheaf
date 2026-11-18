@@ -96,11 +96,6 @@ impl ParsedQuery {
             _ => None,
         })
     }
-
-    /// Whether the query has words or phrases, as opposed to filters only.
-    pub fn has_text(&self) -> bool {
-        self.words().next().is_some() || self.phrases().next().is_some()
-    }
 }
 
 /// The canonical English form. Parsing it gives the same parts again, which is how
@@ -554,9 +549,6 @@ mod tests {
             query.filters().collect::<Vec<_>>(),
             [&Filter::Tag("einkauf".to_owned()), &Filter::Open]
         );
-        assert!(query.has_text());
-        assert!(!parse("#einkauf offen: has:").has_text());
-        assert!(!parse("").has_text());
     }
 
     #[test]

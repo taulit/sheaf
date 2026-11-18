@@ -58,11 +58,6 @@ impl NoteId {
     pub fn as_str(&self) -> &str {
         &self.0
     }
-
-    /// Whether `text` has the shape of an id (either form). Used to tell ids from titles.
-    pub fn looks_like_id(text: &str) -> bool {
-        text.parse::<NoteId>().is_ok()
-    }
 }
 
 impl fmt::Display for NoteId {
@@ -183,13 +178,5 @@ mod tests {
             NoteId::provisional("a.md").as_str(),
             "p9e2sp7zkne9vvg1q9ev2b7zxq"
         );
-    }
-
-    #[test]
-    fn titles_are_not_ids() {
-        assert!(!NoteId::looks_like_id("Einkauf"));
-        assert!(!NoteId::looks_like_id("p"));
-        assert!(!NoteId::looks_like_id("Protokoll vom 12. November"));
-        assert!(NoteId::looks_like_id("01JD3K8Z6Q4X7V9B2M5N8P0R3T"));
     }
 }
