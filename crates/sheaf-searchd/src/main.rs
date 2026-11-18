@@ -6,8 +6,9 @@ mod logger;
 mod service;
 
 use std::ffi::OsString;
+use std::os::unix::process::CommandExt as _;
 use std::path::{Path, PathBuf};
-use std::process::ExitCode;
+use std::process::{Command, ExitCode};
 use std::time::Duration;
 
 use sheaf_core::NoteStore;
@@ -16,6 +17,11 @@ use sheaf_core::paths::Env;
 use crate::indexer::Op;
 
 const IDLE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
+
+/// One malloc arena for all threads and a fixed trim threshold, which also stops the
+/// mmap threshold from growing: memory the searches freed goes back to the system
+/// instead of staying with the idle service (docs/ARCHITECTURE.md, "Index").
+const MALLOC_TUNABLES: &str = "glibc.malloc.arena_max=1:glibc.malloc.trim_threshold=131072";
 
 const USAGE: &str = "\
 Usage: sheaf-searchd [--reindex | --version | --help]
@@ -43,6 +49,7 @@ fn main() -> ExitCode {
     let args: Vec<&str> = args.iter().map(|arg| arg.to_str().unwrap_or("")).collect();
     let outcome = match args.as_slice() {
         [] => {
+            restart_with_malloc_tunables();
             start(|notes, index| zruntime::block_on(service::serve(notes, index, idle_timeout())))
         }
         ["--reindex"] => start(reindex),
@@ -60,6 +67,33 @@ fn main() -> ExitCode {
         }
     };
     exit_code(outcome)
+}
+
+/// glibc reads `GLIBC_TUNABLES` only when a process starts, so the service starts itself
+/// once more with [`MALLOC_TUNABLES`] added, however it was launched (D-Bus activation,
+/// Flatpak, by hand). Malloc tunables set by the user are left alone. Returns only if
+/// nothing is to be done or the restart failed; call it while there is one thread.
+fn restart_with_malloc_tunables() {
+    let set = std::env::var("GLIBC_TUNABLES").unwrap_or_default();
+    if set.contains("glibc.malloc.") {
+        return;
+    }
+    let tunables = if set.is_empty() {
+        MALLOC_TUNABLES.to_owned()
+    } else {
+        format!("{set}:{MALLOC_TUNABLES}")
+    };
+    let mut args = std::env::args_os();
+    let arg0 = args.next().unwrap_or_else(|| "sheaf-searchd".into());
+    let failed = match std::env::current_exe() {
+        Ok(exe) => Command::new(exe)
+            .arg0(arg0)
+            .args(args)
+            .env("GLIBC_TUNABLES", tunables)
+            .exec(),
+        Err(err) => err,
+    };
+    eprintln!("sheaf-searchd: running without malloc tunables: {failed}");
 }
 
 fn exit_code(outcome: Outcome) -> ExitCode {

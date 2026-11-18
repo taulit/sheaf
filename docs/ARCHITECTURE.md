@@ -58,8 +58,18 @@ write returns. See `NoteId` in `crates/sheaf-core/src/model.rs`.
 - `sheaf-searchd` is the only writer. It watches the notes folder, re-indexes changed
   files and commits within 300 ms. Each write runs in a short-lived child process
   (`sheaf-searchd --index`): tantivy's writer leaves about 7 MB behind in the process
-  that created it, which would break the 15 MB idle budget of the service. On start it reconciles the index with the
-  folder (path + mtime + size), so changes made while it was not running are picked up.
+  that created it, which would break the 15 MB idle budget of the service. On start it
+  reconciles the index with the folder (path + mtime + size), so changes made while it was
+  not running are picked up.
+- The rest of the service's idle memory budget (< 15 MB RSS) is held in three places. It
+  is built with the Cargo profile `service` (`opt-level = "s"`, fat LTO), because its own
+  code is most of what stays resident. It lets go of the index 5 s after the last request.
+  And it restarts itself once at start with `GLIBC_TUNABLES` set to
+  `glibc.malloc.arena_max=1:glibc.malloc.trim_threshold=131072`, so that malloc gives the
+  searches' memory back instead of keeping it in one arena per thread. glibc reads the
+  variable only when a process starts. The service sets it itself, not the D-Bus service
+  file, so it holds however the service is started (D-Bus activation, Flatpak, AUR, by
+  hand). Malloc tunables the user set are left alone.
 - The app opens the same index read-only and reloads on commit. The gallery is drawn
   from stored index fields, not from the files.
 - The CLI reads and writes note files through `sheaf-core` directly. To search and
