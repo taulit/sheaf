@@ -507,7 +507,12 @@ mod tests {
             "folder:Clients"
         );
         assert_eq!(
-            rename_folder("folder:/arbeit/kunden", "Arbeit/Kunden", "Privat/Leute", &all),
+            rename_folder(
+                "folder:/arbeit/kunden",
+                "Arbeit/Kunden",
+                "Privat/Leute",
+                &all
+            ),
             "folder:/Privat/Leute"
         );
     }
