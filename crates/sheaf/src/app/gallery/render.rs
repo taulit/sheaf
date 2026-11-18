@@ -566,14 +566,15 @@ impl GalleryView {
             .min_h_0()
             .overflow_y_scroll()
             .children(rows)
-            .when(!tags.is_empty(), |lists| {
-                lists.child(separator(tokens)).children(tags)
-            })
             .when(!smart.is_empty(), |lists| {
                 lists.child(separator(tokens)).children(smart)
             })
             .child(separator(tokens))
-            .child(trash);
+            .child(trash)
+            // Last, as there can be many.
+            .when(!tags.is_empty(), |lists| {
+                lists.child(separator(tokens)).children(tags)
+            });
         surface(tokens)
             .id("folders-popover")
             .on_action(cx.listener(|this, _: &input::Escape, _, cx| this.set_popover(None, cx)))
