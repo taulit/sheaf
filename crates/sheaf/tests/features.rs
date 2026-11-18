@@ -7,106 +7,14 @@ mod fixture;
 
 use std::io::Read as _;
 use std::path::PathBuf;
-use std::sync::Arc;
 
-use fixture::{Look, Notes};
-use gpui::{Entity, TestAppContext, VisualTestContext};
-use sheaf::app::dialogs::{Dialogs, Scripted};
-use sheaf::app::instance::Request;
-use sheaf::app::library::Library;
+use fixture::{Notes, TestApp, open_app};
+use gpui::{Entity, TestAppContext};
+use sheaf::app::note::Upload;
 use sheaf::app::note::export::Format;
-use sheaf::app::note::{NoteView, Upload};
-use sheaf::app::window::{self, MainWindow};
 use sheaf_core::NoteId;
 
-struct TestApp {
-    library: Entity<Library>,
-    main: Entity<MainWindow>,
-    dialogs: Arc<Scripted>,
-    cx: &'static mut VisualTestContext,
-}
-
-fn open_app(notes: &Notes, cx: &mut TestAppContext) -> TestApp {
-    let dialogs = Arc::new(Scripted::default());
-    let library = cx.update(|cx| {
-        fixture::init_app(Look::default(), cx);
-        cx.set_global(Dialogs::new(dialogs.clone()));
-        fixture::open_library(notes, cx)
-    });
-    let (window, main) = cx
-        .update(|cx| window::open(library.clone(), None, cx))
-        .unwrap();
-    let cx = VisualTestContext::from_window(window.into(), cx).into_mut();
-    cx.run_until_parked();
-    TestApp {
-        library,
-        main,
-        dialogs,
-        cx,
-    }
-}
-
 impl TestApp {
-    fn id_of(&mut self, title: &str) -> NoteId {
-        let listed = self
-            .main
-            .read_with(self.cx, |main, cx| main.gallery().read(cx).notes().to_vec());
-        let note = listed.into_iter().find(|note| note.title == title);
-        note.unwrap_or_else(|| panic!("no note titled {title}")).id
-    }
-
-    fn open(&mut self, title: &str) -> Entity<NoteView> {
-        let id = self.id_of(title);
-        let main = self.main.clone();
-        self.cx.update(|window, cx| {
-            main.update(cx, |main, cx| {
-                main.handle(
-                    Request::OpenNote {
-                        id: id.to_string(),
-                        query: String::new(),
-                    },
-                    window,
-                    cx,
-                );
-            });
-        });
-        self.cx.run_until_parked();
-        self.note()
-    }
-
-    fn note(&mut self) -> Entity<NoteView> {
-        self.main
-            .read_with(self.cx, |main, _| main.note().cloned())
-            .expect("a note is open")
-    }
-
-    fn note_do(
-        &mut self,
-        run: impl FnOnce(&mut NoteView, &mut gpui::Window, &mut gpui::Context<NoteView>),
-    ) {
-        let note = self.note();
-        self.cx
-            .update(|window, cx| note.update(cx, |note, cx| run(note, window, cx)));
-        self.cx.run_until_parked();
-    }
-
-    fn editor_text(&mut self) -> String {
-        let note = self.note();
-        note.read_with(self.cx, |note, cx| note.editor().read(cx).markdown())
-    }
-
-    /// The toast shown, with the label of its button.
-    fn toast(&mut self) -> Option<(String, Option<String>)> {
-        self.main.read_with(self.cx, |main, cx| {
-            main.toasts().read(cx).shown().map(|toast| {
-                (
-                    toast.message.to_string(),
-                    toast.action_label().map(ToString::to_string),
-                )
-            })
-        })
-    }
-
     fn save_to(&self, path: PathBuf) {
         self.dialogs.saves.lock().unwrap().push_back(path);
     }
@@ -127,7 +35,7 @@ async fn export_as_pdf_writes_the_chosen_file(cx: &mut TestAppContext) {
     let pdf = std::fs::read(&target).unwrap();
     assert!(pdf.starts_with(b"%PDF-"));
     assert_eq!(
-        app.toast(),
+        app.toast_with_action(),
         Some(("Exported".to_owned(), Some("Open".to_owned())))
     );
     assert_eq!(
@@ -158,7 +66,7 @@ async fn a_cancelled_export_writes_and_says_nothing(cx: &mut TestAppContext) {
     app.open("Einkauf");
     app.note_do(|note, _, cx| note.export(Format::Pdf, cx));
     app.note_do(|note, _, cx| note.print(cx));
-    assert_eq!(app.toast(), None);
+    assert_eq!(app.toast_with_action(), None);
     assert!(app.dialogs.printed.lock().unwrap().is_empty());
 }
 
@@ -169,7 +77,7 @@ async fn an_export_that_fails_says_why(cx: &mut TestAppContext) {
     app.open("Einkauf");
     app.save_to(notes.scratch("missing/folder/Einkauf.pdf"));
     app.note_do(|note, _, cx| note.export(Format::Pdf, cx));
-    let (message, button) = app.toast().unwrap();
+    let (message, button) = app.toast_with_action().unwrap();
     assert!(message.starts_with("Could not export: "), "{message}");
     assert_eq!(button, None);
 }
@@ -200,7 +108,7 @@ async fn the_gallery_exports_one_note_to_a_file_and_several_to_a_folder(cx: &mut
     app.cx.run_until_parked();
     assert!(std::fs::read(&target).unwrap().starts_with(b"%PDF-"));
     assert_eq!(
-        app.toast(),
+        app.toast_with_action(),
         Some(("Exported".to_owned(), Some("Open".to_owned())))
     );
 
@@ -256,7 +164,7 @@ async fn a_failed_print_offers_the_pdf_in_a_viewer(cx: &mut TestAppContext) {
     *app.dialogs.print_error.lock().unwrap() = Some("no print portal".to_owned());
     app.note_do(|note, _, cx| note.print(cx));
     assert_eq!(
-        app.toast(),
+        app.toast_with_action(),
         Some((
             "Could not print: no print portal".to_owned(),
             Some("Open as PDF".to_owned())
@@ -517,7 +425,7 @@ async fn a_file_that_cannot_be_read_is_reported(cx: &mut TestAppContext) {
             cx,
         );
     });
-    let (message, _) = app.toast().unwrap();
+    let (message, _) = app.toast_with_action().unwrap();
     assert!(message.starts_with("Could not attach: "), "{message}");
     assert!(!app.editor_text().contains("_attachments"));
 }

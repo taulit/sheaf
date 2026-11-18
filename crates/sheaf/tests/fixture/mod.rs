@@ -1,6 +1,6 @@
 //! What the app tests and the screenshots share: a seeded notes folder in a temporary
-//! directory, a fixed "now", and the app set up the way `app::run` does it, without a
-//! bus, a display or the user's files.
+//! directory, a fixed "now", the app set up the way `app::run` does it, without a
+//! bus, a display or the user's files, and a [`TestApp`] to drive it.
 
 // Each test binary uses its own part of these helpers.
 #![allow(dead_code, clippy::unwrap_used)]
@@ -10,12 +10,20 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use gpui::{App, Entity};
+use gpui::{App, Entity, TestAppContext, VisualTestContext, WindowHandle};
+use gpui_component::Root;
 use jiff::tz::TimeZone;
 use jiff::{Timestamp, ZonedDateTime};
 use sheaf::app::actions;
+use sheaf::app::dialogs::{Dialogs, Scripted};
+use sheaf::app::gallery::GalleryView;
+use sheaf::app::instance::Request;
 use sheaf::app::library::Library;
+use sheaf::app::note::NoteView;
+use sheaf::app::state::StateFile;
 use sheaf::app::theme::{self, Appearance, Overrides};
+use sheaf::app::window::{self, MainWindow, Route};
+use sheaf_core::{NoteId, NoteMeta};
 use tempfile::TempDir;
 
 /// The moment the fixture pretends it is: Monday, 16 November 2026, 13:24 in Berlin.
@@ -278,4 +286,169 @@ pub fn open_library(notes: &Notes, cx: &mut App) -> Entity<Library> {
     let library = Library::local(&notes.dir, cx).unwrap();
     library.update(cx, |library, _| library.set_clock(Arc::new(now)));
     library
+}
+
+/// The app with its main window on a notes folder, in a test window, for the tests
+/// to drive. The dialogs answer as [`TestApp::dialogs`] is told; none ever opens.
+pub struct TestApp {
+    pub library: Entity<Library>,
+    pub main: Entity<MainWindow>,
+    pub window: WindowHandle<Root>,
+    pub dialogs: Arc<Scripted>,
+    pub cx: &'static mut VisualTestContext,
+}
+
+pub fn open_app(notes: &Notes, cx: &mut TestAppContext) -> TestApp {
+    open_app_with_state(notes, None, cx)
+}
+
+/// [`open_app`] with the window size remembered in `state_file`.
+pub fn open_app_with_state(
+    notes: &Notes,
+    state_file: Option<StateFile>,
+    cx: &mut TestAppContext,
+) -> TestApp {
+    let library = cx.update(|cx| {
+        init_app(Look::default(), cx);
+        open_library(notes, cx)
+    });
+    open_window(library, state_file, cx)
+}
+
+/// A main window on `library`, set up already.
+pub fn open_window(
+    library: Entity<Library>,
+    state_file: Option<StateFile>,
+    cx: &mut TestAppContext,
+) -> TestApp {
+    let dialogs = Arc::new(Scripted::default());
+    cx.update(|cx| cx.set_global(Dialogs::new(dialogs.clone())));
+    let (window, main) = cx
+        .update(|cx| window::open(library.clone(), state_file, cx))
+        .unwrap();
+    let cx = VisualTestContext::from_window(window.into(), cx).into_mut();
+    cx.run_until_parked();
+    let mut app = TestApp {
+        library,
+        main,
+        window,
+        dialogs,
+        cx,
+    };
+    app.draw();
+    app
+}
+
+impl TestApp {
+    pub fn gallery(&mut self) -> Entity<GalleryView> {
+        self.main
+            .read_with(self.cx, |main, _| main.gallery().clone())
+    }
+
+    pub fn read<R>(&mut self, read: impl FnOnce(&GalleryView) -> R) -> R {
+        let gallery = self.gallery();
+        gallery.read_with(self.cx, |gallery, _| read(gallery))
+    }
+
+    /// Changes the gallery, then lets it settle and draws.
+    pub fn update(
+        &mut self,
+        update: impl FnOnce(&mut GalleryView, &mut gpui::Context<GalleryView>),
+    ) {
+        let gallery = self.gallery();
+        gallery.update(self.cx, update);
+        self.settle();
+    }
+
+    /// Lets tasks and the search's pause run out, then draws a frame.
+    pub fn settle(&mut self) {
+        self.cx.run_until_parked();
+        self.cx.executor().advance_clock(Duration::from_millis(50));
+        self.cx.run_until_parked();
+        self.draw();
+    }
+
+    pub fn draw(&mut self) {
+        self.cx.update(|window, cx| window.draw(cx).clear(cx));
+        self.cx.run_until_parked();
+    }
+
+    pub fn keys(&mut self, keys: &str) {
+        self.cx.simulate_keystrokes(keys);
+        self.settle();
+    }
+
+    pub fn route(&mut self) -> Route {
+        self.main.read_with(self.cx, |main, cx| main.route(cx))
+    }
+
+    /// The notes the gallery lists, in order.
+    pub fn listed(&mut self) -> Vec<NoteMeta> {
+        self.read(|gallery| gallery.notes().to_vec())
+    }
+
+    pub fn titles(&mut self) -> Vec<String> {
+        self.listed().into_iter().map(|note| note.title).collect()
+    }
+
+    pub fn id_of(&mut self, title: &str) -> NoteId {
+        let note = self.listed().into_iter().find(|note| note.title == title);
+        note.unwrap_or_else(|| panic!("no note titled {title}")).id
+    }
+
+    pub fn request(&mut self, request: Request) {
+        let main = self.main.clone();
+        self.cx.update(|window, cx| {
+            main.update(cx, |main, cx| main.handle(request, window, cx));
+        });
+        self.cx.run_until_parked();
+    }
+
+    /// Opens the note titled `title` as the service would ask for it.
+    pub fn open(&mut self, title: &str) -> Entity<NoteView> {
+        let id = self.id_of(title);
+        self.request(Request::OpenNote {
+            id: id.to_string(),
+            query: String::new(),
+        });
+        self.note()
+    }
+
+    pub fn note(&mut self) -> Entity<NoteView> {
+        self.main
+            .read_with(self.cx, |main, _| main.note().cloned())
+            .expect("a note is open")
+    }
+
+    pub fn note_do(
+        &mut self,
+        run: impl FnOnce(&mut NoteView, &mut gpui::Window, &mut gpui::Context<NoteView>),
+    ) {
+        let note = self.note();
+        self.cx
+            .update(|window, cx| note.update(cx, |note, cx| run(note, window, cx)));
+        self.cx.run_until_parked();
+    }
+
+    /// The Markdown in the editor of the open note.
+    pub fn editor_text(&mut self) -> String {
+        let note = self.note();
+        note.read_with(self.cx, |note, cx| note.editor().read(cx).markdown())
+    }
+
+    pub fn toast(&mut self) -> Option<String> {
+        self.toast_with_action().map(|(message, _)| message)
+    }
+
+    /// The toast shown, with the label of its button.
+    pub fn toast_with_action(&mut self) -> Option<(String, Option<String>)> {
+        self.main.read_with(self.cx, |main, cx| {
+            main.toasts().read(cx).shown().map(|toast| {
+                (
+                    toast.message.to_string(),
+                    toast.action_label().map(ToString::to_string),
+                )
+            })
+        })
+    }
 }

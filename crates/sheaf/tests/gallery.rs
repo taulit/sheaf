@@ -7,94 +7,15 @@
 
 mod fixture;
 
-use std::time::Duration;
-
-use fixture::{Look, Notes};
-use gpui::{Entity, ListOffset, Modifiers, TestAppContext, VisualTestContext, WindowHandle, px};
-use gpui_component::Root;
+use fixture::{Look, Notes, TestApp, open_app, open_window};
+use gpui::{ListOffset, Modifiers, TestAppContext, VisualTestContext, px};
 use sheaf::app::gallery::dates::Group;
 use sheaf::app::gallery::{GalleryView, Popover, Scope};
-use sheaf::app::library::Library;
-use sheaf::app::window::{self, MainWindow, Route};
+use sheaf::app::window::{self, Route};
 use sheaf_core::config::{Sort as SortOrder, View};
 use sheaf_core::{CreateOptions, Feature, Filter, FolderConfig};
 
-struct TestApp {
-    library: Entity<Library>,
-    main: Entity<MainWindow>,
-    _window: WindowHandle<Root>,
-    cx: &'static mut VisualTestContext,
-}
-
-fn open_app(notes: &Notes, cx: &mut TestAppContext) -> TestApp {
-    let library = cx.update(|cx| {
-        fixture::init_app(Look::default(), cx);
-        fixture::open_library(notes, cx)
-    });
-    open_window(library, cx)
-}
-
-fn open_window(library: Entity<Library>, cx: &mut TestAppContext) -> TestApp {
-    let (window, main) = cx
-        .update(|cx| window::open(library.clone(), None, cx))
-        .unwrap();
-    let cx = VisualTestContext::from_window(window.into(), cx).into_mut();
-    cx.run_until_parked();
-    let mut app = TestApp {
-        library,
-        main,
-        _window: window,
-        cx,
-    };
-    app.draw();
-    app
-}
-
 impl TestApp {
-    fn gallery(&mut self) -> Entity<GalleryView> {
-        self.main
-            .read_with(self.cx, |main, _| main.gallery().clone())
-    }
-
-    fn read<R>(&mut self, read: impl FnOnce(&GalleryView) -> R) -> R {
-        let gallery = self.gallery();
-        gallery.read_with(self.cx, |gallery, _| read(gallery))
-    }
-
-    fn update(&mut self, update: impl FnOnce(&mut GalleryView, &mut gpui::Context<GalleryView>)) {
-        let gallery = self.gallery();
-        gallery.update(self.cx, update);
-        self.settle();
-    }
-
-    /// Lets tasks and the search's pause run out, then draws a frame.
-    fn settle(&mut self) {
-        self.cx.run_until_parked();
-        self.cx.executor().advance_clock(Duration::from_millis(50));
-        self.cx.run_until_parked();
-        self.draw();
-    }
-
-    fn draw(&mut self) {
-        self.cx.update(|window, cx| window.draw(cx).clear(cx));
-        self.cx.run_until_parked();
-    }
-
-    fn keys(&mut self, keys: &str) {
-        self.cx.simulate_keystrokes(keys);
-        self.settle();
-    }
-
-    fn titles(&mut self) -> Vec<String> {
-        self.read(|gallery| {
-            gallery
-                .notes()
-                .iter()
-                .map(|note| note.title.clone())
-                .collect()
-        })
-    }
-
     fn index_of(&mut self, title: &str) -> usize {
         let titles = self.titles();
         titles
@@ -130,19 +51,6 @@ impl TestApp {
     fn click(&mut self, title: &str, modifiers: Modifiers) {
         let index = self.index_of(title);
         self.update(|gallery, cx| gallery.click(index, modifiers, cx));
-    }
-
-    fn route(&mut self) -> Route {
-        self.main.read_with(self.cx, |main, cx| main.route(cx))
-    }
-
-    fn toast(&mut self) -> Option<String> {
-        self.main.read_with(self.cx, |main, cx| {
-            main.toasts()
-                .read(cx)
-                .shown()
-                .map(|toast| toast.message.to_string())
-        })
     }
 }
 
@@ -528,7 +436,7 @@ async fn the_view_is_remembered_per_folder(cx: &mut TestAppContext) {
 
     // A new window on the same folder starts with what was chosen.
     let library = app.library.clone();
-    let mut again = open_window(library, app.cx);
+    let mut again = open_window(library, None, app.cx);
     assert_eq!(again.read(|gallery| gallery.view()), View::List);
 }
 

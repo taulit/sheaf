@@ -6,34 +6,15 @@
 
 mod fixture;
 
-use std::time::Duration;
-
-use fixture::{Look, Notes};
-use gpui::{Entity, Modifiers, TestAppContext, VisualTestContext};
+use fixture::{Notes, TestApp, open_app};
+use gpui::{Modifiers, TestAppContext};
 use jiff::Timestamp;
+use sheaf::app::gallery::Scope;
 use sheaf::app::gallery::trash::{Confirm, days_left};
-use sheaf::app::gallery::{GalleryView, Scope};
-use sheaf::app::library::Library;
-use sheaf::app::window::{self, MainWindow};
-
-struct TestApp {
-    library: Entity<Library>,
-    main: Entity<MainWindow>,
-    cx: &'static mut VisualTestContext,
-}
 
 /// The app with `titles` moved to the trash, showing it.
 fn open_trash(notes: &Notes, titles: &[&str], cx: &mut gpui::TestAppContext) -> TestApp {
-    let library = cx.update(|cx| {
-        fixture::init_app(Look::default(), cx);
-        fixture::open_library(notes, cx)
-    });
-    let (window, main) = cx
-        .update(|cx| window::open(library.clone(), None, cx))
-        .unwrap();
-    let cx = VisualTestContext::from_window(window.into(), cx).into_mut();
-    cx.run_until_parked();
-    let mut app = TestApp { library, main, cx };
+    let mut app = open_app(notes, cx);
     for title in titles {
         let id = app.read(|gallery| {
             let note = gallery.notes().iter().find(|note| note.title == *title);
@@ -50,40 +31,10 @@ fn open_trash(notes: &Notes, titles: &[&str], cx: &mut gpui::TestAppContext) -> 
 }
 
 impl TestApp {
-    fn gallery(&mut self) -> Entity<GalleryView> {
-        self.main
-            .read_with(self.cx, |main, _| main.gallery().clone())
-    }
-
-    fn read<R>(&mut self, read: impl FnOnce(&GalleryView) -> R) -> R {
-        let gallery = self.gallery();
-        gallery.read_with(self.cx, |gallery, _| read(gallery))
-    }
-
-    fn update(&mut self, update: impl FnOnce(&mut GalleryView, &mut gpui::Context<GalleryView>)) {
-        let gallery = self.gallery();
-        gallery.update(self.cx, update);
-        self.cx.run_until_parked();
-        self.cx.executor().advance_clock(Duration::from_millis(50));
-        self.cx.run_until_parked();
-        self.cx.update(|window, cx| window.draw(cx).clear(cx));
-        self.cx.run_until_parked();
-    }
-
     fn click_button(&mut self, id: &'static str) {
         let bounds = self.cx.debug_bounds(id).expect("the button is drawn");
         self.cx.simulate_click(bounds.center(), Modifiers::none());
         self.update(|_, _| {});
-    }
-
-    fn titles(&mut self) -> Vec<String> {
-        self.read(|gallery| {
-            gallery
-                .notes()
-                .iter()
-                .map(|note| note.title.clone())
-                .collect()
-        })
     }
 
     fn click(&mut self, index: usize, modifiers: Modifiers) {
