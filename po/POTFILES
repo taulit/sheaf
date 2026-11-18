@@ -67,6 +67,7 @@ crates/sheaf/src/app/note/header.rs
 crates/sheaf/src/app/note/jump.rs
 crates/sheaf/src/app/note/mod.rs
 crates/sheaf/src/app/note/setup.rs
+crates/sheaf/src/app/note/template.rs
 crates/sheaf/src/app/note/worker.rs
 crates/sheaf/src/app/overlays/mod.rs
 crates/sheaf/src/app/overlays/palette.rs
@@ -80,7 +81,9 @@ crates/sheaf/src/app/settings/view.rs
 crates/sheaf/src/app/shortcut.rs
 crates/sheaf/src/app/state.rs
 crates/sheaf/src/app/theme.rs
+crates/sheaf/src/app/trace.rs
 crates/sheaf/src/app/window.rs
+crates/sheaf/src/bin/sheaf-budgets.rs
 crates/sheaf/src/cli/args.rs
 crates/sheaf/src/cli/commands/app.rs
 crates/sheaf/src/cli/commands/mod.rs
