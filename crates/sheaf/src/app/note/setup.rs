@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use gpui::{App, Edges, FontWeight, Pixels, px};
 use gpui_markdown_editor::extensions::{Highlight, Tag, WikiLink};
 use gpui_markdown_editor::{
-    Completion, CompletionKind, EditorOptions, EditorStyle, SrcResolver, UiParts,
+    Completion, CompletionKind, EditorOptions, EditorStyle, SlashItem, SrcResolver, UiParts,
 };
 use sheaf_core::config::LineWidth;
 
@@ -44,7 +44,7 @@ pub struct Lookup {
 
 pub type SharedLookup = Arc<Mutex<Lookup>>;
 
-pub fn options(lookup: &SharedLookup) -> EditorOptions {
+pub fn options(lookup: &SharedLookup, slash_items: Vec<SlashItem>) -> EditorOptions {
     let resolver: SrcResolver = {
         let lookup = lookup.clone();
         Arc::new(move |src| resolve(&lookup, src))
@@ -60,6 +60,7 @@ pub fn options(lookup: &SharedLookup) -> EditorOptions {
         extensions: vec![Box::new(WikiLink), Box::new(Tag), Box::new(Highlight)],
         resolve_src: Some(resolver),
         completions: Some(completions),
+        slash_items,
         ui: UiParts::ALL,
         ..Default::default()
     }

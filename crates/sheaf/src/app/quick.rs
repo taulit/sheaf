@@ -47,7 +47,7 @@ use super::assets::{IconName, icon};
 use super::chrome::pane;
 use super::instance::Request;
 use super::library::{Folder, Library};
-use super::note::{Banner, NoteEvent, NoteView, attach, setup};
+use super::note::{Banner, NoteEvent, NoteView, attach, setup, template};
 use super::overlays::{self, MenuRow, Toast, ToastHost};
 use super::settings::Settings;
 use super::theme::ActiveTokens as _;
@@ -704,6 +704,11 @@ impl Render for QuickNoteView {
             )
             .child(self.render_footer(cx))
             .children(folder_menu)
+            .children(
+                self.note
+                    .as_ref()
+                    .and_then(|note| template::menu(note, note.read(cx).template_menu(), cx)),
+            )
             .child(self.toasts.clone())
     }
 }

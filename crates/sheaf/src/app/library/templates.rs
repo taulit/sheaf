@@ -4,7 +4,7 @@
 use std::path::PathBuf;
 
 use gpui::{App, AppContext as _, Context, Task};
-use sheaf_core::{CreateOptions, NoteMeta, Result, templates};
+use sheaf_core::{CreateOptions, NoteMeta, Result, frontmatter, templates};
 
 use super::{Effect, Library};
 
@@ -28,6 +28,18 @@ impl Library {
         self.write(None, Effect::Keep, cx, move |store| {
             let text = templates::note_text(store.root(), &name, "", &now)?;
             store.create(&text, &options)
+        })
+    }
+
+    /// The text of the template `name` filled in for the note titled `title`, without
+    /// its frontmatter, to insert into that note (`/vorlage`).
+    pub fn template_text(&self, name: &str, title: &str, cx: &App) -> Task<Result<String>> {
+        let root = self.store.root().to_owned();
+        let (name, title) = (name.to_owned(), title.to_owned());
+        let now = self.now();
+        cx.background_spawn(async move {
+            let text = templates::render(&root, &name, &title, &now)?;
+            Ok(frontmatter::split(&text).body.to_owned())
         })
     }
 

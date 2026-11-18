@@ -69,6 +69,7 @@ pub struct MenuRow {
     icon: Option<IconName>,
     trailing: Option<String>,
     disabled: bool,
+    selected: bool,
     on_click: Option<RowHandler>,
 }
 
@@ -80,6 +81,7 @@ impl MenuRow {
             icon: None,
             trailing: None,
             disabled: false,
+            selected: false,
             on_click: None,
         }
     }
@@ -98,6 +100,12 @@ impl MenuRow {
     /// Shown, but not yet available.
     pub fn disabled(mut self, disabled: bool) -> Self {
         self.disabled = disabled;
+        self
+    }
+
+    /// The row the keys move to, drawn like a hovered one.
+    pub fn selected(mut self, selected: bool) -> Self {
+        self.selected = selected;
         self
     }
 
@@ -134,6 +142,7 @@ impl gpui::RenderOnce for MenuRow {
             .py(px(8.))
             .rounded(px(9.))
             .text_color(color)
+            .when(self.selected, |row| row.bg(hover))
             .when(!self.disabled, |row| {
                 row.cursor_pointer().hover(move |style| style.bg(hover))
             })

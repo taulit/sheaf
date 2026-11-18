@@ -140,3 +140,63 @@ async fn edit_templates_creates_the_folder(cx: &mut TestAppContext) {
     );
     assert_eq!(app.read(|gallery| gallery.popover()), None);
 }
+
+impl TestApp {
+    fn note_menu(&mut self) -> Option<Vec<String>> {
+        self.main.read_with(self.cx, |main, cx| {
+            let note = main.note()?.read(cx);
+            note.template_menu().map(|menu| menu.names().to_vec())
+        })
+    }
+
+    fn note_text(&mut self) -> String {
+        self.main.read_with(self.cx, |main, cx| {
+            let note = main.note().unwrap().read(cx);
+            note.editor().read(cx).markdown()
+        })
+    }
+}
+
+/// `/vorlage` (and `/template`) in the text: the slash menu's entry lists the templates,
+/// the keys choose one, and it is filled in at the caret.
+#[gpui::test]
+async fn the_slash_menu_inserts_a_template(cx: &mut TestAppContext) {
+    let notes = with_templates();
+    let mut app = open_app(&notes, cx);
+    app.cx.simulate_keystrokes("ctrl-n");
+    app.cx.run_until_parked();
+
+    app.cx.simulate_input("/vorlage");
+    app.cx.simulate_keystrokes("enter");
+    app.cx.run_until_parked();
+    assert_eq!(
+        app.note_menu(),
+        Some(vec!["Anruf".to_owned(), "Protokoll".to_owned()])
+    );
+    assert_eq!(app.note_text().trim(), "", "the typed /vorlage is gone");
+
+    // Esc closes the menu and stays in the note.
+    app.cx.simulate_keystrokes("escape");
+    assert_eq!(app.note_menu(), None);
+    assert!(matches!(
+        app.main.read_with(app.cx, |main, cx| main.route(cx)),
+        Route::Note { .. }
+    ));
+
+    app.cx.simulate_input("/template");
+    app.cx.simulate_keystrokes("enter");
+    app.cx.run_until_parked();
+    app.cx.simulate_keystrokes("down down up enter");
+    app.cx.run_until_parked();
+    assert_eq!(app.note_menu(), None);
+    let text = app.note_text();
+    assert_eq!(text, "#\n\nDatum: 2026-11-16, 13:24\n\n- [ ] Teilnehmer\n");
+
+    // The keyboard is back in the text.
+    app.cx.simulate_input("Wochenrunde");
+    assert!(
+        app.note_text().contains("Wochenrunde"),
+        "{}",
+        app.note_text()
+    );
+}

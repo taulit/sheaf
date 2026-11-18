@@ -84,6 +84,8 @@ pub const NOTE: &str = "Note";
 pub const EDITOR: &str = "MarkdownEditor";
 /// Key context of the Quick Note window.
 pub const QUICK_NOTE: &str = "QuickNote";
+/// Key context of the menu of templates that `/vorlage` opens in the text.
+pub const TEMPLATE_MENU: &str = "TemplateMenu";
 /// The editor inside the Quick Note window, where Ctrl+Enter is not the editor's.
 const QUICK_NOTE_EDITOR: &str = "QuickNote > MarkdownEditor";
 
@@ -118,6 +120,10 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl-enter", QuickNoteOpen, Some(QUICK_NOTE_EDITOR)),
         // The editor pastes text only; files and images on the clipboard are ours.
         KeyBinding::new("ctrl-v", PasteAttachment, Some(EDITOR)),
+        KeyBinding::new("down", SelectNext, Some(TEMPLATE_MENU)),
+        KeyBinding::new("up", SelectPrevious, Some(TEMPLATE_MENU)),
+        KeyBinding::new("enter", OpenSelected, Some(TEMPLATE_MENU)),
+        KeyBinding::new("escape", Back, Some(TEMPLATE_MENU)),
     ]);
     bind_editor_action("ctrl-shift-k", "markdown_editor::ToggleLink", cx);
 }

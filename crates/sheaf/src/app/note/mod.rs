@@ -41,6 +41,7 @@ pub(crate) mod files;
 mod header;
 mod jump;
 pub(crate) mod setup;
+pub(crate) mod template;
 mod worker;
 
 use std::path::PathBuf;
@@ -147,6 +148,8 @@ pub struct NoteView {
     rename_pending: bool,
     banner: Option<Banner>,
     popover: Option<Popover>,
+    template_menu: Option<template::TemplateMenu>,
+    _templates: Task<()>,
     /// Counts the saves; "Saved" fades in afresh after each one.
     saves: usize,
     saved_shown: bool,
@@ -190,8 +193,10 @@ impl NoteView {
             folder: notes_dir.clone(),
             ..Lookup::default()
         }));
+        let note = cx.weak_entity();
         let editor = cx.new(|cx| {
-            let mut editor = MarkdownEditor::new(window, cx, setup::options(&lookup));
+            let slash = vec![template::slash_item(note)];
+            let mut editor = MarkdownEditor::new(window, cx, setup::options(&lookup, slash));
             editor.set_style(setup::style(cx), cx);
             editor
         });
@@ -254,6 +259,8 @@ impl NoteView {
             rename_pending: false,
             banner: None,
             popover: None,
+            template_menu: None,
+            _templates: Task::ready(()),
             saves: 0,
             saved_shown: false,
             _save_timer: Task::ready(()),
@@ -979,6 +986,11 @@ impl Render for NoteView {
             )
             .children(self.backlinks_section(cx))
             .children(saved)
+            .children(template::menu(
+                &cx.entity(),
+                self.template_menu.as_ref(),
+                cx,
+            ))
             .when(self.popover.is_some(), |pane| {
                 pane.child(header::dismiss_layer(cx))
             })
