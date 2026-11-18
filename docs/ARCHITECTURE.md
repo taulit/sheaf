@@ -47,7 +47,7 @@ write returns. See `NoteId` in `crates/sheaf-core/src/model.rs`.
 |---|---|
 | Notes folder location | `$XDG_CONFIG_HOME/sheaf/config.toml` (`notes_dir`), overridden by `SHEAF_NOTES_DIR` or `--dir` |
 | App settings (default order, editor font and line width) | `$XDG_CONFIG_HOME/sheaf/config.toml` (`sort`, `[editor]`) |
-| Default notes folder | `$XDG_DOCUMENTS_DIR/Notes` (localised: `Notizen`), chosen on first run |
+| Default notes folder | `$XDG_DOCUMENTS_DIR/Notes` (localised: `Notizen`; an existing one of either name is taken), recorded as `notes_dir` by whichever of app, service and CLI runs first |
 | Per-folder state | `<notes>/.sheaf/config.toml`: smart folders, sort order, per-note view state |
 | Templates | `<notes>/.sheaf/templates/*.md` |
 | Trash | `<notes>/.trash/`, each file with `deleted:` and `from:` in its frontmatter |
