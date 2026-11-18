@@ -18,7 +18,8 @@ chmod +x "$work/build/sheaf" "$work/build/sheaf-searchd"
 
 prefix=/usr
 dest="$work/dest"
-SHEAF_BUILD_DIR="$work/build" "$root/build-aux/install.sh" "$prefix" "$dest"
+SHEAF_BUILD_DIR="$work/build" SHEAF_SERVICE_BUILD_DIR="$work/build" \
+    "$root/build-aux/install.sh" "$prefix" "$dest"
 tree="$dest$prefix"
 
 fail=0

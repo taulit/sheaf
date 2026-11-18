@@ -71,6 +71,15 @@ lto = "thin"
 codegen-units = 4
 strip = "debuginfo"
 
+# sheaf-searchd runs all session long, mostly idle: built for size, its resident code is
+# what its memory budget (< 15 MB) is mostly made of. Search through it stays within
+# noise of the release build (docs/testing.md, "Budgets").
+[profile.service]
+inherits = "release"
+opt-level = "s"
+lto = "fat"
+codegen-units = 1
+
 [profile.bench]
 debug = false
 

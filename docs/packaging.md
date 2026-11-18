@@ -20,8 +20,16 @@ packages call it, so the layout exists once:
 | Shell completions | bash, zsh and fish, written by `sheaf completions <shell>` |
 | Licence | `share/licenses/$SHEAF_LICENSE_NAME/LICENSE` (default `sheaf`) |
 
-The binaries come from `$SHEAF_BUILD_DIR` (default `$CARGO_TARGET_DIR/release`, else
-`target/release`). `scripts/check-install.sh` installs stub binaries into a temporary prefix
+`sheaf` comes from `$SHEAF_BUILD_DIR` (default `$CARGO_TARGET_DIR/release`, else
+`target/release`), `sheaf-searchd` from `$SHEAF_SERVICE_BUILD_DIR` (default
+`$CARGO_TARGET_DIR/service`, else `target/service`): the service is built with the Cargo
+profile `service` (size-optimised, fat LTO) for its idle memory budget:
+
+```sh
+cargo build --release --locked -p sheaf
+cargo build --profile service --locked -p sheaf-searchd
+```
+ `scripts/check-install.sh` installs stub binaries into a temporary prefix
 and checks the tree, the service files, `desktop-file-validate` and `appstreamcli validate`.
 It needs no build.
 

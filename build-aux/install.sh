@@ -4,9 +4,12 @@
 #
 #   build-aux/install.sh <prefix> [<destdir>]
 #
-# Files go to <destdir><prefix>/..., the D-Bus service files name <prefix>/bin. Binaries are
+# Files go to <destdir><prefix>/..., the D-Bus service files name <prefix>/bin. `sheaf` is
 # taken from $SHEAF_BUILD_DIR (default: <target dir>/release, with <target dir> from
-# $CARGO_TARGET_DIR or ./target). Build first: cargo build --release --locked.
+# $CARGO_TARGET_DIR or ./target), `sheaf-searchd` from $SHEAF_SERVICE_BUILD_DIR (default:
+# <target dir>/service). Build first:
+#   cargo build --release --locked -p sheaf
+#   cargo build --profile service --locked -p sheaf-searchd
 # The licence goes to share/licenses/$SHEAF_LICENSE_NAME (default: sheaf).
 set -eu
 
@@ -21,17 +24,18 @@ case "$prefix" in /*) ;; *) echo "$0: prefix must be absolute: $prefix" >&2; exi
 root="$(cd "$(dirname "$0")/.." && pwd)"
 app_id="io.github.taulit.Sheaf"
 build_dir="${SHEAF_BUILD_DIR:-${CARGO_TARGET_DIR:-$root/target}/release}"
+service_dir="${SHEAF_SERVICE_BUILD_DIR:-${CARGO_TARGET_DIR:-$root/target}/service}"
 
 root_prefix="$destdir$prefix"
 bindir="$root_prefix/bin"
 datadir="$root_prefix/share"
 
-for bin in sheaf sheaf-searchd; do
-    [ -x "$build_dir/$bin" ] || { echo "$0: $build_dir/$bin not found; build first" >&2; exit 1; }
+for bin in "$build_dir/sheaf" "$service_dir/sheaf-searchd"; do
+    [ -x "$bin" ] || { echo "$0: $bin not found; build first" >&2; exit 1; }
 done
 
 install -d "$bindir"
-install -m 755 "$build_dir/sheaf" "$build_dir/sheaf-searchd" "$bindir/"
+install -m 755 "$build_dir/sheaf" "$service_dir/sheaf-searchd" "$bindir/"
 
 install -Dm644 "$root/data/$app_id.desktop" "$datadir/applications/$app_id.desktop"
 install -Dm644 "$root/data/$app_id.metainfo.xml" "$datadir/metainfo/$app_id.metainfo.xml"

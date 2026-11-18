@@ -14,10 +14,13 @@ set -euo pipefail
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 runs="${1:-9}"
 bin="$repo/target/release"
+# sheaf-searchd as it ships: built with the profile `service` (Cargo.toml).
+svc="$repo/target/service"
 
 cd "$repo"
 echo "building (release, --locked) ..." >&2
-cargo build --release --locked --quiet -p sheaf -p sheaf-searchd
+cargo build --release --locked --quiet -p sheaf
+cargo build --profile service --locked --quiet -p sheaf-searchd
 cargo build --release --locked --quiet -p sheaf --features budgets --bin sheaf-budgets
 cargo build --release --locked --quiet -p sheaf-core --features testgen --example search_budget
 
@@ -30,7 +33,7 @@ home="$work/home"
 services="$home/.local/share/dbus-1/services"
 mkdir -p "$services" "$home/.config" "$home/.cache" "$home/.local/state" "$work/run"
 chmod 700 "$work/run"
-sed "s|@bindir@|$bin|g" data/io.github.taulit.Sheaf.SearchProvider.service.in \
+sed "s|@bindir@|$svc|g" data/io.github.taulit.Sheaf.SearchProvider.service.in \
     >"$services/io.github.taulit.Sheaf.SearchProvider.service"
 # Only sheaf-searchd can be started on the bus: no portal or other desktop service.
 cat >"$work/bus.conf" <<EOF
@@ -69,8 +72,8 @@ echo "generating notes ..." >&2
 "$bin/sheaf-budgets" generate "$work/notes-1k" 1000 15
 "$bin/sheaf-budgets" generate "$work/notes-10k" 10000 15
 # The app reads the index sheaf-searchd wrote, as after a login.
-isolated "$work/notes-1k" "$bin/sheaf-searchd" --reindex >/dev/null
-isolated "$work/notes-10k" "$bin/sheaf-searchd" --reindex >/dev/null
+isolated "$work/notes-1k" "$svc/sheaf-searchd" --reindex >/dev/null
+isolated "$work/notes-10k" "$svc/sheaf-searchd" --reindex >/dev/null
 
 status=0
 echo "measuring the start, $runs runs ..." >&2
@@ -87,9 +90,9 @@ echo "measuring scrolling ..." >&2
 isolated "$work/notes-10k" "$bin/sheaf-budgets" scroll "$work/notes-10k" >>"$rows" || status=1
 
 echo "measuring sheaf-searchd ..." >&2
-isolated "$work/notes-1k" bus "$bin/sheaf-budgets" searchd "$bin/sheaf-searchd" 1,000 \
+isolated "$work/notes-1k" bus "$bin/sheaf-budgets" searchd "$svc/sheaf-searchd" 1,000 \
     >>"$rows" || status=1
-isolated "$work/notes-10k" bus "$bin/sheaf-budgets" searchd "$bin/sheaf-searchd" 10,000 \
+isolated "$work/notes-10k" bus "$bin/sheaf-budgets" searchd "$svc/sheaf-searchd" 10,000 \
     >>"$rows" || status=1
 
 echo

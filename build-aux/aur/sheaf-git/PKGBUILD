@@ -51,7 +51,8 @@ build() {
   cd "$pkgname"
   export RUSTUP_TOOLCHAIN=stable
   export CARGO_TARGET_DIR=target
-  cargo build --frozen --release
+  cargo build --frozen --release -p sheaf
+  cargo build --frozen --profile service -p sheaf-searchd
 }
 
 check() {
@@ -63,6 +64,7 @@ check() {
 
 package() {
   cd "$pkgname"
-  SHEAF_BUILD_DIR="$PWD/target/release" SHEAF_LICENSE_NAME="$pkgname" \
+  SHEAF_BUILD_DIR="$PWD/target/release" SHEAF_SERVICE_BUILD_DIR="$PWD/target/service" \
+    SHEAF_LICENSE_NAME="$pkgname" \
     build-aux/install.sh /usr "$pkgdir"
 }

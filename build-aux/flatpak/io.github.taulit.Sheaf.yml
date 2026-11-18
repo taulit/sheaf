@@ -34,7 +34,8 @@ modules:
     buildsystem: simple
     build-commands:
       - cargo --offline fetch --manifest-path Cargo.toml --locked
-      - cargo --offline build --release --locked
+      - cargo --offline build --release --locked -p sheaf
+      - cargo --offline build --profile service --locked -p sheaf-searchd
       # The layout lives in build-aux/install.sh. Flatpak exports the desktop file, the
       # icons, the metainfo, both D-Bus service files and the search provider ini from here.
       - SHEAF_LICENSE_NAME=io.github.taulit.Sheaf build-aux/install.sh /app
