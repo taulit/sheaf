@@ -11,7 +11,13 @@ name: Release
 
 on:
   push:
-    tags: ['v[0-9]+.[0-9]+.[0-9]+*']
+    # A filter is a glob, not a regex; the first step checks the version strictly.
+    tags: ['v[0-9]+.[0-9]+.[0-9]+', 'v[0-9]+.[0-9]+.[0-9]+-[0-9A-Za-z]*']
+
+# Every job reads only; the draft release job asks for more itself. Values from the tag
+# reach shell only through env and quoted variables, never as ${{ }} inside run.
+permissions:
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
@@ -25,10 +31,22 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - id: version
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-      - run: scripts/check-release.sh "${{ steps.version.outputs.version }}"
+        name: Version from the tag, strict semver
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          semver='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'
+          if [[ ! "$v" =~ $semver ]]; then
+            echo "::error::tag $GITHUB_REF_NAME is not v<semver>"
+            exit 1
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+      - env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: scripts/check-release.sh "$VERSION"
       - name: Release notes exist
-        run: scripts/release-notes.sh "${{ steps.version.outputs.version }}" > /dev/null
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: scripts/release-notes.sh "$VERSION" > /dev/null
 
   tarball:
     name: source tarball
@@ -39,8 +57,10 @@ jobs:
       - name: Archive the tag
         # The AUR package takes its checksum from this file, so it must not change between
         # runs: git archive is deterministic and gzip -n leaves out the file time.
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
         run: |
-          v="${{ needs.verify.outputs.version }}"
+          v="$VERSION"
           mkdir dist
           git archive --format=tar --prefix="sheaf-$v/" "$GITHUB_REF_NAME" | gzip -n -9 > "dist/sheaf-$v.tar.gz"
       - uses: actions/upload-artifact@v4
@@ -84,6 +104,8 @@ jobs:
         run: |
           git config --global url."https://x-access-token:${EDITOR_TOKEN}@github.com/taulit/gpui-markdown-editor".insteadOf "https://github.com/taulit/gpui-markdown-editor"
       - name: Build from this checkout instead of the tag's git source (NEEDS EDITOR)
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
         run: |
           python3 -I - <<'PY'
           import yaml
@@ -95,7 +117,7 @@ jobs:
           PY
           flatpak-builder --user --force-clean --disable-rofiles-fuse --repo=repo \
             build build-aux/flatpak/ci.yml
-          flatpak build-bundle repo "sheaf-${{ needs.verify.outputs.version }}.flatpak" io.github.taulit.Sheaf
+          flatpak build-bundle repo "sheaf-$VERSION.flatpak" io.github.taulit.Sheaf
       - uses: actions/upload-artifact@v4
         with:
           name: flatpak
@@ -116,14 +138,17 @@ jobs:
           path: dist
           merge-multiple: true
       - name: Checksums and notes
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
         run: |
           (cd dist && sha256sum * > SHA256SUMS)
-          scripts/release-notes.sh "${{ needs.verify.outputs.version }}" > notes.md
+          scripts/release-notes.sh "$VERSION" > notes.md
       - name: Create the draft release
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.verify.outputs.version }}
         run: |
-          v="${{ needs.verify.outputs.version }}"
+          v="$VERSION"
           case "$v" in *-*) pre=--prerelease ;; *) pre= ;; esac
           gh release create "$GITHUB_REF_NAME" --draft $pre \
             --title "Sheaf $v" --notes-file notes.md dist/*
