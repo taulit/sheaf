@@ -65,7 +65,7 @@ The packaging itself is described in [packaging.md](packaging.md).
 
 ## 2. Release day, in order
 
-1. **Editor.** Sheaf uses `taulit/gpui-markdown-editor` `v0.1.0` (since 2026-11-18). If a
+1. **Editor.** Sheaf uses `taulit/gpui-markdown-editor` `v0.2.0` (since 2026-11-22). If a
    newer tag ships, bump it in `Cargo.toml`, update `Cargo.lock` and
    `build-aux/flatpak/cargo-sources.json` (`scripts/update-cargo-sources.sh`), run the gate. Make the editor repository public or give CI a token
    (blockers 1 and 2).

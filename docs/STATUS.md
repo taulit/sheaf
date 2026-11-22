@@ -30,7 +30,7 @@ Other sessions read only this file. Updated at the end of every phase.
   SIGTERM; the file follows the title; changes from other programs reload or ask; a save
   that fails shows a banner and falls back to `$XDG_STATE_HOME/sheaf/recovered/`.
 - Command palette (Ctrl+K), keyboard shortcuts (Ctrl+?), toasts; German translation.
-- The editor renders and edits the note in place (`gpui-markdown-editor` `v0.1.0`);
+- The editor renders and edits the note in place (`gpui-markdown-editor` `v0.2.0`);
   Ctrl+K stays the command palette inside it, the editor's link prompt is on Ctrl+Shift+K.
   Format bar, slash menu (`/vorlage` and `/template` insert a template), find bar
   (Ctrl+F), folding, tables, inline images. Dropped and pasted files and images become
@@ -128,7 +128,7 @@ None yet.
 
 | What | State on 2026-11-16 | Effect |
 |---|---|---|
-| `taulit/gpui-markdown-editor` tag `v0.1.0` | used since 2026-11-18 (newest tag): WYSIWYG editing, `highlight`, `scroll_to`, `set_style`, format bar, slash menu with host items, find bar, folding, tables, images, completions, `MetaChanged`. API as in `v0.0.3`; empty paragraphs are no longer written | gpui-pre =0.3.12, gpui-component =0.10.0, MSRV 1.95 |
+| `taulit/gpui-markdown-editor` tag `v0.2.0` | used since 2026-11-22 (newest tag): menus and labels in the language of the environment (`EditorStrings::from_env`), WYSIWYG editing, `highlight`, `scroll_to`, `set_style`, format bar, slash menu with host items, find bar, folding, tables, images, completions, `MetaChanged`. API as in `v0.0.3`; empty paragraphs are no longer written | gpui-pre =0.3.12, gpui-component =0.10.0, MSRV 1.95 |
 | `taulit/visor` tag `api-v1` | exists (checked 2026-11-17) | "Visor: Notes" is built in `visor-module/` against it (S3) |
 
 ## Open
@@ -157,7 +157,7 @@ None yet.
   private `taulit/gpui-markdown-editor`. The gate runs locally before every PR.
 - In service mode folder and tag counts follow the service's index, not the app's own
   writes (`app/library/overlay.rs`).
-- Wanted from the editor (API, still not in `v0.1.0`): read and set the scroll position (a
+- Wanted from the editor (API, still not in `v0.2.0`): read and set the scroll position (a
   silent reload from disk scrolls to the top), slots above the first and below the last
   block (the date line and "Linked from" do not scroll with the text, and the format bar
   floats above an open "Linked from"), asynchronous completions (`[[`/`#` use a cached
