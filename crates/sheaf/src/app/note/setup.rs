@@ -7,7 +7,8 @@ use std::sync::{Arc, Mutex, PoisonError};
 use gpui::{App, Edges, FontWeight, Pixels, px};
 use gpui_markdown_editor::extensions::{Highlight, Tag, WikiLink};
 use gpui_markdown_editor::{
-    Completion, CompletionKind, EditorOptions, EditorStyle, SlashItem, SrcResolver, UiParts,
+    Completion, CompletionKind, EditorOptions, EditorStrings, EditorStyle, SlashItem, SrcResolver,
+    UiParts,
 };
 use sheaf_core::config::LineWidth;
 
@@ -62,6 +63,8 @@ pub fn options(lookup: &SharedLookup, slash_items: Vec<SlashItem>, ui: UiParts) 
         completions: Some(completions),
         slash_items,
         ui,
+        // The editor's own menus and labels, in the language of the environment.
+        strings: EditorStrings::from_env(),
         ..Default::default()
     }
 }
