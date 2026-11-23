@@ -779,17 +779,15 @@ impl DocumentView {
             .into_any_element()
     }
 
-    /// The folder of the file and when it was changed, under the header.
+    /// When the file was last changed, under the header, as the date line of a note.
     fn render_subtitle(&self, cx: &App) -> impl IntoElement {
         let tokens = cx.tokens();
-        let folder = self.path.parent().map(home_relative).unwrap_or_default();
-        let modified = self.modified.map(|modified| {
-            date::long_date_time(&modified.to_zoned_datetime(jiff::tz::TimeZone::system()))
-        });
-        let line = match modified {
-            Some(modified) => format!("{folder} · {modified}"),
-            None => folder,
-        };
+        let line = self
+            .modified
+            .map(|modified| {
+                date::long_date_time(&modified.to_zoned_datetime(jiff::tz::TimeZone::system()))
+            })
+            .unwrap_or_default();
         div()
             .id("document-subtitle")
             .flex_none()
@@ -921,19 +919,6 @@ fn editor_options(lookup: &setup::SharedLookup) -> EditorOptions {
     options.completions = None;
     options.strings = EditorStrings::from_env();
     options
-}
-
-/// `folder` with the home folder as `~`.
-fn home_relative(folder: &Path) -> String {
-    let home = std::env::var_os("HOME").map(PathBuf::from);
-    match home
-        .as_deref()
-        .and_then(|home| folder.strip_prefix(home).ok())
-    {
-        Some(rest) if rest.as_os_str().is_empty() => "~".to_owned(),
-        Some(rest) => format!("~/{}", rest.display()),
-        None => folder.display().to_string(),
-    }
 }
 
 /// A button of 04 "Buttons": 28 high, 12 px/600, primary in the accent colour.
