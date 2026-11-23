@@ -45,6 +45,9 @@ pub struct AppConfig {
 pub struct EditorSettings {
     pub font: EditorFont,
     pub line_width: LineWidth,
+    /// The first part of every word drawn bold, as a reading aid ("bionic reading").
+    /// Display only; the files do not change.
+    pub bionic_reading: bool,
     #[serde(flatten)]
     pub other: toml::Table,
 }
@@ -66,9 +69,11 @@ pub enum EditorFont {
 pub enum LineWidth {
     Narrow,
     /// The 700 px column of plan 04.
-    #[default]
     Medium,
+    #[default]
     Wide,
+    /// As wide as a big window allows, for long documents on a big screen.
+    Full,
 }
 
 /// What Sheaf remembers about one notes folder.

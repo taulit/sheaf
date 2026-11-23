@@ -2552,8 +2552,8 @@ dependencies = [
 
 [[package]]
 name = "gpui-markdown-editor"
-version = "0.2.0"
-source = "git+https://github.com/taulit/gpui-markdown-editor?tag=v0.2.0#ceb29d85ed8866ab5ac90cf8196ee49cf9fde5b0"
+version = "0.3.0"
+source = "git+https://github.com/taulit/gpui-markdown-editor?rev=fd76d2494078c39469572f5b05bffcf1e6d81401#fd76d2494078c39469572f5b05bffcf1e6d81401"
 dependencies = [
  "futures",
  "gpui-component",

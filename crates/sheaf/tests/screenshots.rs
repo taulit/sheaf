@@ -612,24 +612,42 @@ fn settings_scenes() {
 }
 
 /// A Markdown file from outside the notes folder in its own window, with frontmatter
-/// that stays out of sight, headings, a checklist and a table.
+/// that stays out of sight, lines kept as they are written, a checklist and a table;
+/// once as it is and once with the reading aid.
 #[test]
 #[ignore = "needs a GPU and writes docs/screenshots, run scripts/screenshot.sh"]
 fn document_scenes() {
     let folder = tempfile::tempdir().expect("a folder");
-    let path = folder.path().join("README.md");
+    let path = folder.path().join("fragen.md");
     std::fs::write(
         &path,
-        "---\ntitle: Gartenprojekt\n---\n# Gartenprojekt\n\nEin Plan für das Hochbeet im Frühjahr, \
-         geschrieben in **Markdown** und gespeichert genau hier.\n\n## Aufgaben\n\n\
-         - [x] Holz bestellen\n- [ ] Erde mischen\n- [ ] Tomaten vorziehen\n\n## Material\n\n\
-         | Teil | Menge |\n| --- | --- |\n| Bretter | 12 |\n| Schrauben | 80 |\n\n\
-         > Tipp: Schnecken mögen keinen Kaffeesatz.\n",
+        "---\ntitle: Fragen\n---\n# Fragen an die Projektleitung\n\n\
+         Stand: 23.11.2026 · Entwurf. Erst gehen wir die Fragen intern durch.\n\n\
+         ## 1. Im Dummy vorhanden, in der Beschreibung nicht\n\n\
+         **P-01 ★ Angebotsrechner.** Eigene Hauptseite: schlägt für ein neues Angebot \
+         einen Preis vor, berechnet aus ähnlichen abgeschlossenen Aufträgen.\n\
+         Annahme: nicht Teil des Pakets, optional am Ende.\n\
+         Antwort: kommt direkt mit rein.\n\n\
+         **P-02 ★ Berichte als PDF.** Eigene Hauptseite mit Berichtsvorlagen und \
+         Versand per Mail nach Zeitplan.\n\
+         Annahme: Berichte und Versand sind optional.\n\
+         Antwort: Berichte ja, das Format ist noch offen.\n\n\
+         ## Offen\n\n- [x] Dummy durchgesehen\n- [ ] Fragen an die Projektleitung\n\n\
+         | Teil | Stunden |\n| --- | --- |\n| Rechner | 40 |\n| Berichte | 24 |\n",
     )
     .expect("the file");
-    for (theme, dark) in [("dark", true), ("light", false)] {
+    for (name, dark, bionic) in [
+        ("app-document-dark", true, false),
+        ("app-document-light", false, false),
+        ("app-document-bionic-dark", true, true),
+    ] {
         let notes = Notes::seeded();
         let (mut cx, _) = headless(dark, &notes);
+        cx.update(|cx| {
+            let mut config = sheaf_core::AppConfig::default();
+            config.editor.bionic_reading = bionic;
+            cx.set_global(sheaf::app::settings::Settings::new(None, config));
+        });
         let window = cx
             .open_window(
                 size(px(WIDTH + 2. * MARGIN), px(HEIGHT + 2. * MARGIN)),
@@ -640,7 +658,7 @@ fn document_scenes() {
             )
             .expect("failed to open the offscreen window");
         cx.run_until_parked();
-        draw_and_save(&mut cx, window.into(), &format!("app-document-{theme}"));
+        draw_and_save(&mut cx, window.into(), name);
     }
 }
 
