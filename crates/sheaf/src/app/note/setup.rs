@@ -152,6 +152,7 @@ pub fn style(cx: &App) -> EditorStyle {
     style.highlight_color = tokens.accent.opacity(0.25);
     style.selection_color = tokens.accent.opacity(0.4);
     style.caret_color = tokens.accent;
+    style.bionic_reading = settings::config(cx).editor.bionic_reading;
     style
 }
 
@@ -194,6 +195,8 @@ mod tests {
         assert_eq!(text(1200., LineWidth::Medium), 700. - 96.);
         assert_eq!(text(1200., LineWidth::Narrow), 600. - 96.);
         assert_eq!(text(1200., LineWidth::Wide), 860. - 96.);
+        assert_eq!(text(1600., LineWidth::Full), 1240. - 96.);
+        assert_eq!(text(1000., LineWidth::Full), 1000. - 96.);
         assert_eq!(text(760., LineWidth::Medium), 700. - 96.);
         assert_eq!(
             text(500., LineWidth::Medium),

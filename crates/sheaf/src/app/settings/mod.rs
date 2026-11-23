@@ -102,11 +102,12 @@ pub fn column(width: LineWidth) -> Pixels {
         LineWidth::Narrow => px(600.),
         LineWidth::Medium => px(700.),
         LineWidth::Wide => px(860.),
+        LineWidth::Full => WIDEST_COLUMN,
     }
 }
 
 /// The widest column, which the editor is created with; narrower ones are padding.
-pub const WIDEST_COLUMN: Pixels = px(860.);
+pub const WIDEST_COLUMN: Pixels = px(1240.);
 
 /// Families tried in order for the serif and monospaced choices.
 const SERIF: &[&str] = &[
@@ -151,6 +152,7 @@ mod tests {
             column(LineWidth::Medium),
             super::super::theme::size::EDITOR_MAX_WIDTH
         );
-        assert_eq!(column(LineWidth::Wide), WIDEST_COLUMN);
+        assert!(column(LineWidth::Wide) < column(LineWidth::Full));
+        assert_eq!(column(LineWidth::Full), WIDEST_COLUMN);
     }
 }

@@ -182,6 +182,11 @@ impl SettingsView {
         self.saved(saved, window, cx);
     }
 
+    pub fn set_bionic_reading(&mut self, on: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let saved = update(cx, |config| config.editor.bionic_reading = on);
+        self.saved(saved, window, cx);
+    }
+
     pub fn set_resume_minutes(
         &mut self,
         minutes: u32,
@@ -494,10 +499,18 @@ impl Render for SettingsView {
                 (LineWidth::Narrow, tr("Narrow")),
                 (LineWidth::Medium, tr("Medium")),
                 (LineWidth::Wide, tr("Wide")),
+                (LineWidth::Full, tr("Very Wide")),
             ],
             config.editor.line_width,
             cx,
             SettingsView::set_line_width,
+        );
+        let reading_control = segmented(
+            "bionic-reading",
+            vec![(false, tr("Off")), (true, tr("On"))],
+            config.editor.bionic_reading,
+            cx,
+            SettingsView::set_bionic_reading,
         );
         let folder_error = self.quick_folder_error.clone().map(|error| {
             div()
@@ -602,6 +615,14 @@ impl Render for SettingsView {
             vec![
                 row(tr("Font"), None, font_control, cx),
                 row(tr("Line Width"), None, width_control, cx),
+                row(
+                    tr("Reading Aid"),
+                    Some(tr(
+                        "Word beginnings in bold guide the eye through the text (bionic reading)",
+                    )),
+                    reading_control,
+                    cx,
+                ),
             ],
             cx,
         );

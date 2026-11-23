@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: sheaf\n"
 "Report-Msgid-Bugs-To: https://github.com/taulit/sheaf/issues\n"
-"POT-Creation-Date: 2026-11-23 14:24+0100\n"
+"POT-Creation-Date: 2026-11-23 15:33+0100\n"
 "PO-Revision-Date: 2026-11-18 12:00+0100\n"
 "Last-Translator: Automatically generated\n"
 "Language-Team: Polish\n"
@@ -17,7 +17,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
 
-#: crates/sheaf-core/src/config.rs:156
+#: crates/sheaf-core/src/config.rs:161
 msgid "Quick Notes"
 msgstr "Szybkie notatki"
 
@@ -111,7 +111,7 @@ msgstr "Nowa notatka"
 #: crates/sheaf/src/app/actions.rs:179
 #: crates/sheaf/src/app/overlays/shortcuts.rs:31
 #: crates/sheaf/src/app/quick.rs:110 crates/sheaf/src/app/quick.rs:485
-#: crates/sheaf/src/app/settings/view.rs:558
+#: crates/sheaf/src/app/settings/view.rs:571
 #: crates/sheaf/src/app/shortcut.rs:121
 msgid "Quick Note"
 msgstr "Szybka notatka"
@@ -154,13 +154,13 @@ msgstr "Wróć do notatek"
 
 #: crates/sheaf/src/app/actions.rs:192
 #: crates/sheaf/src/app/overlays/shortcuts.rs:150
-#: crates/sheaf/src/app/settings/view.rs:633
+#: crates/sheaf/src/app/settings/view.rs:654
 msgid "Keyboard Shortcuts"
 msgstr "Skróty klawiszowe"
 
 #: crates/sheaf/src/app/actions.rs:193
-#: crates/sheaf/src/app/settings/view.rs:647
-#: crates/sheaf/src/app/settings/view.rs:688
+#: crates/sheaf/src/app/settings/view.rs:668
+#: crates/sheaf/src/app/settings/view.rs:709
 msgid "Settings"
 msgstr "Ustawienia"
 
@@ -264,44 +264,44 @@ msgstr "Pokaż w Plikach"
 msgid "Copy as Markdown"
 msgstr "Skopiuj jako Markdown"
 
-#: crates/sheaf/src/app/document.rs:810 crates/sheaf/src/app/note/header.rs:288
+#: crates/sheaf/src/app/document.rs:808 crates/sheaf/src/app/note/header.rs:288
 msgid "File changed on disk"
 msgstr "Plik zmieniony na dysku"
 
-#: crates/sheaf/src/app/document.rs:812 crates/sheaf/src/app/note/header.rs:290
+#: crates/sheaf/src/app/document.rs:810 crates/sheaf/src/app/note/header.rs:290
 msgid "Reload"
 msgstr "Wczytaj ponownie"
 
-#: crates/sheaf/src/app/document.rs:815 crates/sheaf/src/app/note/header.rs:293
+#: crates/sheaf/src/app/document.rs:813 crates/sheaf/src/app/note/header.rs:293
 msgid "Keep Mine"
 msgstr "Zachowaj moją"
 
-#: crates/sheaf/src/app/document.rs:821
+#: crates/sheaf/src/app/document.rs:819
 msgid "The file was deleted elsewhere"
 msgstr "Plik został usunięty gdzie indziej"
 
-#: crates/sheaf/src/app/document.rs:823
+#: crates/sheaf/src/app/document.rs:821
 msgid "Save Again"
 msgstr "Zapisz ponownie"
 
-#: crates/sheaf/src/app/document.rs:829 crates/sheaf/src/app/note/header.rs:307
+#: crates/sheaf/src/app/document.rs:827 crates/sheaf/src/app/note/header.rs:307
 #, rust-format
 msgid "Could not save: {}"
 msgstr "Nie można zapisać: {}"
 
-#: crates/sheaf/src/app/document.rs:831 crates/sheaf/src/app/note/header.rs:309
+#: crates/sheaf/src/app/document.rs:829 crates/sheaf/src/app/note/header.rs:309
 msgid "Try Again"
 msgstr "Spróbuj ponownie"
 
-#: crates/sheaf/src/app/document.rs:877
+#: crates/sheaf/src/app/document.rs:875
 msgid "Could not open the file"
 msgstr "Nie można otworzyć pliku"
 
-#: crates/sheaf/src/app/document.rs:897
+#: crates/sheaf/src/app/document.rs:895
 msgid "the file is not loaded"
 msgstr "plik nie jest wczytany"
 
-#: crates/sheaf/src/app/document.rs:993 crates/sheaf/src/app/note/mod.rs:948
+#: crates/sheaf/src/app/document.rs:978 crates/sheaf/src/app/note/mod.rs:948
 #: crates/sheaf/src/app/quick.rs:517
 msgid "Saved"
 msgstr "Zapisano"
@@ -617,7 +617,7 @@ msgstr "Sortuj"
 
 #: crates/sheaf/src/app/gallery/render.rs:137
 #: crates/sheaf/src/app/overlays/shortcuts.rs:29
-#: crates/sheaf/src/app/settings/view.rs:546
+#: crates/sheaf/src/app/settings/view.rs:559
 msgid "Gallery"
 msgstr "Galeria"
 
@@ -671,17 +671,17 @@ msgid "New Folder"
 msgstr "Nowy katalog"
 
 #: crates/sheaf/src/app/gallery/render.rs:610
-#: crates/sheaf/src/app/settings/view.rs:433
+#: crates/sheaf/src/app/settings/view.rs:438
 msgid "Date Edited"
 msgstr "Data edycji"
 
 #: crates/sheaf/src/app/gallery/render.rs:611
-#: crates/sheaf/src/app/settings/view.rs:434
+#: crates/sheaf/src/app/settings/view.rs:439
 msgid "Date Created"
 msgstr "Data utworzenia"
 
 #: crates/sheaf/src/app/gallery/render.rs:612
-#: crates/sheaf/src/app/settings/view.rs:435
+#: crates/sheaf/src/app/settings/view.rs:440
 msgid "Title"
 msgstr "Tytuł"
 
@@ -1064,104 +1064,124 @@ msgstr "Gotowe"
 msgid "Choose Notes Folder"
 msgstr "Wybierz katalog notatek"
 
-#: crates/sheaf/src/app/settings/view.rs:208
+#: crates/sheaf/src/app/settings/view.rs:213
 msgid "Choose a folder inside the notes folder, without “..” or a leading dot"
 msgstr "Wybierz katalog w katalogu notatek, bez „..” i bez kropki na początku"
 
-#: crates/sheaf/src/app/settings/view.rs:272
+#: crates/sheaf/src/app/settings/view.rs:277
 #, rust-format
 msgid "Could not save the settings: {}"
 msgstr "Nie można zapisać ustawień: {}"
 
-#: crates/sheaf/src/app/settings/view.rs:441
+#: crates/sheaf/src/app/settings/view.rs:446
 msgid "Never"
 msgstr "Nigdy"
 
-#: crates/sheaf/src/app/settings/view.rs:443
+#: crates/sheaf/src/app/settings/view.rs:448
 #, rust-format
 msgid "{} min"
 msgstr "{} min"
 
-#: crates/sheaf/src/app/settings/view.rs:457
+#: crates/sheaf/src/app/settings/view.rs:462
 msgid "Change…"
 msgstr "Zmień…"
 
-#: crates/sheaf/src/app/settings/view.rs:483
+#: crates/sheaf/src/app/settings/view.rs:488
 msgid "System"
 msgstr "Systemowa"
 
-#: crates/sheaf/src/app/settings/view.rs:484
+#: crates/sheaf/src/app/settings/view.rs:489
 msgid "Serif"
 msgstr "Szeryfowa"
 
-#: crates/sheaf/src/app/settings/view.rs:485
+#: crates/sheaf/src/app/settings/view.rs:490
 msgid "Mono"
 msgstr "Stałej szerokości"
 
-#: crates/sheaf/src/app/settings/view.rs:494
+#: crates/sheaf/src/app/settings/view.rs:499
 msgid "Narrow"
 msgstr "Wąska"
 
-#: crates/sheaf/src/app/settings/view.rs:495
+#: crates/sheaf/src/app/settings/view.rs:500
 msgid "Medium"
 msgstr "Średnia"
 
-#: crates/sheaf/src/app/settings/view.rs:496
+#: crates/sheaf/src/app/settings/view.rs:501
 msgid "Wide"
 msgstr "Szeroka"
 
-#: crates/sheaf/src/app/settings/view.rs:536
+#: crates/sheaf/src/app/settings/view.rs:502
+msgid "Very Wide"
+msgstr "Bardzo szeroka"
+
+#: crates/sheaf/src/app/settings/view.rs:510
+msgid "Off"
+msgstr "Wył."
+
+#: crates/sheaf/src/app/settings/view.rs:510
+msgid "On"
+msgstr "Wł."
+
+#: crates/sheaf/src/app/settings/view.rs:549
 msgid "Notes Folder"
 msgstr "Katalog notatek"
 
-#: crates/sheaf/src/app/settings/view.rs:539
+#: crates/sheaf/src/app/settings/view.rs:552
 msgid "Notes are plain Markdown files in this folder"
 msgstr "Notatki to zwykłe pliki Markdown w tym katalogu"
 
-#: crates/sheaf/src/app/settings/view.rs:548
+#: crates/sheaf/src/app/settings/view.rs:561
 msgid "Sort Notes By"
 msgstr "Sortuj notatki według"
 
-#: crates/sheaf/src/app/settings/view.rs:550
+#: crates/sheaf/src/app/settings/view.rs:563
 msgid "Folders sorted differently in the gallery keep their order"
 msgstr "Katalogi posortowane w galerii inaczej zachowują swoją kolejność"
 
-#: crates/sheaf/src/app/settings/view.rs:561
+#: crates/sheaf/src/app/settings/view.rs:574
 msgid "Folder"
 msgstr "Katalog"
 
-#: crates/sheaf/src/app/settings/view.rs:562
+#: crates/sheaf/src/app/settings/view.rs:575
 msgid "Where new quick notes are stored"
 msgstr "Gdzie zapisywane są nowe szybkie notatki"
 
-#: crates/sheaf/src/app/settings/view.rs:567
+#: crates/sheaf/src/app/settings/view.rs:580
 msgid "Continue the Last Quick Note"
 msgstr "Kontynuuj ostatnią szybką notatkę"
 
-#: crates/sheaf/src/app/settings/view.rs:569
+#: crates/sheaf/src/app/settings/view.rs:582
 msgid "A quick note this recent is continued instead of starting a new one"
 msgstr "Tak świeża szybka notatka jest kontynuowana zamiast tworzenia nowej"
 
-#: crates/sheaf/src/app/settings/view.rs:576
-#: crates/sheaf/src/app/settings/view.rs:583
+#: crates/sheaf/src/app/settings/view.rs:589
+#: crates/sheaf/src/app/settings/view.rs:596
 msgid "Shortcut from Anywhere"
 msgstr "Skrót z dowolnego miejsca"
 
-#: crates/sheaf/src/app/settings/view.rs:577
+#: crates/sheaf/src/app/settings/view.rs:590
 msgid "Visor supplies it: open Visor and type “note”"
 msgstr "Zapewnia go Visor: otwórz Visor i wpisz „note”"
 
-#: crates/sheaf/src/app/settings/view.rs:601
+#: crates/sheaf/src/app/settings/view.rs:614
 msgid "Editor"
 msgstr "Edytor"
 
-#: crates/sheaf/src/app/settings/view.rs:603
+#: crates/sheaf/src/app/settings/view.rs:616
 msgid "Font"
 msgstr "Czcionka"
 
-#: crates/sheaf/src/app/settings/view.rs:604
+#: crates/sheaf/src/app/settings/view.rs:617
 msgid "Line Width"
 msgstr "Szerokość wiersza"
+
+#: crates/sheaf/src/app/settings/view.rs:619
+msgid "Reading Aid"
+msgstr "Pomoc w czytaniu"
+
+#: crates/sheaf/src/app/settings/view.rs:621
+msgid "Word beginnings in bold guide the eye through the text (bionic reading)"
+msgstr "Pogrubione początki słów prowadzą wzrok przez tekst (bionic reading)"
 
 #: crates/sheaf/src/app/shortcut.rs:89
 msgid "While Notes runs, through GNOME’s shortcut portal, also with Visor installed. Otherwise add a custom shortcut for “flatpak run io.github.taulit.Sheaf --quick” in GNOME Settings, Keyboard"
