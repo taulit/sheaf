@@ -34,7 +34,7 @@
 
 pub(crate) mod attach;
 mod backlinks;
-mod date;
+pub(crate) mod date;
 pub mod export;
 pub use export::ViewerFiles;
 pub(crate) mod files;

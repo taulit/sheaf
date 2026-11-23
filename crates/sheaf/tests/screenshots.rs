@@ -611,6 +611,39 @@ fn settings_scenes() {
     }
 }
 
+/// A Markdown file from outside the notes folder in its own window, with frontmatter
+/// that stays out of sight, headings, a checklist and a table.
+#[test]
+#[ignore = "needs a GPU and writes docs/screenshots, run scripts/screenshot.sh"]
+fn document_scenes() {
+    let folder = tempfile::tempdir().expect("a folder");
+    let path = folder.path().join("README.md");
+    std::fs::write(
+        &path,
+        "---\ntitle: Gartenprojekt\n---\n# Gartenprojekt\n\nEin Plan für das Hochbeet im Frühjahr, \
+         geschrieben in **Markdown** und gespeichert genau hier.\n\n## Aufgaben\n\n\
+         - [x] Holz bestellen\n- [ ] Erde mischen\n- [ ] Tomaten vorziehen\n\n## Material\n\n\
+         | Teil | Menge |\n| --- | --- |\n| Bretter | 12 |\n| Schrauben | 80 |\n\n\
+         > Tipp: Schnecken mögen keinen Kaffeesatz.\n",
+    )
+    .expect("the file");
+    for (theme, dark) in [("dark", true), ("light", false)] {
+        let notes = Notes::seeded();
+        let (mut cx, _) = headless(dark, &notes);
+        let window = cx
+            .open_window(
+                size(px(WIDTH + 2. * MARGIN), px(HEIGHT + 2. * MARGIN)),
+                |window, cx| {
+                    let (root, _) = sheaf::app::document::build(path.clone(), window, cx);
+                    cx.new(|_| Desktop { root, dark })
+                },
+            )
+            .expect("failed to open the offscreen window");
+        cx.run_until_parked();
+        draw_and_save(&mut cx, window.into(), &format!("app-document-{theme}"));
+    }
+}
+
 /// The default size of the settings window.
 const SETTINGS_WIDTH: f32 = 640.;
 const SETTINGS_HEIGHT: f32 = 720.;

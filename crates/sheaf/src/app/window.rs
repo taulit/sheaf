@@ -17,6 +17,7 @@ use gpui::{
     Subscription, Task, TitlebarOptions, Window, WindowBounds, WindowDecorations, WindowHandle,
     WindowOptions, div, prelude::FluentBuilder as _, px, relative, size as size_of,
 };
+use std::path::PathBuf;
 use std::rc::Rc;
 
 use gpui_component::Root;
@@ -37,10 +38,10 @@ use super::note::{NoteEvent, NoteView};
 use super::overlays::palette::{CommandPalette, PaletteEvent};
 use super::overlays::shortcuts::ShortcutsSheet;
 use super::overlays::{Toast, ToastHost};
-use super::quick;
 use super::settings::{self, Settings, view::SettingsView};
 use super::state::{Recovery, StateFile, WindowState};
 use super::theme::{ActiveTokens as _, motion, size};
+use super::{document, quick};
 
 /// The shadow gpui-component draws around a client-decorated window, on every side.
 const FRAME_SHADOW: f32 = 20.0;
@@ -347,10 +348,21 @@ impl MainWindow {
             },
             Request::Search { query } => self.search_in_gallery(Some(&query), window, cx),
             Request::OpenUris(uris) => {
-                let Some(uri) = uris.first() else { return };
-                let found = self.library.read(cx).note_at(uri, cx);
+                let Some(uri) = uris.first().cloned() else {
+                    return;
+                };
+                let found = self.library.read(cx).note_at(&uri, cx);
                 self._opening = cx.spawn_in(window, async move |this, cx| {
-                    let Some(meta) = found.await else { return };
+                    let Some(meta) = found.await else {
+                        // In the notes folder but not a note, such as a template: still
+                        // a Markdown file to edit where it is.
+                        let path = PathBuf::from(crate::app::library::decode_file_uri(&uri));
+                        let opened = cx.update(|_, cx| document::open(&path, cx));
+                        if let Ok(Err(err)) = opened {
+                            log::error!("cannot open {}: {err:#}", path.display());
+                        }
+                        return;
+                    };
                     let _ = this.update_in(cx, |this, window, cx| {
                         this.open_note(meta.id, String::new(), window, cx);
                     });

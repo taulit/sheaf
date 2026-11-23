@@ -28,8 +28,13 @@ pub struct Cli {
 }
 
 /// How to start the app; only without a command.
-#[derive(Clone, Copy, Debug, Default, Args)]
+#[derive(Clone, Debug, Default, Args)]
 pub struct AppArgs {
+    /// Markdown files to open: a note in the notes window, any other file in a window
+    /// of its own, edited where it is
+    #[arg(value_name = "FILE")]
+    pub files: Vec<String>,
+
     /// Start the app with a new note
     #[arg(long)]
     pub new: bool,
@@ -44,8 +49,8 @@ pub struct AppArgs {
 }
 
 impl AppArgs {
-    pub fn any(self) -> bool {
-        self.new || self.quick || self.dbus_service
+    pub fn any(&self) -> bool {
+        self.new || self.quick || self.dbus_service || !self.files.is_empty()
     }
 }
 

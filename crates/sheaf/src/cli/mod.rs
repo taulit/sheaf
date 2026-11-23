@@ -33,6 +33,19 @@ pub fn run(args: impl IntoIterator<Item = OsString>) -> ExitCode {
     let json = cli.json
         || matches!(&cli.command, Some(Command::Show(show)) if matches!(show.format, Format::Json));
     if cli.command.is_none() && !json {
+        // A word that is neither a file nor a URI is a mistyped command, not a file.
+        let unknown = cli
+            .app
+            .files
+            .iter()
+            .find(|file| !file.contains("://") && !std::path::Path::new(file).exists());
+        if let Some(unknown) = unknown {
+            let err = <Cli as clap::CommandFactory>::command().error(
+                ErrorKind::InvalidSubcommand,
+                format!("unrecognized subcommand or file '{unknown}'"),
+            );
+            return report_usage(&err, false);
+        }
         return crate::app::run(launch(cli.app), cli.dir);
     }
     match execute(cli, json) {
@@ -42,7 +55,9 @@ pub fn run(args: impl IntoIterator<Item = OsString>) -> ExitCode {
 }
 
 fn launch(args: AppArgs) -> Launch {
-    let request = if args.new {
+    let request = if !args.files.is_empty() {
+        Request::OpenUris(args.files.iter().map(|file| file_uri(file)).collect())
+    } else if args.new {
         Request::NewNote
     } else if args.quick {
         Request::QuickNote
@@ -53,6 +68,16 @@ fn launch(args: AppArgs) -> Launch {
         request,
         service: args.dbus_service,
     }
+}
+
+/// A file named on the command line as a `file://` URI; a URI is taken as it is.
+fn file_uri(file: &str) -> String {
+    if file.contains("://") {
+        return file.to_owned();
+    }
+    let path = std::path::Path::new(file);
+    let path = std::path::absolute(path).unwrap_or_else(|_| path.to_owned());
+    crate::app::note::files::file_uri(&path)
 }
 
 fn execute(cli: Cli, json: bool) -> error::Result {
