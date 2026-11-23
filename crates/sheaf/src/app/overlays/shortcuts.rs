@@ -29,6 +29,7 @@ pub fn groups(cx: &App) -> Vec<ShortcutGroup> {
         (actions::GALLERY, tr("Gallery")),
         (actions::NOTE, tr("Note")),
         (actions::QUICK_NOTE, tr("Quick Note")),
+        (actions::DOCUMENT, tr("Markdown File")),
     ];
     let commands = actions::commands();
     let mut bound: Vec<(String, String, String)> = commands

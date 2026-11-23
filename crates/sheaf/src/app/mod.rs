@@ -10,6 +10,7 @@
 //! | [`chrome`] | pane, header bar and buttons the views are built from |
 //! | [`window`] | the main window and its router |
 //! | [`gallery`], [`note`] | the two views |
+//! | [`document`] | the window of a Markdown file from outside the notes folder |
 //! | [`overlays`] | toast, command palette, list of shortcuts, popover parts |
 //! | [`dialogs`] | save, open and print dialogs of the portals |
 //! | [`settings`] | the user's settings and their window |
@@ -23,6 +24,7 @@ pub mod actions;
 pub mod assets;
 pub mod chrome;
 pub mod dialogs;
+pub mod document;
 pub mod gallery;
 pub mod instance;
 pub mod library;
@@ -273,6 +275,7 @@ async fn show(request: Request, token: Option<String>, cx: &mut AsyncApp) {
         let shown = match request {
             // Only its own small window, not the main one (plan 03 §8).
             Request::QuickNote => open_quick_note(cx),
+            Request::OpenUris(uris) => open_uris(uris, cx),
             request => present(request, cx),
         };
         if let Err(err) = shown {
@@ -290,6 +293,36 @@ fn open_quick_note(cx: &mut App) -> anyhow::Result<()> {
         }
     });
     quick::open(library, on_request, cx).map(|_| ())
+}
+
+/// Opens files: notes in the main window, any other Markdown file in a window of its
+/// own, edited where it is.
+fn open_uris(uris: Vec<String>, cx: &mut App) -> anyhow::Result<()> {
+    let notes_dir = cx
+        .global::<Session>()
+        .library
+        .read(cx)
+        .notes_dir()
+        .to_owned();
+    let notes_dir = notes_dir.canonicalize().unwrap_or(notes_dir);
+    let mut notes = Vec::new();
+    for uri in uris {
+        if uri.contains("://") && !uri.starts_with("file://") {
+            log::warn!("cannot open {uri}: not a local file");
+            continue;
+        }
+        let path = PathBuf::from(library::decode_file_uri(&uri));
+        let path = path.canonicalize().unwrap_or(path);
+        if path.starts_with(&notes_dir) {
+            notes.push(uri);
+        } else {
+            document::open(&path, cx)?;
+        }
+    }
+    if notes.is_empty() {
+        return Ok(());
+    }
+    present(Request::OpenUris(notes), cx)
 }
 
 fn present(request: Request, cx: &mut App) -> anyhow::Result<()> {

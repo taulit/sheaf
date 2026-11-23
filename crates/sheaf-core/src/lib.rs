@@ -5,12 +5,14 @@
 //!
 //! - [`model`]: the types every other part exchanges.
 //! - storage ([`paths`], [`frontmatter`], [`scan`], [`store`], [`trash`], [`config`],
-//!   [`templates`], [`watch`]): reads and writes the notes folder.
+//!   [`templates`], [`watch`]): reads and writes the notes folder; [`document`] reads and
+//!   writes a single Markdown file outside it.
 //! - search ([`analysis`], [`query`], [`index`], [`search`], [`snippet`]): indexes
 //!   [`model::NoteDoc`]s and answers queries.
 
 pub mod analysis;
 pub mod config;
+pub mod document;
 pub mod error;
 pub mod frontmatter;
 pub mod i18n;

@@ -1,6 +1,7 @@
 crates/sheaf-core/examples/search_budget.rs
 crates/sheaf-core/src/analysis.rs
 crates/sheaf-core/src/config.rs
+crates/sheaf-core/src/document.rs
 crates/sheaf-core/src/error.rs
 crates/sheaf-core/src/frontmatter.rs
 crates/sheaf-core/src/i18n.rs
@@ -39,6 +40,7 @@ crates/sheaf/src/app/actions.rs
 crates/sheaf/src/app/assets.rs
 crates/sheaf/src/app/chrome.rs
 crates/sheaf/src/app/dialogs.rs
+crates/sheaf/src/app/document.rs
 crates/sheaf/src/app/gallery/cards.rs
 crates/sheaf/src/app/gallery/chips.rs
 crates/sheaf/src/app/gallery/covers.rs

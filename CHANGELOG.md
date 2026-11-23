@@ -43,7 +43,7 @@ First release.
   zsh and fish. See `docs/AGENTS.md`.
 - "Visor: Notes", a GNOME Shell extension that shows recent notes in the Visor dock and saves
   quick notes with the command `note`.
-- German translation.
+- German translation, also of the editor's menus and toolbars, in the language of the desktop.
 - Packages: Flatpak manifest, AUR packages `sheaf` and `sheaf-git`.
 
 [0.1.0]: https://github.com/taulit/sheaf/releases/tag/v0.1.0

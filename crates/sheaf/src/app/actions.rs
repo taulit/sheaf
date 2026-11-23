@@ -71,6 +71,10 @@ actions!(
         AttachFile,
         /// Paste into the open note: files and images become attachments.
         PasteAttachment,
+        /// Write the Markdown file of a document window now.
+        SaveDocument,
+        /// Write the Markdown file of a document window and close it.
+        CloseDocument,
     ]
 );
 
@@ -84,6 +88,8 @@ pub const NOTE: &str = "Note";
 pub const EDITOR: &str = "MarkdownEditor";
 /// Key context of the Quick Note window.
 pub const QUICK_NOTE: &str = "QuickNote";
+/// Key context of a window with a Markdown file from outside the notes folder.
+pub const DOCUMENT: &str = "Document";
 /// Key context of the menu of templates that `/vorlage` opens in the text.
 pub const TEMPLATE_MENU: &str = "TemplateMenu";
 /// The editor inside the Quick Note window, where Ctrl+Enter is not the editor's.
@@ -118,6 +124,8 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl-w", QuickNoteDone, Some(QUICK_NOTE)),
         KeyBinding::new("ctrl-enter", QuickNoteOpen, Some(QUICK_NOTE)),
         KeyBinding::new("ctrl-enter", QuickNoteOpen, Some(QUICK_NOTE_EDITOR)),
+        KeyBinding::new("ctrl-s", SaveDocument, Some(DOCUMENT)),
+        KeyBinding::new("ctrl-w", CloseDocument, Some(DOCUMENT)),
         // The editor pastes text only; files and images on the clipboard are ours.
         KeyBinding::new("ctrl-v", PasteAttachment, Some(EDITOR)),
         KeyBinding::new("down", SelectNext, Some(TEMPLATE_MENU)),
@@ -198,5 +206,7 @@ pub fn commands() -> Vec<CommandInfo> {
         hidden(Box::new(QuickNoteDone), tr("Close Quick Note")),
         hidden(Box::new(QuickNoteOpen), tr("Open Quick Note in Notes")),
         hidden(Box::new(PasteAttachment), tr("Paste")),
+        hidden(Box::new(SaveDocument), tr("Save File")),
+        hidden(Box::new(CloseDocument), tr("Close File")),
     ]
 }

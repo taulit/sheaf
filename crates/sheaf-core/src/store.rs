@@ -453,7 +453,7 @@ pub(crate) fn format_local(time: Timestamp) -> String {
         .to_string()
 }
 
-fn timestamp(time: io::Result<SystemTime>) -> Option<Timestamp> {
+pub(crate) fn timestamp(time: io::Result<SystemTime>) -> Option<Timestamp> {
     time.ok().and_then(|time| Timestamp::try_from(time).ok())
 }
 
