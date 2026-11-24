@@ -156,6 +156,8 @@ pub enum Popover {
     Sort,
     /// The `+ ▾` menu of new notes and templates.
     Templates,
+    /// The main menu: settings and keyboard shortcuts.
+    Main,
 }
 
 /// Where the query matched a note.

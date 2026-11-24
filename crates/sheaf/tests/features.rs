@@ -496,9 +496,10 @@ impl TestApp {
     fn open_settings(&mut self) -> (Entity<SettingsView>, gpui::AnyWindowHandle) {
         self.cx.dispatch_action(sheaf::app::actions::OpenSettings);
         self.cx.run_until_parked();
+        let main = self.main.clone();
         let view = self
-            .main
-            .read_with(self.cx, |main, _| main.settings_window().cloned())
+            .cx
+            .update(|_, cx| main.read(cx).settings_window(cx))
             .expect("the settings window is open");
         let window = self
             .cx

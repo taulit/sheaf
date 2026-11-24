@@ -32,11 +32,25 @@ pub struct AppConfig {
     /// The order of folders that have none of their own; see [`FolderConfig::view`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sort: Option<Sort>,
+    /// Light or dark, or as the desktop says.
+    #[serde(default)]
+    pub color_scheme: ColorScheme,
     /// How the note view sets the text.
     #[serde(default)]
     pub editor: EditorSettings,
     #[serde(flatten)]
     pub other: toml::Table,
+}
+
+/// Whether the windows are light or dark.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ColorScheme {
+    /// As the desktop says.
+    #[default]
+    System,
+    Light,
+    Dark,
 }
 
 /// How the note view sets the text: `[editor]` in the app configuration.

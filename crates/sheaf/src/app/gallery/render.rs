@@ -15,7 +15,8 @@ use sheaf_core::i18n::tr;
 
 use super::{GalleryView, Popover, Scope, chips};
 use crate::app::actions::{
-    self, NewNote, SaveSearchAsSmartFolder, ShowFolders, ShowSortOptions, ShowTemplates, ToggleView,
+    self, NewNote, OpenSettings, SaveSearchAsSmartFolder, ShowFolders, ShowShortcuts,
+    ShowSortOptions, ShowTemplates, ToggleView,
 };
 use crate::app::assets::{IconName, icon};
 use crate::app::chrome::{FlatButton, HeaderBar, button, pane};
@@ -158,6 +159,38 @@ impl GalleryView {
                         .on_click(toggle(Popover::Templates)),
                 )
             })
+            .end(
+                FlatButton::new("main-menu", IconName::Menu)
+                    .tooltip(tr("Main Menu"))
+                    .active(self.popover == Some(Popover::Main))
+                    .on_click(toggle(Popover::Main)),
+            )
+    }
+
+    fn render_main_menu(&self, tokens: &Tokens, cx: &mut Context<Self>) -> impl IntoElement {
+        surface(tokens)
+            .id("main-popover")
+            .w(px(240.))
+            .child(
+                menu_row("open-settings", IconName::Settings, tr("Settings"), tokens).on_click(
+                    cx.listener(|this, _, window, cx| {
+                        this.set_popover(None, cx);
+                        window.dispatch_action(Box::new(OpenSettings), cx);
+                    }),
+                ),
+            )
+            .child(
+                menu_row(
+                    "show-shortcuts",
+                    IconName::Keyboard,
+                    tr("Keyboard Shortcuts"),
+                    tokens,
+                )
+                .on_click(cx.listener(|this, _, window, cx| {
+                    this.set_popover(None, cx);
+                    window.dispatch_action(Box::new(ShowShortcuts), cx);
+                })),
+            )
     }
 
     /// The field: the search icon, the chips, then the text.
@@ -434,6 +467,7 @@ impl GalleryView {
             Popover::Folders => self.render_folders(tokens, cx).into_any_element(),
             Popover::Sort => self.render_sort_menu(tokens, cx).into_any_element(),
             Popover::Templates => self.render_templates_menu(tokens, cx).into_any_element(),
+            Popover::Main => self.render_main_menu(tokens, cx).into_any_element(),
         };
         let overlay = div()
             .absolute()
@@ -463,10 +497,12 @@ impl GalleryView {
                     .top(size::HEADER_HEIGHT - px(4.))
                     .when(popover == Popover::Folders, |slot| slot.left(px(8.)))
                     // Under the sort button: the bar's padding, the close button and
-                    // three 34 px buttons with their gaps are right of it.
-                    .when(popover == Popover::Sort, |slot| slot.right(px(196.)))
-                    // Under `+ ▾`, the last button before the close button.
-                    .when(popover == Popover::Templates, |slot| slot.right(px(44.)))
+                    // five 34 px buttons with their gaps are right of it.
+                    .when(popover == Popover::Sort, |slot| slot.right(px(234.)))
+                    // Under `+ ▾`, the button before the main menu.
+                    .when(popover == Popover::Templates, |slot| slot.right(px(82.)))
+                    // Under the main menu, the last button before the close button.
+                    .when(popover == Popover::Main, |slot| slot.right(px(44.)))
                     .child(surface),
             );
         Some(deferred(overlay).with_priority(1).into_any_element())

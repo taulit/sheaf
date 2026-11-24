@@ -38,7 +38,9 @@ use sheaf_core::document::{self, Checked, Document, Saved};
 use sheaf_core::i18n::tr;
 use sheaf_searchd::api::APP_NAME;
 
-use super::actions::{self, CloseDocument, CloseWindow, PasteAttachment, Print, SaveDocument};
+use super::actions::{
+    self, CloseDocument, CloseWindow, OpenSettings, PasteAttachment, Print, SaveDocument,
+};
 use super::assets::{IconName, icon};
 use super::chrome::{FlatButton, HeaderBar, pane};
 use super::note::export::{self, Format, Source};
@@ -686,6 +688,19 @@ impl DocumentView {
         cx.notify();
     }
 
+    /// The settings window of the app, for the font, the width and the reading aid.
+    /// Only while the app runs with a notes folder, which every real launch has.
+    fn open_settings(&mut self, cx: &mut Context<Self>) {
+        self.menu_open = false;
+        cx.notify();
+        let Some(library) = super::library(cx) else {
+            return;
+        };
+        if let Err(err) = settings::view::show(library, cx) {
+            log::error!("cannot open the settings: {err:#}");
+        }
+    }
+
     fn toast(&mut self, toast: Toast, cx: &mut Context<Self>) {
         self.toasts.update(cx, |toasts, cx| toasts.show(toast, cx));
     }
@@ -775,6 +790,12 @@ impl DocumentView {
                 MenuRow::new("document-print", tr("Print…"))
                     .icon(IconName::Print)
                     .on_click(cx.listener(|this, _, _, cx| this.print(cx))),
+            )
+            .child(overlays::separator(cx))
+            .child(
+                MenuRow::new("document-settings", tr("Settings"))
+                    .icon(IconName::Settings)
+                    .on_click(cx.listener(|this, _, _, cx| this.open_settings(cx))),
             )
             .into_any_element()
     }
@@ -999,6 +1020,7 @@ impl Render for DocumentView {
             .on_action(cx.listener(|this, _: &CloseDocument, window, cx| this.close(window, cx)))
             .on_action(cx.listener(|this, _: &CloseWindow, window, cx| this.close(window, cx)))
             .on_action(cx.listener(|this, _: &Print, _, cx| this.print(cx)))
+            .on_action(cx.listener(|this, _: &OpenSettings, _, cx| this.open_settings(cx)))
             .on_action(cx.listener(|_, _: &PasteAttachment, window, cx| {
                 // Files and images become attachments only in notes; here it is the
                 // editor's own paste.

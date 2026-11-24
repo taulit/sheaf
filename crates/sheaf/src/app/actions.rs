@@ -126,6 +126,7 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl-enter", QuickNoteOpen, Some(QUICK_NOTE_EDITOR)),
         KeyBinding::new("ctrl-s", SaveDocument, Some(DOCUMENT)),
         KeyBinding::new("ctrl-w", CloseDocument, Some(DOCUMENT)),
+        KeyBinding::new("ctrl-,", OpenSettings, Some(DOCUMENT)),
         // The editor pastes text only; files and images on the clipboard are ours.
         KeyBinding::new("ctrl-v", PasteAttachment, Some(EDITOR)),
         KeyBinding::new("down", SelectNext, Some(TEMPLATE_MENU)),
