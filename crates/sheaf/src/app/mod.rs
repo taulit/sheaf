@@ -110,10 +110,11 @@ pub fn run(launch: Launch, dir: Option<PathBuf>) -> ExitCode {
             trace::draw_headless(cx);
         }
         gpui_component::init(cx);
-        theme::init(theme::Overrides::default(), cx);
+        // The settings first: they may choose light or dark.
         if let Some(settings) = settings {
             cx.set_global(settings);
         }
+        theme::init(theme::Overrides::default(), cx);
         actions::bind_keys(cx);
         if let Some(connection) = &connection {
             portal::follow(connection.clone(), cx);
@@ -250,11 +251,22 @@ struct Session {
 impl Global for Session {}
 
 /// Makes `library` the one a main window opened from now on shows, after the notes
-/// folder changed.
+/// folder changed. An open settings window shows it too.
 pub(crate) fn use_library(library: Entity<Library>, cx: &mut App) {
+    if let Some(view) = settings::view::shown(cx) {
+        let library = library.clone();
+        view.update(cx, |view, cx| view.set_library(library, cx));
+    }
     if cx.has_global::<Session>() {
         cx.global_mut::<Session>().library = library;
     }
+}
+
+/// The library of the running app; `None` before it is open, as in tests of single
+/// windows.
+pub(crate) fn library(cx: &App) -> Option<Entity<Library>> {
+    cx.try_global::<Session>()
+        .map(|session| session.library.clone())
 }
 
 /// Brings the main window to the front, opening it if needed, and passes it `request`.

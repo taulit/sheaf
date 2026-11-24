@@ -20,8 +20,9 @@ use gpui::{
     white,
 };
 use gpui_component::{Theme, ThemeMode};
+use sheaf_core::config::ColorScheme;
 
-use super::assets;
+use super::{assets, settings};
 
 /// Sizes and radii in logical pixels, from "Sheaf: Maße".
 pub mod size {
@@ -377,8 +378,23 @@ pub fn set_appearance(appearance: Appearance, cx: &mut App) {
     install(appearance, overrides, cx);
 }
 
+/// Draws again with the appearance last set, after the colour scheme setting changed.
+/// Does nothing before [`init`].
+pub fn refresh(cx: &mut App) {
+    if let Some(state) = cx.try_global::<ThemeState>() {
+        let (appearance, overrides) = (state.appearance.clone(), state.overrides);
+        install(appearance, overrides, cx);
+    }
+}
+
 fn install(appearance: Appearance, overrides: Overrides, cx: &mut App) {
-    let effective = overrides.apply(appearance.clone());
+    let mut chosen = appearance.clone();
+    match settings::config(cx).color_scheme {
+        ColorScheme::System => {}
+        ColorScheme::Light => chosen.dark = false,
+        ColorScheme::Dark => chosen.dark = true,
+    }
+    let effective = overrides.apply(chosen);
     let mut tokens = Tokens::new(&effective);
     if let Some(family) = installed_font(&tokens.font_family, cx) {
         tokens.font_family = family;
@@ -611,6 +627,39 @@ mod tests {
             Overrides::default().apply(Appearance::default()),
             Appearance::default()
         );
+    }
+
+    #[gpui::test]
+    fn the_colour_scheme_setting_wins_over_the_desktop(cx: &mut gpui::TestAppContext) {
+        cx.update(|cx| {
+            gpui_component::init(cx);
+            init(Overrides::default(), cx);
+            let desktop = Appearance {
+                dark: false,
+                ..Appearance::default()
+            };
+            set_appearance(desktop, cx);
+            assert!(!cx.tokens().dark, "System follows the desktop");
+
+            settings::update(cx, |config| config.color_scheme = ColorScheme::Dark).detach();
+            assert!(cx.tokens().dark);
+            assert!(!appearance(cx).dark, "the desktop's choice is kept");
+
+            let light_desktop = appearance(cx).clone();
+            let dark_desktop = Appearance {
+                dark: true,
+                ..light_desktop
+            };
+            settings::update(cx, |config| config.color_scheme = ColorScheme::Light).detach();
+            set_appearance(dark_desktop, cx);
+            assert!(
+                !cx.tokens().dark,
+                "a change of the desktop does not undo it"
+            );
+
+            settings::update(cx, |config| config.color_scheme = ColorScheme::System).detach();
+            assert!(cx.tokens().dark);
+        });
     }
 
     #[test]

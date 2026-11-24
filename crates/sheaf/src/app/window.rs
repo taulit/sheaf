@@ -82,8 +82,6 @@ pub struct MainWindow {
     _note_events: Option<Subscription>,
     _overlay_events: Option<Subscription>,
     _subscriptions: [Subscription; 1],
-    /// The settings window, while it is open.
-    settings: Option<(WindowHandle<Root>, Entity<SettingsView>)>,
     /// The settings the window last followed.
     seen: Seen,
     _settings_events: Subscription,
@@ -142,7 +140,6 @@ impl MainWindow {
             _note_events: None,
             _overlay_events: None,
             _subscriptions: [gallery_event],
-            settings: None,
             seen: Seen::of(&settings::config(cx)),
             _settings_events: cx.observe_global_in::<Settings>(window, Self::settings_changed),
         };
@@ -536,21 +533,13 @@ impl MainWindow {
 
     /// Opens the settings window (Ctrl+,), or brings it to the front.
     fn open_settings(&mut self, _: &OpenSettings, _: &mut Window, cx: &mut Context<Self>) {
-        if let Some((handle, _)) = &self.settings
-            && handle
-                .update(cx, |_, window, _| window.activate_window())
-                .is_ok()
-        {
-            return;
-        }
-        match settings::view::open(self.library.clone(), cx) {
-            Ok(opened) => self.settings = Some(opened),
-            Err(err) => log::error!("cannot open the settings: {err:#}"),
+        if let Err(err) = settings::view::show(self.library.clone(), cx) {
+            log::error!("cannot open the settings: {err:#}");
         }
     }
 
-    pub fn settings_window(&self) -> Option<&Entity<SettingsView>> {
-        self.settings.as_ref().map(|(_, view)| view)
+    pub fn settings_window(&self, cx: &App) -> Option<Entity<SettingsView>> {
+        settings::view::shown(cx)
     }
 
     fn gallery_event(
@@ -610,10 +599,6 @@ impl MainWindow {
             match reopened {
                 Ok(library) => {
                     super::use_library(library.clone(), cx);
-                    if let Some((_, view)) = &this.settings {
-                        let library = library.clone();
-                        view.update(cx, |view, cx| view.set_library(library, cx));
-                    }
                     this.library = library;
                     this.replace_gallery(window, cx);
                 }

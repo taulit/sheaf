@@ -1,13 +1,14 @@
-//! The settings window (Ctrl+,): notes folder, default order, Quick Note, the font and
-//! line width of the note text, and the keyboard shortcuts to read, among them the
-//! global Quick Note shortcut with the fallback of plan 03 §8. Every choice takes
-//! effect at once; there is nothing to confirm.
+//! The settings window (Ctrl+,): notes folder, default order, Quick Note, light or
+//! dark, the font, line width and reading aid of the note text, and the keyboard
+//! shortcuts to read, among them the global Quick Note shortcut with the fallback of
+//! plan 03 §8. Every choice takes effect at once; there is nothing to confirm. There is
+//! one settings window, opened from the main window or from a Markdown file's window.
 
 use std::path::PathBuf;
 
 use gpui::{
     AnyElement, App, AppContext as _, Bounds, Context, Entity, FocusHandle, Focusable, FontWeight,
-    InteractiveElement as _, IntoElement, KeyBinding, KeyDownEvent, MouseButton,
+    Global, InteractiveElement as _, IntoElement, KeyBinding, KeyDownEvent, MouseButton,
     ParentElement as _, Render, SharedString, StatefulInteractiveElement as _, Styled as _, Task,
     TitlebarOptions, Window, WindowBounds, WindowDecorations, WindowHandle, WindowOptions, div,
     prelude::FluentBuilder as _, px, size as size_of,
@@ -15,7 +16,7 @@ use gpui::{
 use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::notification::Notification;
 use gpui_component::{Root, WindowExt as _};
-use sheaf_core::config::{EditorFont, LineWidth, QuickNote, Sort};
+use sheaf_core::config::{ColorScheme, EditorFont, LineWidth, QuickNote, Sort};
 use sheaf_core::i18n::tr;
 use sheaf_searchd::api::APP_NAME;
 
@@ -164,6 +165,16 @@ impl SettingsView {
 
     pub fn set_sort(&mut self, sort: Sort, window: &mut Window, cx: &mut Context<Self>) {
         let saved = update(cx, |config| config.sort = Some(sort));
+        self.saved(saved, window, cx);
+    }
+
+    pub fn set_color_scheme(
+        &mut self,
+        scheme: ColorScheme,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let saved = update(cx, |config| config.color_scheme = scheme);
         self.saved(saved, window, cx);
     }
 
@@ -482,6 +493,17 @@ impl Render for SettingsView {
             cx,
             SettingsView::set_resume_minutes,
         );
+        let scheme_control = segmented(
+            "color-scheme",
+            vec![
+                (ColorScheme::System, tr("System")),
+                (ColorScheme::Light, tr("Light")),
+                (ColorScheme::Dark, tr("Dark")),
+            ],
+            config.color_scheme,
+            cx,
+            SettingsView::set_color_scheme,
+        );
         let font_control = segmented(
             "font",
             vec![
@@ -610,6 +632,16 @@ impl Render for SettingsView {
             ],
             cx,
         );
+        let look = group(
+            tr("Appearance"),
+            vec![row(
+                tr("Style"),
+                Some(tr("System follows the light or dark style of the desktop")),
+                scheme_control,
+                cx,
+            )],
+            cx,
+        );
         let editor = group(
             tr("Editor"),
             vec![
@@ -689,6 +721,7 @@ impl Render for SettingsView {
                                     .child(folder)
                                     .child(gallery)
                                     .child(quick)
+                                    .child(look)
                                     .child(editor)
                                     .children(keys),
                             ),
@@ -697,7 +730,41 @@ impl Render for SettingsView {
     }
 }
 
-/// Opens the settings window.
+/// The settings window, while it is open; there is one for all windows.
+struct Shown(WindowHandle<Root>, Entity<SettingsView>);
+
+impl Global for Shown {}
+
+/// Brings the settings window to the front, opening it for `library` if none is open.
+pub fn show(
+    library: Entity<Library>,
+    cx: &mut App,
+) -> anyhow::Result<(WindowHandle<Root>, Entity<SettingsView>)> {
+    if let Some(Shown(handle, view)) = cx.try_global::<Shown>() {
+        let (handle, view) = (*handle, view.clone());
+        if handle
+            .update(cx, |_, window, _| window.activate_window())
+            .is_ok()
+        {
+            return Ok((handle, view));
+        }
+    }
+    let (handle, view) = open(library, cx)?;
+    cx.set_global(Shown(handle, view.clone()));
+    Ok((handle, view))
+}
+
+/// The settings window, if it is open.
+pub fn shown(cx: &App) -> Option<Entity<SettingsView>> {
+    let Shown(handle, view) = cx.try_global::<Shown>()?;
+    let id = handle.window_id();
+    cx.windows()
+        .iter()
+        .any(|window| window.window_id() == id)
+        .then(|| view.clone())
+}
+
+/// Opens a settings window.
 pub fn open(
     library: Entity<Library>,
     cx: &mut App,

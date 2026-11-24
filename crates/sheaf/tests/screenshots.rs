@@ -155,6 +155,8 @@ const SCENES: &[(&str, Folder, Scene)] = &[
     ("gallery-smart-symbol", Folder::Seeded, gallery_smart_symbol),
     ("gallery-folder-menu", Folder::Seeded, gallery_folder_menu),
     ("gallery-tags", Folder::Seeded, gallery_tags),
+    ("gallery-main-menu", Folder::Seeded, gallery_main_menu),
+    ("gallery-sort", Folder::Seeded, gallery_sort),
 ];
 
 /// The start view as it opens.
@@ -241,6 +243,24 @@ fn gallery_tags(stage: &mut Stage) {
         })
         .expect("the window is open");
     stage.cx.run_until_parked();
+}
+
+/// The main menu of the header bar: settings and keyboard shortcuts.
+fn gallery_main_menu(stage: &mut Stage) {
+    stage.update(|main, _, cx| {
+        main.gallery().update(cx, |gallery, cx| {
+            gallery.set_popover(Some(GalleryPopover::Main), cx)
+        });
+    });
+}
+
+/// The sort popover, under its button.
+fn gallery_sort(stage: &mut Stage) {
+    stage.update(|main, _, cx| {
+        main.gallery().update(cx, |gallery, cx| {
+            gallery.set_popover(Some(GalleryPopover::Sort), cx)
+        });
+    });
 }
 
 /// The context menu of a folder in the folder popover.

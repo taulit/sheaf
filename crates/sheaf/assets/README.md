@@ -37,6 +37,8 @@ text colour, so their own fill colour does not matter.
 | `object-select.svg` | `actions/object-select-symbolic` |
 | `open-menu.svg` | `actions/open-menu-symbolic` |
 | `pan-down.svg` | `ui/pan-down-symbolic` |
+| `preferences-desktop-keyboard-shortcuts.svg` | `legacy/preferences-desktop-keyboard-shortcuts-symbolic` |
+| `preferences-system.svg` | `categories/preferences-system-symbolic` |
 | `send-to.svg` | `actions/send-to-symbolic` |
 | `sidebar-show.svg` | `actions/sidebar-show-symbolic` |
 | `starred.svg` | `status/starred-symbolic` |

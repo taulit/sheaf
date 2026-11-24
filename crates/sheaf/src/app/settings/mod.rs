@@ -81,6 +81,9 @@ pub fn update(cx: &mut App, change: impl FnOnce(&mut AppConfig)) -> Task<Result<
         .get_or_insert_with(|| Serial::new(cx))
         .clone();
     cx.set_global(settings);
+    if before.color_scheme != after.color_scheme {
+        super::theme::refresh(cx);
+    }
     let saved = writes.run(
         move || match file {
             Some(file) => AppConfig::save_changes(&file, &before, &after)
