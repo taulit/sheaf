@@ -87,12 +87,17 @@ class NotesModule {
 
   buildView() {
     const {t} = this._ctx;
-    const root = new St.BoxLayout({style_class: 'sheaf-notes-view', vertical: true, x_expand: true});
+    const root = new St.BoxLayout({style_class: 'sheaf-notes-view', orientation: Clutter.Orientation.VERTICAL, x_expand: true});
     const entry = new St.Entry({
       style_class: 'sheaf-notes-entry', hint_text: t('New note …'), can_focus: true, x_expand: true,
     });
-    entry.clutter_text.connectObject('key-press-event', (_text, event) => this._onKey(event), this);
-    const content = new St.BoxLayout({style_class: 'sheaf-notes-content', vertical: true, x_expand: true});
+    // Before the text sees the key: since GNOME 51 its own bindings (Enter)
+    // run ahead of key-press-event handlers connected to it.
+    entry.connectObject('captured-event', (_entry, event) =>
+      event.type() === Clutter.EventType.KEY_PRESS && global.stage.get_key_focus() === entry.clutter_text
+        ? this._onKey(event)
+        : Clutter.EVENT_PROPAGATE, this);
+    const content = new St.BoxLayout({style_class: 'sheaf-notes-content', orientation: Clutter.Orientation.VERTICAL, x_expand: true});
     root.add_child(entry);
     root.add_child(content);
     this._view = {root, entry, content, error: null, saving: false};
